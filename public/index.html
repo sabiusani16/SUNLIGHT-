@@ -75,10 +75,7 @@
     <!-- SETTINGS -->
     <section class="view" id="view-settings">
       <h2 class="title">Settings</h2>
-      <div class="profile-card">
-        <div class="avatar big"><img src="https://i.pravatar.cc/150?img=47" alt="" onerror="this.remove()"><span>Y</span></div>
-        <div><strong>You</strong><p>Hey there! I am using SUNLIGHT</p></div>
-      </div>
+      <div class="profile-card" id="profileCard"></div>
       <div class="settings-list" id="settingsList"></div>
     </section>
   </main>
@@ -114,7 +111,7 @@
       <button class="icon-btn light" data-close="chatScreen" aria-label="Back"><i class="fa-solid fa-arrow-left"></i></button>
       <div class="avatar sm" id="chatAvatar"></div>
       <div class="grow"><strong id="chatName"></strong><small id="chatState"></small></div>
-      <button class="icon-btn light" data-toast="Video call"><i class="fa-solid fa-video"></i></button>
+      <button class="icon-btn light" id="favBtn" aria-label="Favorite"><i class="fa-regular fa-star"></i></button>
       <button class="icon-btn light" data-toast="Voice call"><i class="fa-solid fa-phone"></i></button>
     </div>
     <div class="messages" id="messages"></div>
@@ -122,6 +119,21 @@
       <button type="button" class="icon-btn" data-toast="Attachments"><i class="fa-solid fa-paperclip"></i></button>
       <input id="msgInput" type="text" placeholder="Message" autocomplete="off">
       <button class="send" id="sendBtn" aria-label="Send"><i class="fa-solid fa-paper-plane"></i></button>
+    </form>
+  </div>
+
+  <!-- AUTH -->
+  <div class="screen auth open" id="auth">
+    <form class="auth-card" id="authForm">
+      <span class="logo big"><i class="fa-solid fa-sun"></i></span>
+      <h2>SUNLIGHT</h2>
+      <p id="authSub">Log in to continue</p>
+      <label hidden id="nameWrap"><input id="authName" type="text" placeholder="Your name" maxlength="40" autocomplete="name"></label>
+      <label><input id="authUser" type="text" placeholder="Username" maxlength="20" autocomplete="username" autocapitalize="none" required></label>
+      <label><input id="authPass" type="password" placeholder="Password" autocomplete="current-password" required></label>
+      <p class="auth-err" id="authErr"></p>
+      <button class="auth-btn" id="authBtn">Log in</button>
+      <button type="button" class="auth-switch" id="authSwitch">New here? Create an account</button>
     </form>
   </div>
 

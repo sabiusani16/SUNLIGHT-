@@ -1,115 +1,173 @@
 'use strict';
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
-const pic = n => `https://i.pravatar.cc/150?img=${n}`;
+const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const COLORS = ['#075B42', '#0E7C5A', '#8A6D0B', '#2F6F8F', '#6B4E9B', '#B5533C'];
 
-/* ---------- Sample data ---------- */
-const chats = [
-  { id: 1, name: 'Amina Yusuf', img: 5, msg: 'Sending the photos now 📸', time: '10:42', unread: 3, online: true, fav: true, tick: null, story: 'new' },
-  { id: 2, name: 'Design Team', img: 0, msg: 'Hassan: Final mockups are approved ✅', time: '10:15', unread: 12, online: false, group: true, tick: null },
-  { id: 3, name: 'Omar Farooq', img: 12, msg: 'See you at the café at 6', time: '09:58', unread: 0, online: true, tick: 'read', story: 'new' },
-  { id: 4, name: 'Mum', img: 47, msg: 'Don’t forget to eat something', time: '09:30', unread: 1, online: false, fav: true, tick: null },
-  { id: 5, name: 'Sara Malik', img: 9, msg: 'That sounds perfect, thank you!', time: 'Yesterday', unread: 0, online: false, tick: 'delivered', story: 'seen' },
-  { id: 6, name: 'Weekend Hikers', img: 0, msg: 'Bilal: Trail opens at 7 sharp', time: 'Yesterday', unread: 5, online: false, group: true, tick: null },
-  { id: 7, name: 'Daniel Brooks', img: 15, msg: 'Invoice sent, let me know', time: 'Yesterday', unread: 0, online: true, tick: 'read', story: 'seen' },
-  { id: 8, name: 'Zainab Ali', img: 32, msg: '🎉 Congratulations!', time: 'Tuesday', unread: 0, online: false, fav: true, tick: 'read' },
-  { id: 9, name: 'Family Circle', img: 0, msg: 'Dad: Dinner at 8 on Friday', time: 'Monday', unread: 0, online: false, group: true, tick: 'delivered' },
-  { id: 10, name: 'Ibrahim Khan', img: 53, msg: 'Voice message (0:24)', time: 'Sunday', unread: 0, online: false, tick: 'read' }
-];
-const communities = [
-  { name: 'Sunrise Neighbours', sub: '4 groups · 238 members', img: 0 },
-  { name: 'Web Developers Hub', sub: '6 groups · 1,204 members', img: 0 },
-  { name: 'Book Lovers Club', sub: '3 groups · 512 members', img: 0 }
-];
-const calls = [
-  { name: 'Amina Yusuf', img: 5, info: 'Today, 09:12', icon: 'fa-arrow-down-left', miss: true, type: 'fa-phone' },
-  { name: 'Omar Farooq', img: 12, info: 'Today, 08:30', icon: 'fa-arrow-up-right', type: 'fa-video' },
-  { name: 'Mum', img: 47, info: 'Yesterday, 20:05', icon: 'fa-arrow-down-left', type: 'fa-phone' },
-  { name: 'Daniel Brooks', img: 15, info: 'Yesterday, 14:47', icon: 'fa-arrow-up-right', type: 'fa-phone' },
-  { name: 'Sara Malik', img: 9, info: 'Tuesday, 18:20', icon: 'fa-arrow-down-left', miss: true, type: 'fa-video' }
-];
-const settings = [
-  ['fa-key', 'Account', 'Privacy, security, change number'],
-  ['fa-lock', 'Privacy', 'Last seen, profile photo, status'],
-  ['fa-bell', 'Notifications', 'Message, group and call tones'],
-  ['fa-database', 'Storage and data', 'Network usage, auto-download'],
-  ['fa-palette', 'Appearance', 'Theme, wallpaper, chat colour'],
-  ['fa-circle-question', 'Help', 'Help centre, contact us']
-];
-const history = {};
-const replies = ['Sounds good!', 'Got it 👍', 'Give me a minute', 'Haha, really?', 'Let’s do it', 'Talk soon ☀️'];
+let token = localStorage.getItem('sl_token'), me = null, chats = [], users = [], current = null;
+let filter = 'all', query = '', pollTimer = null, sigChats = '', sigUsers = '', sigMsgs = '';
+const favs = new Set(JSON.parse(localStorage.getItem('sl_favs') || '[]'));
+
+/* ---------- API ---------- */
+async function api(path, opts = {}) {
+  const res = await fetch('/api/' + path, {
+    method: opts.body ? 'POST' : (opts.method || 'GET'),
+    headers: { 'content-type': 'application/json', ...(token ? { authorization: 'Bearer ' + token } : {}) },
+    body: opts.body ? JSON.stringify(opts.body) : undefined
+  });
+  const data = await res.json().catch(() => ({}));
+  if (res.status === 401 && token && path !== 'login') logout(true);
+  if (!res.ok) throw new Error(data.error || 'Something went wrong');
+  return data;
+}
 
 /* ---------- Helpers ---------- */
-const initials = n => n.split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase();
+const initials = n => n.trim().split(/\s+/).map(w => w[0]).slice(0, 2).join('').toUpperCase();
 const avatar = (p, extra = '', dot = false) =>
-  `<div class="avatar ${extra}">${p.img ? `<img src="${pic(p.img)}" alt="" loading="lazy" onerror="this.remove()">` : ''}<span>${initials(p.name)}</span>${dot && p.online ? '<i class="dot"></i>' : ''}</div>`;
+  `<div class="avatar ${extra}" style="background:${COLORS[p.id % COLORS.length]}"><span>${esc(initials(p.name))}</span>${dot && p.online ? '<i class="dot"></i>' : ''}</div>`;
 const tickIcon = t => t ? `<i class="fa-solid fa-check-double tick ${t === 'read' ? 'read' : ''}"></i>` : '';
-const nowTime = () => new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
-
+const clock = ts => new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
+function fmt(ts) {
+  const d = new Date(ts), n = new Date();
+  if (d.toDateString() === n.toDateString()) return clock(ts);
+  if (d.toDateString() === new Date(n - 864e5).toDateString()) return 'Yesterday';
+  return d.toLocaleDateString([], { day: 'numeric', month: 'short' });
+}
 let toastTimer;
 function toast(text) {
   const t = $('#toast');
-  t.textContent = text;
-  t.classList.add('show');
+  t.textContent = text; t.classList.add('show');
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => t.classList.remove('show'), 1800);
 }
+const openScreen = id => $('#' + id).classList.add('open');
+const closeScreen = id => $('#' + id).classList.remove('open');
+const empty = (icon, text) => `<div class="empty"><i class="${icon}"></i>${text}</div>`;
 
-/* ---------- Chat list ---------- */
-let filter = 'all', query = '';
+/* ---------- Auth ---------- */
+let mode = 'login';
+function setMode(m) {
+  mode = m;
+  $('#nameWrap').hidden = m === 'login';
+  $('#authSub').textContent = m === 'login' ? 'Log in to continue' : 'Create your SUNLIGHT account';
+  $('#authBtn').textContent = m === 'login' ? 'Log in' : 'Create account';
+  $('#authSwitch').textContent = m === 'login' ? 'New here? Create an account' : 'Already have an account? Log in';
+  $('#authPass').autocomplete = m === 'login' ? 'current-password' : 'new-password';
+  $('#authErr').textContent = '';
+}
+$('#authSwitch').addEventListener('click', () => setMode(mode === 'login' ? 'register' : 'login'));
+$('#authForm').addEventListener('submit', async e => {
+  e.preventDefault();
+  const btn = $('#authBtn'); btn.disabled = true; $('#authErr').textContent = '';
+  try {
+    const d = await api(mode, { body: { name: $('#authName').value, username: $('#authUser').value, password: $('#authPass').value } });
+    token = d.token; localStorage.setItem('sl_token', token);
+    $('#authPass').value = '';
+    await start(d.user);
+  } catch (err) { $('#authErr').textContent = err.message; }
+  btn.disabled = false;
+});
 
+function logout(silent) {
+  if (token && !silent) api('logout', { method: 'POST', body: {} }).catch(() => {});
+  token = null; me = null; current = null; chats = []; users = [];
+  localStorage.removeItem('sl_token');
+  clearInterval(pollTimer); sigChats = sigUsers = sigMsgs = '';
+  ['chatScreen', 'newChat'].forEach(closeScreen);
+  openScreen('auth'); setMode('login');
+}
+
+async function start(user) {
+  me = user;
+  closeScreen('auth');
+  renderProfile();
+  await Promise.all([loadChats(), loadUsers()]).catch(() => {});
+  showView('chats');
+  clearInterval(pollTimer);
+  pollTimer = setInterval(poll, 4000);
+}
+
+/* ---------- Data loading ---------- */
+async function loadChats() {
+  const d = await api('chats');
+  const next = d.chats.map(c => ({
+    id: c.id, name: c.name, online: c.online, unread: c.unread, time: fmt(c.last_at), msg: c.last_body,
+    tick: c.last_sender === me.id ? (c.last_read ? 'read' : 'delivered') : null
+  }));
+  const sig = JSON.stringify(next);
+  chats = next;
+  if (sig !== sigChats) { sigChats = sig; renderChats(); }
+}
+async function loadUsers() {
+  const d = await api('users');
+  const sig = JSON.stringify(d.users);
+  users = d.users;
+  if (sig !== sigUsers) { sigUsers = sig; renderStories(); renderLists(); }
+}
+function poll() {
+  if (!me) return;
+  loadChats().catch(() => {}); loadUsers().catch(() => {});
+  if ($('#chatScreen').classList.contains('open')) loadMessages().catch(() => {});
+}
+
+/* ---------- Rendering ---------- */
 function renderChats() {
   const q = query.trim().toLowerCase();
   const list = chats.filter(c =>
-    (filter === 'all' || (filter === 'unread' && c.unread) || (filter === 'fav' && c.fav) || (filter === 'group' && c.group)) &&
+    (filter === 'all' || (filter === 'unread' && c.unread) || (filter === 'fav' && favs.has(c.id))) &&
     (!q || c.name.toLowerCase().includes(q) || c.msg.toLowerCase().includes(q)));
   $('#chatList').innerHTML = list.length ? list.map((c, i) => `
-    <div class="row" data-id="${c.id}" style="animation-delay:${i * 30}ms">
+    <div class="row" data-id="${c.id}" style="animation-delay:${Math.min(i, 8) * 30}ms">
       ${avatar(c, '', true)}
       <div class="body">
-        <div class="line"><strong>${c.name}</strong><span class="time ${c.unread ? 'new' : ''}">${c.time}</span></div>
-        <div class="preview"><span class="grow">${tickIcon(c.tick)}<span class="txt">${c.msg}</span></span>
-          ${c.fav && !c.unread ? '<i class="fa-solid fa-star fav-ico"></i>' : ''}
+        <div class="line"><strong>${esc(c.name)}</strong><span class="time ${c.unread ? 'new' : ''}">${esc(c.time)}</span></div>
+        <div class="preview"><span class="grow">${tickIcon(c.tick)}<span class="txt">${esc(c.msg)}</span></span>
+          ${favs.has(c.id) && !c.unread ? '<i class="fa-solid fa-star fav-ico"></i>' : ''}
           ${c.unread ? `<span class="badge">${c.unread}</span>` : ''}</div>
       </div>
     </div>`).join('')
-    : `<div class="empty"><i class="fa-regular fa-comment-dots"></i>${q ? `No chats match “${query}”` : 'No chats here yet'}</div>`;
+    : q ? empty('fa-regular fa-comment-dots', `No chats match “${esc(query)}”`)
+    : filter === 'group' ? empty('fa-solid fa-user-group', 'Groups are coming soon')
+    : filter === 'fav' ? empty('fa-regular fa-star', 'Open a chat and tap the star to add a favorite')
+    : filter === 'unread' ? empty('fa-solid fa-check-double', 'You’re all caught up')
+    : empty('fa-regular fa-comment-dots', 'No chats yet.<br>Tap the green button to start one.');
   const total = chats.filter(c => c.unread).length;
   const pill = $('#unreadCount');
-  pill.textContent = total;
-  pill.classList.toggle('show', total > 0);
+  pill.textContent = total; pill.classList.toggle('show', total > 0);
+}
+
+function renderProfile() {
+  const mine = avatar(me, '');
+  $('#profileCard').innerHTML = `${mine.replace('class="avatar ', 'class="avatar big ')}<div><strong>${esc(me.name)}</strong><p>@${esc(me.username)}</p></div>`;
+  $('#myStatus').innerHTML = `${mine.replace('</div>', '<i class="add-badge fa-solid fa-plus"></i></div>')}<div><strong>My status</strong><p>Tap to add a status update</p></div>`;
+  $('#settingsList').innerHTML = [
+    ['fa-key', 'Account', '@' + me.username, 'Account'],
+    ['fa-bell', 'Notifications', 'Message tones', 'Notifications'],
+    ['fa-circle-question', 'Help', 'Help centre, contact us', 'Help'],
+    ['fa-right-from-bracket', 'Log out', 'Sign out of this device', '__logout']
+  ].map(s => `<div class="set-row" data-set="${s[3]}"><span class="set-ico"><i class="fa-solid ${s[0]}"></i></span><div><strong>${s[1]}</strong><small>${esc(s[2])}</small></div></div>`).join('');
 }
 
 function renderStories() {
-  const my = `<div class="story" data-toast="Add status"><div class="avatar" style="background:#E4EEE9">
-      <img src="${pic(47)}" alt="" onerror="this.remove()"><span>Y</span><i class="add-badge fa-solid fa-plus"></i></div><span class="n">My status</span></div>`;
-  const others = chats.filter(c => c.story).map(c => `
-    <div class="story" data-id="${c.id}">${avatar(c, `ring ${c.story === 'seen' ? 'seen' : ''}`)}<span class="n">${c.name.split(' ')[0]}</span></div>`).join('');
-  $('#stories').innerHTML = my + others;
+  const mine = `<div class="story" data-toast="Add status"><div class="avatar" style="background:${COLORS[me.id % COLORS.length]}"><span>${esc(initials(me.name))}</span><i class="add-badge fa-solid fa-plus"></i></div><span class="n">My status</span></div>`;
+  $('#stories').innerHTML = mine + users.slice(0, 10).map(u =>
+    `<div class="story" data-contact="${u.id}">${avatar(u, `ring ${u.online ? '' : 'seen'}`)}<span class="n">${esc(u.name.split(' ')[0])}</span></div>`).join('');
 }
 
-/* ---------- Other views ---------- */
-function renderViews() {
-  $('#myStatus').innerHTML = `<div class="avatar" style="background:#E4EEE9"><img src="${pic(47)}" alt="" onerror="this.remove()"><span>Y</span><i class="add-badge fa-solid fa-plus"></i></div>
-    <div><strong>My status</strong><p>Tap to add a status update</p></div>`;
-  $('#updateList').innerHTML = chats.filter(c => c.story).map(c => `
-    <div class="row" data-toast="Viewing ${c.name}'s status">${avatar(c, `ring ${c.story === 'seen' ? 'seen' : ''}`)}
-    <div class="body"><div class="line"><strong>${c.name}</strong></div><div class="preview">${c.time === 'Yesterday' ? 'Yesterday' : 'Today'}, ${c.time.includes(':') ? c.time : '18:20'}</div></div></div>`).join('');
-  $('#communityList').innerHTML = communities.map(c => `
-    <div class="row" data-toast="Opening ${c.name}">${avatar(c, '')}
-    <div class="body"><div class="line"><strong>${c.name}</strong></div><div class="preview">${c.sub}</div></div></div>`).join('');
-  $('#callList').innerHTML = calls.map(c => `
-    <div class="row ${c.miss ? 'missed' : ''}" data-toast="Calling ${c.name}">${avatar(c, '')}
-    <div class="body"><div class="line"><strong>${c.name}</strong><i class="fa-solid ${c.type} call-btn"></i></div>
-    <div class="preview"><i class="fa-solid ${c.icon} tick" style="color:${c.miss ? '#D64545' : '#2DCB73'}"></i><span class="txt">${c.info}</span></div></div></div>`).join('');
-  $('#settingsList').innerHTML = settings.map(s => `
-    <div class="set-row" data-toast="${s[1]}"><span class="set-ico"><i class="fa-solid ${s[0]}"></i></span>
-    <div><strong>${s[1]}</strong><small>${s[2]}</small></div></div>`).join('');
-  $('#contactList').innerHTML = chats.filter(c => !c.group).sort((a, b) => a.name.localeCompare(b.name)).map(c => `
-    <div class="row" data-contact="${c.id}">${avatar(c, '', true)}
-    <div class="body"><div class="line"><strong>${c.name}</strong></div><div class="preview">${c.online ? 'Online' : 'Hey there! I am using SUNLIGHT'}</div></div></div>`).join('');
-  $('#contactCount').textContent = `${chats.filter(c => !c.group).length} contacts`;
+function renderLists() {
+  const rows = users.map(u => `
+    <div class="row" data-contact="${u.id}">${avatar(u, '', true)}
+      <div class="body"><div class="line"><strong>${esc(u.name)}</strong></div>
+      <div class="preview">${u.online ? 'Online' : '@' + esc(u.username)}</div></div></div>`).join('');
+  const none = empty('fa-solid fa-user-plus', 'No contacts yet.<br>Ask a friend to create a SUNLIGHT account.');
+  $('#contactList').innerHTML = rows || none;
+  $('#updateList').innerHTML = users.length ? users.map(u => `
+    <div class="row" data-toast="${esc(u.name)} has no new status">${avatar(u, `ring ${u.online ? '' : 'seen'}`)}
+    <div class="body"><div class="line"><strong>${esc(u.name)}</strong></div><div class="preview">No recent updates</div></div></div>`).join('') : none;
+  $('#contactCount').textContent = `${users.length} contact${users.length === 1 ? '' : 's'}`;
 }
+$('#communityList').innerHTML = empty('fa-solid fa-users', 'Communities are coming soon');
+$('#callList').innerHTML = empty('fa-solid fa-phone', 'Voice and video calls are coming soon');
 
 /* ---------- Navigation ---------- */
 function showView(name) {
@@ -120,18 +178,16 @@ function showView(name) {
   if (name !== 'chats') closeSearch();
 }
 $('#bottomNav').addEventListener('click', e => { const b = e.target.closest('.nav-item'); if (b) showView(b.dataset.view); });
-
 $('#tabs').addEventListener('click', e => {
   const t = e.target.closest('.tab'); if (!t) return;
   $$('.tab').forEach(x => x.classList.toggle('active', x === t));
-  filter = t.dataset.filter;
-  renderChats();
+  filter = t.dataset.filter; renderChats();
 });
 
 /* ---------- Search ---------- */
 function closeSearch() {
   $('#searchbar').classList.remove('open');
-  $('#searchInput').value = ''; query = ''; renderChats();
+  $('#searchInput').value = ''; query = ''; if (me) renderChats();
 }
 $('#searchBtn').addEventListener('click', () => {
   showView('chats');
@@ -147,80 +203,80 @@ $('#searchInput').addEventListener('input', e => { query = e.target.value; rende
 const menu = $('#menu');
 $('#menuBtn').addEventListener('click', e => { e.stopPropagation(); menu.classList.toggle('open'); });
 document.addEventListener('click', e => { if (!menu.contains(e.target)) menu.classList.remove('open'); });
-$('#cameraBtn').addEventListener('click', () => toast('Camera is not available in this demo'));
+$('#cameraBtn').addEventListener('click', () => toast('Camera is not available yet'));
 
 function action(act) {
   menu.classList.remove('open');
   if (act === 'settings') { closeScreen('newChat'); showView('settings'); }
-  else toast({ group: 'New group', star: 'No starred messages yet', devices: 'Linked devices', contact: 'New contact', community: 'New community' }[act] || act);
+  else toast({ group: 'Groups are coming soon', star: 'No starred messages yet', devices: 'No linked devices', contact: 'Contacts appear when friends join', community: 'Communities are coming soon' }[act] || act);
 }
 $$('[data-act]').forEach(el => el.addEventListener('click', () => action(el.dataset.act)));
 
-/* generic delegated handlers */
 document.addEventListener('click', e => {
   const t = e.target.closest('[data-toast]'); if (t) toast(t.dataset.toast);
   const c = e.target.closest('[data-close]'); if (c) closeScreen(c.dataset.close);
+  const s = e.target.closest('[data-set]');
+  if (s) s.dataset.set === '__logout' ? logout() : toast(s.dataset.set);
 });
-
-/* ---------- Screens ---------- */
-const openScreen = id => $('#' + id).classList.add('open');
-const closeScreen = id => $('#' + id).classList.remove('open');
-$('#fab').addEventListener('click', () => openScreen('newChat'));
+$('#fab').addEventListener('click', () => { loadUsers().catch(() => {}); openScreen('newChat'); });
 
 /* ---------- Conversation ---------- */
-let current = null;
-
-function seed(c) {
-  history[c.id] = [
-    { out: false, text: 'Hey! How’s your day going?', t: '09:40' },
-    { out: true, text: 'Pretty good, just wrapping up some work ☀️', t: '09:41', tick: 'read' },
-    { out: false, text: c.msg.replace(/^[^:]+: /, ''), t: c.time.includes(':') ? c.time : '09:45' }
-  ];
-}
-function bubble(m) {
-  return `<div class="msg ${m.out ? 'out' : 'in'}">${m.text}<small>${m.t}${m.out ? tickIcon(m.tick) : ''}</small></div>`;
-}
-function openChat(id) {
-  const c = chats.find(x => x.id === +id); if (!c) return;
-  current = c; c.unread = 0;
-  if (!history[c.id]) seed(c);
-  $('#chatAvatar').outerHTML = avatar(c, 'sm').replace('class="avatar sm"', 'class="avatar sm" id="chatAvatar"');
-  $('#chatName').textContent = c.name;
-  $('#chatState').textContent = c.group ? 'tap here for group info' : c.online ? 'online' : 'last seen recently';
-  $('#messages').innerHTML = '<div class="day">Today</div>' + history[c.id].map(bubble).join('');
-  openScreen('chatScreen'); closeScreen('newChat');
-  scrollDown(); renderChats();
-}
+const bubble = m => {
+  const out = m.sender_id === me.id;
+  return `<div class="msg ${out ? 'out' : 'in'}">${esc(m.body)}<small>${clock(m.created_at)}${out ? tickIcon(m.read_at ? 'read' : 'delivered') : ''}</small></div>`;
+};
 const scrollDown = () => { const m = $('#messages'); m.scrollTop = m.scrollHeight; };
+const updateFav = () => { $('#favBtn i').className = (current && favs.has(current.id) ? 'fa-solid' : 'fa-regular') + ' fa-star'; };
 
-$('#chatList').addEventListener('click', e => { const r = e.target.closest('.row[data-id]'); if (r) openChat(r.dataset.id); });
-$('#stories').addEventListener('click', e => { const s = e.target.closest('.story[data-id]'); if (s) toast('Viewing status'); });
-$('#contactList').addEventListener('click', e => { const r = e.target.closest('[data-contact]'); if (r) openChat(r.dataset.contact); });
+function openChat(id) {
+  const p = users.find(u => u.id === +id) || chats.find(c => c.id === +id); if (!p) return;
+  current = p; sigMsgs = '';
+  $('#chatAvatar').outerHTML = avatar(p, 'sm').replace('class="avatar sm"', 'class="avatar sm" id="chatAvatar"');
+  $('#chatName').textContent = p.name;
+  $('#chatState').textContent = p.online ? 'online' : 'offline';
+  $('#messages').innerHTML = '';
+  updateFav(); openScreen('chatScreen'); closeScreen('newChat');
+  loadMessages(true).then(loadChats).catch(err => toast(err.message));
+}
+async function loadMessages(force) {
+  if (!current) return;
+  const who = current;
+  const d = await api('messages?with=' + who.id);
+  if (current !== who) return;
+  const sig = d.messages.map(m => m.id + (m.read_at ? 'r' : '')).join();
+  $('#chatState').textContent = d.online ? 'online' : 'offline';
+  if (!force && sig === sigMsgs) return;
+  sigMsgs = sig;
+  const box = $('#messages'), near = box.scrollHeight - box.scrollTop - box.clientHeight < 120;
+  let lastDay = '';
+  box.innerHTML = d.messages.length ? d.messages.map(m => {
+    const day = new Date(m.created_at).toDateString(); let h = '';
+    if (day !== lastDay) { lastDay = day; h = `<div class="day">${day === new Date().toDateString() ? 'Today' : new Date(m.created_at).toLocaleDateString([], { day: 'numeric', month: 'short' })}</div>`; }
+    return h + bubble(m);
+  }).join('') : '<div class="day">Say hello 👋</div>';
+  if (force || near) scrollDown();
+}
 
-$('#composer').addEventListener('submit', e => {
+$('#chatList').addEventListener('click', e => { const r = e.target.closest('[data-id]'); if (r) openChat(r.dataset.id); });
+document.addEventListener('click', e => { const r = e.target.closest('[data-contact]'); if (r) openChat(r.dataset.contact); });
+$('#favBtn').addEventListener('click', () => {
+  if (!current) return;
+  favs.has(current.id) ? favs.delete(current.id) : favs.add(current.id);
+  localStorage.setItem('sl_favs', JSON.stringify([...favs]));
+  updateFav(); renderChats();
+  toast(favs.has(current.id) ? 'Added to favorites' : 'Removed from favorites');
+});
+$('#composer').addEventListener('submit', async e => {
   e.preventDefault();
-  const input = $('#msgInput'), text = input.value.trim();
-  if (!text || !current) return;
-  const c = current, m = { out: true, text: '', t: nowTime(), tick: 'delivered' };
-  m.text = text.replace(/[&<>]/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[ch]));
-  history[c.id].push(m);
-  $('#messages').insertAdjacentHTML('beforeend', bubble(m));
-  input.value = ''; scrollDown();
-  c.msg = text; c.time = m.t; c.tick = 'delivered'; renderChats();
-
-  const typing = document.createElement('div');
-  typing.className = 'typing'; typing.innerHTML = '<i></i><i></i><i></i>';
-  setTimeout(() => { if (current === c) { $('#messages').appendChild(typing); scrollDown(); } }, 500);
-  setTimeout(() => {
-    typing.remove();
-    const r = { out: false, text: replies[Math.floor(Math.random() * replies.length)], t: nowTime() };
-    history[c.id].push(r); m.tick = 'read';
-    if (current === c && $('#chatScreen').classList.contains('open')) {
-      $('#messages').insertAdjacentHTML('beforeend', bubble(r)); scrollDown();
-    } else c.unread++;
-    c.msg = r.text; c.time = r.t; c.tick = null; renderChats();
-  }, 1900);
+  const input = $('#msgInput'), body = input.value.trim();
+  if (!body || !current) return;
+  input.value = '';
+  try {
+    await api('messages', { body: { to: current.id, body } });
+    await loadMessages(true); loadChats();
+  } catch (err) { toast(err.message); input.value = body; }
 });
 
 /* ---------- Init ---------- */
-renderChats(); renderStories(); renderViews(); showView('chats');
+setMode('login');
+if (token) api('me').then(d => start(d.user)).catch(() => logout(true));
