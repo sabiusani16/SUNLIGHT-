@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#075B42">
+<title>SUNLIGHT</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="app" id="app">
+
+  <header class="top">
+    <div class="top-row">
+      <div class="brand">
+        <span class="logo"><i class="fa-solid fa-sun"></i></span>
+        <h1>SUNLIGHT</h1>
+      </div>
+      <div class="top-actions">
+        <button class="icon-btn" id="cameraBtn" aria-label="Camera"><i class="fa-solid fa-camera"></i></button>
+        <button class="icon-btn" id="searchBtn" aria-label="Search"><i class="fa-solid fa-magnifying-glass"></i></button>
+        <button class="icon-btn" id="menuBtn" aria-label="Menu"><i class="fa-solid fa-ellipsis-vertical"></i></button>
+      </div>
+    </div>
+    <div class="searchbar" id="searchbar">
+      <i class="fa-solid fa-magnifying-glass"></i>
+      <input id="searchInput" type="search" placeholder="Search chats and messages" autocomplete="off">
+      <button class="icon-btn small" id="searchClose" aria-label="Close search"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <ul class="dropdown" id="menu">
+      <li data-act="group"><i class="fa-solid fa-user-group"></i>New group</li>
+      <li data-act="star"><i class="fa-regular fa-star"></i>Starred messages</li>
+      <li data-act="devices"><i class="fa-solid fa-laptop"></i>Linked devices</li>
+      <li data-act="settings"><i class="fa-solid fa-gear"></i>Settings</li>
+    </ul>
+  </header>
+
+  <main id="main">
+    <!-- CHATS -->
+    <section class="view active" id="view-chats">
+      <nav class="tabs" id="tabs">
+        <button class="tab active" data-filter="all">All</button>
+        <button class="tab" data-filter="unread">Unread<span class="pill" id="unreadCount"></span></button>
+        <button class="tab" data-filter="fav">Favorites</button>
+        <button class="tab" data-filter="group">Groups</button>
+      </nav>
+      <div class="stories" id="stories"></div>
+      <div class="chat-list" id="chatList"></div>
+    </section>
+
+    <!-- UPDATES -->
+    <section class="view" id="view-updates">
+      <h2 class="title">Updates</h2>
+      <div class="my-status" id="myStatus"></div>
+      <h3 class="sub">Recent updates</h3>
+      <div class="chat-list" id="updateList"></div>
+    </section>
+
+    <!-- COMMUNITIES -->
+    <section class="view" id="view-communities">
+      <h2 class="title">Communities</h2>
+      <div class="chat-list" id="communityList"></div>
+    </section>
+
+    <!-- CALLS -->
+    <section class="view" id="view-calls">
+      <h2 class="title">Calls</h2>
+      <div class="chat-list" id="callList"></div>
+    </section>
+
+    <!-- SETTINGS -->
+    <section class="view" id="view-settings">
+      <h2 class="title">Settings</h2>
+      <div class="profile-card">
+        <div class="avatar big"><img src="https://i.pravatar.cc/150?img=47" alt="" onerror="this.remove()"><span>Y</span></div>
+        <div><strong>You</strong><p>Hey there! I am using SUNLIGHT</p></div>
+      </div>
+      <div class="settings-list" id="settingsList"></div>
+    </section>
+  </main>
+
+  <button class="fab" id="fab" aria-label="New chat"><i class="fa-solid fa-message"></i></button>
+
+  <nav class="bottom-nav" id="bottomNav">
+    <button class="nav-item active" data-view="chats"><span class="nav-ico"><i class="fa-solid fa-message"></i></span>Chats</button>
+    <button class="nav-item" data-view="updates"><span class="nav-ico"><i class="fa-regular fa-circle-dot"></i></span>Updates</button>
+    <button class="nav-item" data-view="communities"><span class="nav-ico"><i class="fa-solid fa-users"></i></span>Communities</button>
+    <button class="nav-item" data-view="calls"><span class="nav-ico"><i class="fa-solid fa-phone"></i></span>Calls</button>
+    <button class="nav-item" data-view="settings"><span class="nav-ico"><i class="fa-solid fa-gear"></i></span>Settings</button>
+  </nav>
+
+  <!-- NEW CHAT -->
+  <div class="screen" id="newChat">
+    <div class="screen-head">
+      <button class="icon-btn light" data-close="newChat" aria-label="Back"><i class="fa-solid fa-arrow-left"></i></button>
+      <div><strong>New chat</strong><small id="contactCount"></small></div>
+    </div>
+    <div class="quick">
+      <button data-act="group"><span class="q-ico"><i class="fa-solid fa-user-group"></i></span>New group</button>
+      <button data-act="contact"><span class="q-ico"><i class="fa-solid fa-user-plus"></i></span>New contact</button>
+      <button data-act="community"><span class="q-ico"><i class="fa-solid fa-users"></i></span>New community</button>
+    </div>
+    <h3 class="sub">Contacts on SUNLIGHT</h3>
+    <div class="chat-list" id="contactList"></div>
+  </div>
+
+  <!-- CONVERSATION -->
+  <div class="screen chat-screen" id="chatScreen">
+    <div class="screen-head">
+      <button class="icon-btn light" data-close="chatScreen" aria-label="Back"><i class="fa-solid fa-arrow-left"></i></button>
+      <div class="avatar sm" id="chatAvatar"></div>
+      <div class="grow"><strong id="chatName"></strong><small id="chatState"></small></div>
+      <button class="icon-btn light" data-toast="Video call"><i class="fa-solid fa-video"></i></button>
+      <button class="icon-btn light" data-toast="Voice call"><i class="fa-solid fa-phone"></i></button>
+    </div>
+    <div class="messages" id="messages"></div>
+    <form class="composer" id="composer">
+      <button type="button" class="icon-btn" data-toast="Attachments"><i class="fa-solid fa-paperclip"></i></button>
+      <input id="msgInput" type="text" placeholder="Message" autocomplete="off">
+      <button class="send" id="sendBtn" aria-label="Send"><i class="fa-solid fa-paper-plane"></i></button>
+    </form>
+  </div>
+
+  <div class="toast" id="toast"></div>
+</div>
+<script src="script.js"></script>
+</body>
+</html>
