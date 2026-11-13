@@ -1,0 +1,18 @@
+name = "sunlight"
+main = "src/worker.js"
+compatibility_date = "2025-09-01"
+
+# Shows Worker errors in Cloudflare dashboard > Workers > sunlight > Logs
+[observability]
+enabled = true
+
+# Static app: public/index.html (HTML + CSS + JS in one file)
+[assets]
+directory = "./public"
+binding = "ASSETS"
+
+# Cloudflare D1 database (binding name MUST stay "DB")
+[[d1_databases]]
+binding = "DB"
+database_name = "sunlight-db"
+database_id = "14778838-61d9-4fd5-a6be-a7d778348def"
