@@ -5,6 +5,8 @@ const hex = b => [...new Uint8Array(b)].map(x => x.toString(16).padStart(2, '0')
 const rand = n => hex(crypto.getRandomValues(new Uint8Array(n)));
 const ONLINE_MS = 30000, SESSION_MS = 30 * 864e5;
 const EMAIL = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
+const likeEsc = s => s.replace(/[\\%_]/g, '\\$&');            // escape LIKE wildcards in user input
+const publicUser = (u, now) => ({ id: u.id, name: u.name, username: u.username, online: now - u.last_seen < ONLINE_MS }); // never includes email / hashes
 
 async function hashPw(pw, salt) {
   const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(pw), 'PBKDF2', false, ['deriveBits']);
@@ -19,7 +21,9 @@ const TABLES = [
   `CREATE TABLE IF NOT EXISTS sessions (token TEXT PRIMARY KEY, user_id INTEGER NOT NULL, created_at INTEGER NOT NULL)`,
   `CREATE TABLE IF NOT EXISTS messages (id INTEGER PRIMARY KEY AUTOINCREMENT, sender_id INTEGER NOT NULL, receiver_id INTEGER NOT NULL, body TEXT NOT NULL, created_at INTEGER NOT NULL, read_at INTEGER)`,
   `CREATE INDEX IF NOT EXISTS idx_msg_pair ON messages(sender_id, receiver_id, id)`,
-  `CREATE INDEX IF NOT EXISTS idx_msg_recv ON messages(receiver_id, read_at)`
+  `CREATE INDEX IF NOT EXISTS idx_msg_recv ON messages(receiver_id, read_at)`,
+  `CREATE TABLE IF NOT EXISTS contacts (owner_id INTEGER NOT NULL, contact_id INTEGER NOT NULL, created_at INTEGER NOT NULL, PRIMARY KEY (owner_id, contact_id))`,
+  `CREATE INDEX IF NOT EXISTS idx_contacts_contact ON contacts(contact_id)`
 ];
 const USER_COLS = { username: "TEXT", email: 'TEXT', name: "TEXT NOT NULL DEFAULT ''", pass_hash: "TEXT NOT NULL DEFAULT ''", salt: "TEXT NOT NULL DEFAULT ''", created_at: 'INTEGER NOT NULL DEFAULT 0', last_seen: 'INTEGER NOT NULL DEFAULT 0' };
 let ready = null;
@@ -112,9 +116,44 @@ async function route(req, env, url) {
     return json({ ok: true });
   }
 
-  if (p === 'users') {
-    const { results } = await db.prepare('SELECT id,name,username,last_seen FROM users WHERE id!=? ORDER BY name LIMIT 200').bind(me.id).all();
-    return json({ users: results.map(u => ({ id: u.id, name: u.name, username: u.username, online: now - u.last_seen < ONLINE_MS })) });
+  // ---- search registered users by username or full name (authenticated only) ----
+  if (p === 'users/search' && !post) {
+    const q = (url.searchParams.get('q') || '').trim().replace(/^@+/, '').slice(0, 40);
+    if (!q) return json({ users: [] });
+    const ql = q.toLowerCase();
+    const { results } = await db.prepare(`
+      SELECT u.id,u.name,u.username,u.last_seen,
+        EXISTS(SELECT 1 FROM contacts c WHERE c.owner_id=?1 AND c.contact_id=u.id) is_contact
+      FROM users u
+      WHERE u.id!=?1 AND (u.username LIKE ?2 ESCAPE '\\' OR u.name LIKE ?2 ESCAPE '\\')
+      ORDER BY CASE WHEN u.username=?3 THEN 0 WHEN u.username LIKE ?4 ESCAPE '\\' THEN 1 WHEN u.name LIKE ?4 ESCAPE '\\' THEN 2 ELSE 3 END, u.name
+      LIMIT 30`).bind(me.id, '%' + likeEsc(q) + '%', ql, likeEsc(q) + '%').all();
+    return json({ users: results.map(u => ({ ...publicUser(u, now), is_contact: !!u.is_contact })) });
+  }
+
+  // ---- my saved contacts ----
+  if (p === 'contacts' && !post) {
+    const { results } = await db.prepare(
+      'SELECT u.id,u.name,u.username,u.last_seen FROM contacts c JOIN users u ON u.id=c.contact_id WHERE c.owner_id=? ORDER BY u.name LIMIT 500'
+    ).bind(me.id).all();
+    return json({ contacts: results.map(u => publicUser(u, now)) });
+  }
+
+  if (p === 'contacts' && post) {
+    const id = Number(body.user_id);
+    if (!Number.isInteger(id) || id < 1) return json({ error: 'Invalid user' }, 400);
+    if (id === me.id) return json({ error: 'You cannot add yourself as a contact' }, 400);
+    const u = await db.prepare('SELECT id,name,username,last_seen FROM users WHERE id=?').bind(id).first();
+    if (!u) return json({ error: 'User not found' }, 404);
+    const r = await db.prepare('INSERT OR IGNORE INTO contacts(owner_id,contact_id,created_at) VALUES(?,?,?)').bind(me.id, id, now).run();
+    return json({ contact: publicUser(u, now), already: !r.meta.changes });
+  }
+
+  if (p === 'contacts/remove' && post) {
+    const id = Number(body.user_id);
+    if (!Number.isInteger(id) || id < 1) return json({ error: 'Invalid user' }, 400);
+    await db.prepare('DELETE FROM contacts WHERE owner_id=? AND contact_id=?').bind(me.id, id).run();
+    return json({ ok: true });
   }
 
   if (p === 'chats') {
@@ -128,6 +167,7 @@ async function route(req, env, url) {
 
   if (p === 'messages' && !post) {
     const peerId = parseInt(url.searchParams.get('with'), 10);
+    if (!Number.isInteger(peerId)) return json({ error: 'User not found' }, 404);
     const peer = await db.prepare('SELECT id,last_seen FROM users WHERE id=?').bind(peerId).first();
     if (!peer) return json({ error: 'User not found' }, 404);
     await db.prepare('UPDATE messages SET read_at=? WHERE sender_id=? AND receiver_id=? AND read_at IS NULL').bind(now, peerId, me.id).run();
@@ -141,7 +181,7 @@ async function route(req, env, url) {
   if (p === 'messages' && post) {
     const to = parseInt(body.to, 10), text = String(body.body || '').trim();
     if (!text || text.length > 2000) return json({ error: 'Message must be 1–2000 characters' }, 400);
-    if (to === me.id || !(await db.prepare('SELECT id FROM users WHERE id=?').bind(to).first())) return json({ error: 'User not found' }, 404);
+    if (!Number.isInteger(to) || to === me.id || !(await db.prepare('SELECT id FROM users WHERE id=?').bind(to).first())) return json({ error: 'User not found' }, 404);
     const r = await db.prepare('INSERT INTO messages(sender_id,receiver_id,body,created_at) VALUES(?,?,?,?)').bind(me.id, to, text, now).run();
     return json({ id: r.meta.last_row_id });
   }
