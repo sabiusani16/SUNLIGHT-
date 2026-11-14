@@ -40,7 +40,11 @@ function ensureSchema(db) {
 export default {
   async fetch(req, env) {
     const url = new URL(req.url);
-    if (!url.pathname.startsWith('/api/')) return env.ASSETS.fetch(req);
+    if (!url.pathname.startsWith('/api/')) {
+      // The app page is served by the static-assets binding ("ASSETS", from [assets] in wrangler.toml).
+      if (!env.ASSETS) return new Response('SUNLIGHT: the static assets binding "ASSETS" is missing on this deployment.\nDeploy from the project folder with: wrangler deploy\n(wrangler.toml must contain [assets] directory = "./public", binding = "ASSETS", and public/index.html must exist.)', { status: 500, headers: { 'content-type': 'text/plain; charset=utf-8', 'cache-control': 'no-store' } });
+      return env.ASSETS.fetch(req);
+    }
     if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS });
     if (!env.DB) return json({ error: 'Database is not connected. Add the D1 binding named "DB" in wrangler.toml and redeploy.', code: 'DB_BINDING' }, 500);
     try {
@@ -68,7 +72,7 @@ async function route(req, env, url) {
 
   if (p === 'health') {
     const r = await db.prepare('SELECT COUNT(*) n FROM users').first();
-    return json({ ok: true, database: 'connected', users: r.n });
+    return json({ ok: true, database: 'connected', assets: !!env.ASSETS, users: r.n });
   }
 
   if (p === 'register' && post) {
