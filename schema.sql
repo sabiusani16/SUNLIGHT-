@@ -1,3 +1,4 @@
+-- FRESH database only. For an EXISTING database run the files in migrations/ instead (they add new columns without touching your data).
 -- SUNLIGHT schema (the Worker also applies this automatically on first request)
 CREATE TABLE IF NOT EXISTS users (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -21,7 +22,41 @@ CREATE TABLE IF NOT EXISTS messages (
   receiver_id INTEGER NOT NULL,
   body TEXT NOT NULL,
   created_at INTEGER NOT NULL,
-  read_at INTEGER
+  read_at INTEGER,
+  type TEXT NOT NULL DEFAULT 'text',
+  media_key TEXT,
+  media_type TEXT,
+  media_size INTEGER,
+  duration INTEGER,
+  reply_to INTEGER,
+  delivered_at INTEGER,
+  deleted_at INTEGER
 );
 CREATE INDEX IF NOT EXISTS idx_msg_pair ON messages(sender_id, receiver_id, id);
 CREATE INDEX IF NOT EXISTS idx_msg_recv ON messages(receiver_id, read_at);
+
+-- Contacts: each row = "owner_id saved contact_id in their contact list"
+CREATE TABLE IF NOT EXISTS contacts (
+  owner_id INTEGER NOT NULL,
+  contact_id INTEGER NOT NULL,
+  created_at INTEGER NOT NULL,
+  PRIMARY KEY (owner_id, contact_id)   -- prevents duplicate contacts
+);
+CREATE INDEX IF NOT EXISTS idx_contacts_contact ON contacts(contact_id);
+CREATE INDEX IF NOT EXISTS idx_msg_media ON messages(media_key);
+CREATE INDEX IF NOT EXISTS idx_msg_deliv ON messages(receiver_id, delivered_at);
+
+-- Photos and voice notes live in D1 (no R2 / no card needed). Files are split into small chunks.
+CREATE TABLE IF NOT EXISTS media (
+  key TEXT PRIMARY KEY,
+  owner_id INTEGER NOT NULL,
+  type TEXT NOT NULL,
+  size INTEGER NOT NULL,
+  created_at INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS media_chunks (
+  key TEXT NOT NULL,
+  idx INTEGER NOT NULL,
+  data TEXT NOT NULL,
+  PRIMARY KEY (key, idx)
+);
