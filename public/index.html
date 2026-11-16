@@ -251,6 +251,10 @@ mark{background:var(--gold-s);color:inherit;border-radius:3px;padding:0 1px}
 @keyframes shimmer{0%{background-position:100% 0}100%{background-position:0 0}}
 .empty small{display:block;margin-top:6px;font-size:13px}
 
+/* profile photo */
+.av-edit{position:relative;flex:none;cursor:pointer}
+.av-edit .cam{position:absolute;right:-2px;bottom:-2px;width:26px;height:26px;border-radius:50%;background:var(--gold);color:var(--green-d);border:2px solid #fff;display:grid;place-items:center;font-size:11px}
+
 /* toast */
 .toast{position:absolute;left:50%;bottom:100px;transform:translate(-50%,20px);background:var(--text);color:#fff;padding:10px 18px;border-radius:22px;font-size:13px;font-weight:500;opacity:0;pointer-events:none;transition:.25s;z-index:60;white-space:nowrap;max-width:90%}
 .toast.show{opacity:1;transform:translate(-50%,0)}
@@ -460,6 +464,7 @@ mark{background:var(--gold-s);color:inherit;border-radius:3px;padding:0 1px}
     </form>
   </div>
 
+  <input type="file" id="avatarInput" accept="image/*" hidden>
   <div class="toast" id="toast"></div>
 </div>
 <script>
@@ -471,7 +476,7 @@ const COLORS = ['#075B42', '#0E7C5A', '#8A6D0B', '#2F6F8F', '#6B4E9B', '#B5533C'
 
 let token = localStorage.getItem('sl_token'), me = null, chats = [], contacts = [], results = [], current = null;
 let filter = 'all', query = '', pollTimer = null, sigChats = '', sigContacts = '', sigMsgs = '';
-let searchSeq = 0, searchTimer = null, lastQ = '';
+let searchSeq = 0, searchTimer = null, lastQ = '', retryQ = '';
 const favs = new Set(JSON.parse(localStorage.getItem('sl_favs') || '[]'));
 
 /* ---------- API ---------- */
@@ -493,8 +498,16 @@ async function api(path, opts = {}) {
 
 /* ---------- Helpers ---------- */
 const initials = n => n.trim().split(/\s+/).map(w => w[0]).slice(0, 2).join('').toUpperCase();
+const avImg = p => p.avatar ? `<img alt="" ${mediaDone.has(p.avatar) ? `src="${mediaDone.get(p.avatar)}"` : `data-av="${esc(p.avatar)}"`} onerror="this.remove()">` : '';
 const avatar = (p, extra = '', dot = false) =>
-  `<div class="avatar ${extra}" style="background:${COLORS[p.id % COLORS.length]}"><span>${esc(initials(p.name))}</span>${dot && p.online ? '<i class="dot"></i>' : ''}</div>`;
+  `<div class="avatar ${extra}" style="background:${COLORS[p.id % COLORS.length]}"><span>${esc(initials(p.name))}</span>${avImg(p)}${dot && p.online ? '<i class="dot"></i>' : ''}</div>`;
+function hydrateAvatars() {                                 // photos are private downloads: fetched with the login token, shown over the initials
+  $$('img[data-av]').forEach(img => {
+    const key = img.dataset.av; img.removeAttribute('data-av');
+    mediaUrl(key).then(u => { img.src = u; }).catch(() => img.remove());
+  });
+}
+new MutationObserver(hydrateAvatars).observe($('#app'), { childList: true, subtree: true });
 const tickIcon = t => !t ? '' : t === 'sending' ? '<i class="fa-regular fa-clock tick"></i>'
   : t === 'failed' ? '<i class="fa-solid fa-circle-exclamation tick fail"></i>'
   : t === 'sent' ? '<i class="fa-solid fa-check tick"></i>'
@@ -582,7 +595,7 @@ async function start(user) {
 async function loadChats() {
   const d = await api('chats');
   const next = d.chats.map(c => ({
-    id: c.id, name: c.name, online: c.online, unread: c.unread, time: fmt(c.last_at), msg: c.last_body || '',
+    id: c.id, name: c.name, avatar: c.avatar || null, online: c.online, unread: c.unread, time: fmt(c.last_at), msg: c.last_body || '',
     type: c.last_type || 'text', deleted: !!c.last_deleted,
     tick: c.last_sender === me.id && !c.last_deleted ? (c.last_read ? 'read' : c.last_delivered ? 'delivered' : 'sent') : null
   }));
@@ -634,9 +647,11 @@ function renderChats() {
 
 function renderProfile() {
   const mine = avatar(me, '');
-  $('#profileCard').innerHTML = `${mine.replace('class="avatar ', 'class="avatar big ')}<div><strong>${esc(me.name)}</strong><p>@${esc(me.username)}</p></div>`;
+  $('#profileCard').innerHTML = `<div class="av-edit" data-set="__photo" role="button" aria-label="Change profile photo">${mine.replace('class="avatar ', 'class="avatar big ')}<i class="cam fa-solid fa-camera"></i></div><div><strong>${esc(me.name)}</strong><p>@${esc(me.username)}</p></div>`;
   $('#myStatus').innerHTML = `${mine.replace('</div>', '<i class="add-badge fa-solid fa-plus"></i></div>')}<div><strong>My status</strong><p>Tap to add a status update</p></div>`;
   $('#settingsList').innerHTML = [
+    ['fa-camera', 'Profile photo', me.avatar ? 'Change your photo' : 'Add a photo so friends recognise you', '__photo'],
+    ...(me.avatar ? [['fa-trash', 'Remove photo', 'Go back to your initials', '__rmphoto']] : []),
     ['fa-key', 'Account', '@' + me.username, 'Account'],
     ['fa-bell', 'Notifications', 'Message tones', 'Notifications'],
     ['fa-circle-question', 'Help', 'Help centre, contact us', 'Help'],
@@ -715,9 +730,9 @@ document.addEventListener('click', e => {
   const t = e.target.closest('[data-toast]'); if (t) toast(t.dataset.toast);
   const c = e.target.closest('[data-close]'); if (c) { closeScreen(c.dataset.close); if (c.dataset.close === 'newChat') resetSearch(); if (c.dataset.close === 'chatScreen') leaveChat(); }
   const s = e.target.closest('[data-set]');
-  if (s) s.dataset.set === '__logout' ? logout() : toast(s.dataset.set);
+  if (s) { const k = s.dataset.set; k === '__logout' ? logout() : k === '__photo' ? $('#avatarInput').click() : k === '__rmphoto' ? removeAvatar() : toast(k); }
 });
-$('#fab').addEventListener('click', () => { resetSearch(); loadContacts().catch(() => {}); openScreen('newChat'); });
+$('#fab').addEventListener('click', () => { resetSearch(); loadContacts().catch(showContactsError); openScreen('newChat'); });
 
 /* ---------- Conversation ---------- */
 const MAX_REC = 300, MAX_VOICE_BYTES = 900000;              // longest voice note (seconds) / biggest file (D1 storage)
@@ -952,10 +967,36 @@ function jumpTo(id) {
 }
 
 /* --- photos: pick, compress, preview with caption, send --- */
+async function loadBitmap(file) {
+  try { return await createImageBitmap(file); }
+  catch { return new Promise((ok, no) => { const i = new Image(); i.onload = () => ok(i); i.onerror = no; i.src = URL.createObjectURL(file); }); }
+}
+async function squareAvatar(file, size = 256) {             // centred square crop, 256px: a profile photo is only ~15-30KB
+  const src = await loadBitmap(file), side = Math.min(src.width, src.height);
+  const c = document.createElement('canvas'); c.width = c.height = size;
+  const g = c.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, size, size);
+  g.drawImage(src, (src.width - side) / 2, (src.height - side) / 2, side, side, 0, 0, size, size);
+  for (const q of [.85, .7, .55]) { const b = await new Promise(ok => c.toBlob(ok, 'image/jpeg', q)); if (b && b.size <= 200000) return b; }
+  throw new Error('Photo is too large');
+}
+async function changeAvatar(file) {
+  if (!file) return;
+  if (!file.type.startsWith('image/')) return toast('Please choose a photo');
+  toast('Uploading photo…');
+  try {
+    const blob = await squareAvatar(file), up = await upload(blob, 'image');
+    const d = await api('profile/avatar', { body: { key: up.key } });
+    const url = URL.createObjectURL(blob); media.set(d.avatar, Promise.resolve(url)); mediaDone.set(d.avatar, url);   // show it at once from the local copy
+    me.avatar = d.avatar; renderProfile(); renderStories(); toast('Profile photo updated');
+  } catch (err) { toast(err.message); }
+}
+async function removeAvatar() {
+  try { await api('profile/avatar/remove', { body: {} }); me.avatar = null; renderProfile(); renderStories(); toast('Profile photo removed'); }
+  catch (err) { toast(err.message); }
+}
+$('#avatarInput').addEventListener('change', e => { changeAvatar(e.target.files[0]); e.target.value = ''; });
 async function compressImage(file) {                        // shrink until <= 900KB (photos are stored in D1)
-  let src;
-  try { src = await createImageBitmap(file); }
-  catch { src = await new Promise((ok, no) => { const i = new Image(); i.onload = () => ok(i); i.onerror = no; i.src = URL.createObjectURL(file); }); }
+  const src = await loadBitmap(file);
   for (const [max, q] of [[1600, .82], [1280, .72], [1024, .62], [800, .55], [640, .5]]) {
     const k = Math.min(1, max / Math.max(src.width, src.height));
     const c = document.createElement('canvas'); c.width = Math.round(src.width * k); c.height = Math.round(src.height * k);
@@ -1068,8 +1109,8 @@ async function runSearch(q) {
     results = d.users; lastQ = q; renderResults();
   } catch (err) {
     if (seq !== searchSeq) return;
-    results = [];
-    $('#resultList').innerHTML = empty('fa-solid fa-triangle-exclamation', esc(err.message));
+    results = []; retryQ = q;
+    $('#resultList').innerHTML = empty('fa-solid fa-triangle-exclamation', `${esc(err.message)}<small><button type="button" class="act-btn add" data-retry="search" style="margin-top:12px"><i class="fa-solid fa-rotate-right"></i>Try again</button></small>`);
   }
   nsBar.classList.remove('loading');
 }
@@ -1113,7 +1154,16 @@ async function removeContact(id, btn) {
     await loadContacts();
   } catch (err) { toast(err.message); btn.disabled = false; }
 }
+function showContactsError(err) {                           // initial contact list could not load: say so, offer a retry
+  if (contacts.length) return;
+  $('#contactList').innerHTML = empty('fa-solid fa-triangle-exclamation', `Could not load your contacts<small>${esc(err.message)}<br><button type="button" class="act-btn add" data-retry="contacts" style="margin-top:12px"><i class="fa-solid fa-rotate-right"></i>Try again</button></small>`);
+}
 $('#newChat').addEventListener('click', e => {
+  const rt = e.target.closest('[data-retry]');
+  if (rt) {
+    if (rt.dataset.retry === 'search' && retryQ) { $('#resultList').innerHTML = skeleton(); return runSearch(retryQ); }
+    if (rt.dataset.retry === 'contacts') { $('#contactList').innerHTML = skeleton(); sigContacts = ''; return loadContacts().catch(showContactsError); }
+  }
   const add = e.target.closest('[data-add]'); if (add) return addContact(+add.dataset.add, add);
   const rm = e.target.closest('[data-remove]'); if (rm) return removeContact(+rm.dataset.remove, rm);
   const row = e.target.closest('[data-open]'); if (row) openChat(row.dataset.open);
