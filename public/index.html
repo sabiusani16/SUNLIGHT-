@@ -1195,7 +1195,7 @@ function drawProfile() {
       <button type="button" data-pclose>Close</button></div></div>`;
 }
 async function openProfile(id) {
-  const known = contacts.find(c => c.id === id) || results.find(c => c.id === id);
+  const known = contacts.find(c => c.id === id) || results.find(c => c.id === id) || chats.find(c => c.id === id);
   profUser = known ? { ...known } : { id, name: 'Loading…', username: '…', avatar: null };
   $('#profBg').hidden = $('#profSheet').hidden = false; drawProfile();
   try { const d = await api('users/' + id); if (profUser && profUser.id === id) { profUser = d.user; drawProfile(); } }
@@ -1205,7 +1205,7 @@ $('#profBg').addEventListener('click', closeProfile);
 $('#profSheet').addEventListener('click', async e => {
   const u = profUser; if (!u) return;
   if (e.target.closest('[data-pclose]')) return closeProfile();
-  if (e.target.closest('[data-pmsg]')) { const p = { ...u }; closeProfile(); if (!contacts.find(c => c.id === p.id)) results = [p, ...results.filter(r => r.id !== p.id)]; return openChat(p.id); }
+  if (e.target.closest('[data-pmsg]')) { const p = { ...u }; closeProfile(); if (current && current.id === p.id) return; if (!contacts.find(c => c.id === p.id)) results = [p, ...results.filter(r => r.id !== p.id)]; return openChat(p.id); }
   try {
     if (e.target.closest('[data-padd]')) { await api('contacts', { body: { user_id: u.id } }); toast('Added to contacts'); u.is_contact = true; }
     else if (e.target.closest('[data-prm]')) { await api('contacts/remove', { body: { user_id: u.id } }); toast('Removed from contacts'); u.is_contact = false; }
@@ -1214,10 +1214,13 @@ $('#profSheet').addEventListener('click', async e => {
     await loadContacts(); if (!$('#nsResults').hidden) renderResults();
   } catch (err) { toast(err.message); }
 });
-document.addEventListener('click', e => {                   // tapping a photo/name opens the profile (capture: before the row opens the chat)
-  const av = e.target.closest('#newChat .row .avatar, #view-contacts .row .avatar'); if (!av) return;
-  const row = av.closest('[data-open]'); if (!row) return;
-  e.stopPropagation(); openProfile(+row.dataset.open);
+document.addEventListener('click', e => {                   // tapping a photo opens that person's profile (capture: runs before the row opens the chat)
+  const hd = e.target.closest('#chatAvatar, #chatName');    // chat header: photo or name
+  if (hd && current) { e.stopPropagation(); return openProfile(current.id); }
+  const av = e.target.closest('#newChat .row .avatar, #chatList .row .avatar, #view-chats .row .avatar, #stories .story .avatar'); if (!av) return;
+  const holder = av.closest('[data-open],[data-id],[data-contact]'); if (!holder) return;
+  const id = +(holder.dataset.open || holder.dataset.id || holder.dataset.contact); if (!id) return;
+  e.stopPropagation(); openProfile(id);
 }, true);
 
 /* ---------- Init ---------- */
