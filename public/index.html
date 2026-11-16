@@ -255,6 +255,18 @@ mark{background:var(--gold-s);color:inherit;border-radius:3px;padding:0 1px}
 .av-edit{position:relative;flex:none;cursor:pointer}
 .av-edit .cam{position:absolute;right:-2px;bottom:-2px;width:26px;height:26px;border-radius:50%;background:var(--gold);color:var(--green-d);border:2px solid #fff;display:grid;place-items:center;font-size:11px}
 
+/* profile sheet */
+.prof{text-align:center;padding:6px 18px 8px}
+.prof .avatar{width:96px;height:96px;font-size:34px;margin:6px auto 12px}
+.prof h3{font-size:19px;margin:0}.prof p{color:#6B7B75;margin:4px 0 0;font-size:14px}
+.prof .st{display:inline-flex;align-items:center;gap:6px;margin-top:8px;font-size:13px;color:#6B7B75}
+.prof .st i{width:9px;height:9px;border-radius:50%;background:#B8C4BF}.prof .st.on{color:#1E9E5A}.prof .st.on i{background:#2DCB73}
+.prof .btns{display:flex;gap:10px;margin-top:18px}
+.prof .btns button{flex:1;justify-content:center;height:44px;border-radius:22px;border:1.5px solid var(--green);color:var(--green);font-weight:700;display:flex;align-items:center;gap:8px}
+.prof .btns .main{background:var(--green);color:#fff}
+.prof .btns .danger{border-color:#F1C4C4;color:#D64545}
+#profBg{position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:80}
+#profSheet{position:fixed;left:50%;transform:translateX(-50%);width:100%;max-width:480px;bottom:0;z-index:81;background:#fff;border-radius:22px 22px 0 0;padding:10px 8px calc(16px + env(safe-area-inset-bottom,0px));box-shadow:0 -10px 30px rgba(0,0,0,.18);animation:rise .22s ease}
 /* toast */
 .toast{position:absolute;left:50%;bottom:100px;transform:translate(-50%,20px);background:var(--text);color:#fff;padding:10px 18px;border-radius:22px;font-size:13px;font-weight:500;opacity:0;pointer-events:none;transition:.25s;z-index:60;white-space:nowrap;max-width:90%}
 .toast.show{opacity:1;transform:translate(-50%,0)}
@@ -465,6 +477,7 @@ mark{background:var(--gold-s);color:inherit;border-radius:3px;padding:0 1px}
   </div>
 
   <input type="file" id="avatarInput" accept="image/*" hidden>
+  <div id="profBg" hidden></div><div id="profSheet" hidden role="dialog" aria-label="Profile"></div>
   <div class="toast" id="toast"></div>
 </div>
 <script>
@@ -1168,6 +1181,44 @@ $('#newChat').addEventListener('click', e => {
   const rm = e.target.closest('[data-remove]'); if (rm) return removeContact(+rm.dataset.remove, rm);
   const row = e.target.closest('[data-open]'); if (row) openChat(row.dataset.open);
 });
+
+/* ---------- View profile ---------- */
+let profUser = null;
+function closeProfile() { $('#profBg').hidden = $('#profSheet').hidden = true; profUser = null; }
+function drawProfile() {
+  const u = profUser; if (!u) return;
+  $('#profSheet').innerHTML = `<div class="grab" style="width:38px;height:4px;border-radius:2px;background:#D8E2DD;margin:0 auto 8px"></div><div class="prof">${avatar(u)}
+    <h3>${esc(u.name)}</h3><p>@${esc(u.username)}</p>
+    <div class="st ${u.online ? 'on' : ''}"><i></i>${u.online ? 'Online' : 'Offline'}</div>
+    <div class="btns">${u.is_me ? '' : `<button type="button" class="main" data-pmsg><i class="fa-solid fa-message"></i>Message</button>
+      ${u.is_contact ? '<button type="button" class="danger" data-prm><i class="fa-solid fa-user-minus"></i>Remove</button>' : '<button type="button" data-padd><i class="fa-solid fa-user-plus"></i>Add contact</button>'}`}
+      <button type="button" data-pclose>Close</button></div></div>`;
+}
+async function openProfile(id) {
+  const known = contacts.find(c => c.id === id) || results.find(c => c.id === id);
+  profUser = known ? { ...known } : { id, name: 'Loading…', username: '…', avatar: null };
+  $('#profBg').hidden = $('#profSheet').hidden = false; drawProfile();
+  try { const d = await api('users/' + id); if (profUser && profUser.id === id) { profUser = d.user; drawProfile(); } }
+  catch (err) { toast(err.message); closeProfile(); }
+}
+$('#profBg').addEventListener('click', closeProfile);
+$('#profSheet').addEventListener('click', async e => {
+  const u = profUser; if (!u) return;
+  if (e.target.closest('[data-pclose]')) return closeProfile();
+  if (e.target.closest('[data-pmsg]')) { const p = { ...u }; closeProfile(); if (!contacts.find(c => c.id === p.id)) results = [p, ...results.filter(r => r.id !== p.id)]; return openChat(p.id); }
+  try {
+    if (e.target.closest('[data-padd]')) { await api('contacts', { body: { user_id: u.id } }); toast('Added to contacts'); u.is_contact = true; }
+    else if (e.target.closest('[data-prm]')) { await api('contacts/remove', { body: { user_id: u.id } }); toast('Removed from contacts'); u.is_contact = false; }
+    else return;
+    drawProfile(); const r = results.find(x => x.id === u.id); if (r) r.is_contact = u.is_contact;
+    await loadContacts(); if (!$('#nsResults').hidden) renderResults();
+  } catch (err) { toast(err.message); }
+});
+document.addEventListener('click', e => {                   // tapping a photo/name opens the profile (capture: before the row opens the chat)
+  const av = e.target.closest('#newChat .row .avatar, #view-contacts .row .avatar'); if (!av) return;
+  const row = av.closest('[data-open]'); if (!row) return;
+  e.stopPropagation(); openProfile(+row.dataset.open);
+}, true);
 
 /* ---------- Init ---------- */
 setMode('login');
