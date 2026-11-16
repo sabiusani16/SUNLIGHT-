@@ -8,7 +8,8 @@ CREATE TABLE IF NOT EXISTS users (
   pass_hash TEXT NOT NULL,
   salt TEXT NOT NULL,
   created_at INTEGER NOT NULL,
-  last_seen INTEGER NOT NULL
+  last_seen INTEGER NOT NULL,
+  avatar_key TEXT
 );
 CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email ON users(email) WHERE email IS NOT NULL;
 CREATE TABLE IF NOT EXISTS sessions (
