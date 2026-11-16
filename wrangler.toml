@@ -16,3 +16,9 @@ binding = "ASSETS"
 binding = "DB"
 database_name = "sunlight-db"
 database_id = "14778838-61d9-4fd5-a6be-a7d778348def"
+name = "sunlight"
+compatibility_date = "2026-11-16"
+
+[assets]
+directory = "./public"
+binding = "ASSETS"
