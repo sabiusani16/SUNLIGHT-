@@ -27,7 +27,7 @@ function sniff(kind, b64) {                                // what the file REAL
   }
   return null;
 }
-const publicUser = (u, now) => ({ id: u.id, name: u.name, username: u.username, online: now - u.last_seen < ONLINE_MS }); // never includes email / hashes
+const publicUser = (u, now) => ({ id: u.id, name: u.name, username: u.username, avatar: u.avatar_key || null, online: now - u.last_seen < ONLINE_MS }); // never includes email / hashes
 
 async function hashPw(pw, salt) {
   const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(pw), 'PBKDF2', false, ['deriveBits']);
@@ -48,7 +48,7 @@ const TABLES = [
   `CREATE TABLE IF NOT EXISTS media (key TEXT PRIMARY KEY, owner_id INTEGER NOT NULL, type TEXT NOT NULL, size INTEGER NOT NULL, created_at INTEGER NOT NULL)`,
   `CREATE TABLE IF NOT EXISTS media_chunks (key TEXT NOT NULL, idx INTEGER NOT NULL, data TEXT NOT NULL, PRIMARY KEY (key, idx))`
 ];
-const USER_COLS = { username: "TEXT", email: 'TEXT', name: "TEXT NOT NULL DEFAULT ''", pass_hash: "TEXT NOT NULL DEFAULT ''", salt: "TEXT NOT NULL DEFAULT ''", created_at: 'INTEGER NOT NULL DEFAULT 0', last_seen: 'INTEGER NOT NULL DEFAULT 0' };
+const USER_COLS = { username: "TEXT", email: 'TEXT', name: "TEXT NOT NULL DEFAULT ''", pass_hash: "TEXT NOT NULL DEFAULT ''", salt: "TEXT NOT NULL DEFAULT ''", created_at: 'INTEGER NOT NULL DEFAULT 0', last_seen: 'INTEGER NOT NULL DEFAULT 0', avatar_key: 'TEXT' };
 const MSG_COLS = { type: "TEXT NOT NULL DEFAULT 'text'", media_key: 'TEXT', media_type: 'TEXT', media_size: 'INTEGER', duration: 'INTEGER', reply_to: 'INTEGER', delivered_at: 'INTEGER', deleted_at: 'INTEGER' };
 let ready = null;
 function ensureSchema(db) {
@@ -125,23 +125,23 @@ async function route(req, env, url) {
       if (/UNIQUE|constraint/i.test(String(e && e.message))) return json({ error: 'Username or email already taken' }, 409);
       throw e;
     }
-    return startSession(db, { id: r.meta.last_row_id, username, name }, now);
+    return startSession(db, { id: r.meta.last_row_id, username, name, avatar: null }, now);
   }
 
   if (p === 'login' && post) {
     const ident = String(body.username || body.email || body.identifier || '').trim().toLowerCase();
     const pw = String(body.password || '');
     if (!ident || !pw) return json({ error: 'Enter your username (or email) and password' }, 400);
-    const u = await db.prepare('SELECT id,username,name,pass_hash,salt FROM users WHERE username=?1 OR email=?1').bind(ident).first();
+    const u = await db.prepare('SELECT id,username,name,avatar_key,pass_hash,salt FROM users WHERE username=?1 OR email=?1').bind(ident).first();
     // same work + same message whether the account exists or not
     const ok = u && u.pass_hash && safeEq(await hashPw(pw, u.salt), u.pass_hash);
     if (!ok) return json({ error: 'Incorrect username/email or password' }, 401);
-    return startSession(db, { id: u.id, username: u.username, name: u.name }, now);
+    return startSession(db, { id: u.id, username: u.username, name: u.name, avatar: u.avatar_key || null }, now);
   }
 
   // ---- authenticated routes ----
   const tok = (req.headers.get('authorization') || '').replace('Bearer ', '');
-  const me = tok ? await db.prepare('SELECT u.id,u.username,u.name,u.last_seen FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token=? AND s.created_at>?').bind(tok, now - SESSION_MS).first() : null;
+  const me = tok ? await db.prepare('SELECT u.id,u.username,u.name,u.avatar_key avatar,u.last_seen FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token=? AND s.created_at>?').bind(tok, now - SESSION_MS).first() : null;
   if (!me) return json({ error: 'Please log in' }, 401);
   if (now - me.last_seen > 10000) await db.prepare('UPDATE users SET last_seen=? WHERE id=?').bind(now, me.id).run(); // throttled: saves D1 writes
   delete me.last_seen;
@@ -159,7 +159,7 @@ async function route(req, env, url) {
     if (!q) return json({ users: [] });
     const ql = q.toLowerCase();
     const { results } = await db.prepare(`
-      SELECT u.id,u.name,u.username,u.last_seen,
+      SELECT u.id,u.name,u.username,u.avatar_key,u.last_seen,
         EXISTS(SELECT 1 FROM contacts c WHERE c.owner_id=?1 AND c.contact_id=u.id) is_contact
       FROM users u
       WHERE u.id!=?1 AND (u.username LIKE ?2 ESCAPE '\\' OR u.name LIKE ?2 ESCAPE '\\')
@@ -171,7 +171,7 @@ async function route(req, env, url) {
   // ---- my saved contacts ----
   if (p === 'contacts' && !post) {
     const { results } = await db.prepare(
-      'SELECT u.id,u.name,u.username,u.last_seen FROM contacts c JOIN users u ON u.id=c.contact_id WHERE c.owner_id=? ORDER BY u.name LIMIT 500'
+      'SELECT u.id,u.name,u.username,u.avatar_key,u.last_seen FROM contacts c JOIN users u ON u.id=c.contact_id WHERE c.owner_id=? ORDER BY u.name LIMIT 500'
     ).bind(me.id).all();
     return json({ contacts: results.map(u => publicUser(u, now)) });
   }
@@ -180,7 +180,7 @@ async function route(req, env, url) {
     const id = Number(body.user_id);
     if (!Number.isInteger(id) || id < 1) return json({ error: 'Invalid user' }, 400);
     if (id === me.id) return json({ error: 'You cannot add yourself as a contact' }, 400);
-    const u = await db.prepare('SELECT id,name,username,last_seen FROM users WHERE id=?').bind(id).first();
+    const u = await db.prepare('SELECT id,name,username,avatar_key,last_seen FROM users WHERE id=?').bind(id).first();
     if (!u) return json({ error: 'User not found' }, 404);
     const r = await db.prepare('INSERT OR IGNORE INTO contacts(owner_id,contact_id,created_at) VALUES(?,?,?)').bind(me.id, id, now).run();
     return json({ contact: publicUser(u, now), already: !r.meta.changes });
@@ -196,12 +196,12 @@ async function route(req, env, url) {
   if (p === 'chats') {
     await db.prepare('UPDATE messages SET delivered_at=? WHERE receiver_id=? AND delivered_at IS NULL').bind(now, me.id).run();
     const { results } = await db.prepare(`
-      SELECT u.id,u.name,u.last_seen,m.body last_body,m.type last_type,m.created_at last_at,m.sender_id last_sender,m.read_at last_read,m.delivered_at last_delivered,
+      SELECT u.id,u.name,u.avatar_key,u.last_seen,m.body last_body,m.type last_type,m.created_at last_at,m.sender_id last_sender,m.read_at last_read,m.delivered_at last_delivered,
         m.deleted_at last_deleted,
         (SELECT COUNT(*) FROM messages x WHERE x.sender_id=u.id AND x.receiver_id=?1 AND x.read_at IS NULL) unread
       FROM users u JOIN messages m ON m.id=(SELECT MAX(id) FROM messages WHERE (sender_id=?1 AND receiver_id=u.id) OR (sender_id=u.id AND receiver_id=?1))
       WHERE u.id!=?1 ORDER BY m.id DESC LIMIT 200`).bind(me.id).all();
-    return json({ chats: results.map(c => ({ ...c, online: now - c.last_seen < ONLINE_MS, last_seen: undefined })) });
+    return json({ chats: results.map(c => ({ ...c, avatar: c.avatar_key || null, avatar_key: undefined, online: now - c.last_seen < ONLINE_MS, last_seen: undefined })) });
   }
 
   if (p === 'messages' && !post) {
@@ -230,7 +230,7 @@ async function route(req, env, url) {
       if (!up) return json({ error: 'Upload not found. Please try again.' }, 400);
       mtype = up.type;
       if (!mtype.startsWith(type === 'image' ? 'image/' : 'audio/')) return json({ error: 'Media type does not match' }, 400);
-      if (await db.prepare('SELECT id FROM messages WHERE media_key=?').bind(key).first()) return json({ error: 'Media already used' }, 409);
+      if (await db.prepare('SELECT id FROM messages WHERE media_key=?').bind(key).first() || await db.prepare('SELECT id FROM users WHERE avatar_key=?').bind(key).first()) return json({ error: 'Media already used' }, 409);
       msize = up.size; dur = type === 'voice' ? Math.min(3600, Math.max(0, Math.round(Number(body.duration) || 0))) : null;
     }
     if (body.reply_to != null) {
@@ -252,6 +252,27 @@ async function route(req, env, url) {
     return json({ ok: true });
   }
 
+  // ---- profile photo (uses a previous /api/media upload of kind "image") ----
+  const dropMedia = key => db.batch([db.prepare('DELETE FROM media_chunks WHERE key=?').bind(key), db.prepare('DELETE FROM media WHERE key=?').bind(key)]);
+  if (p === 'profile/avatar' && post) {
+    const key = String(body.key || '');
+    if (!MEDIA_KEY.test(key) || !key.startsWith('u' + me.id + '/')) return json({ error: 'Invalid photo' }, 400);
+    const up = await db.prepare('SELECT type,size FROM media WHERE key=? AND owner_id=?').bind(key, me.id).first();
+    if (!up || !up.type.startsWith('image/')) return json({ error: 'Upload not found. Please try again.' }, 400);
+    if (up.size > 250000) return json({ error: 'Profile photo is too large' }, 413);
+    if (await db.prepare('SELECT id FROM messages WHERE media_key=?').bind(key).first()) return json({ error: 'Media already used' }, 409);
+    const prev = await db.prepare('SELECT avatar_key FROM users WHERE id=?').bind(me.id).first();
+    await db.prepare('UPDATE users SET avatar_key=? WHERE id=?').bind(key, me.id).run();
+    if (prev && prev.avatar_key && prev.avatar_key !== key) await dropMedia(prev.avatar_key);
+    return json({ avatar: key });
+  }
+  if (p === 'profile/avatar/remove' && post) {
+    const prev = await db.prepare('SELECT avatar_key FROM users WHERE id=?').bind(me.id).first();
+    await db.prepare('UPDATE users SET avatar_key=NULL WHERE id=?').bind(me.id).run();
+    if (prev && prev.avatar_key) await dropMedia(prev.avatar_key);
+    return json({ ok: true });
+  }
+
   // ---- media (photos, voice notes) stored in D1: JSON upload {kind, data: base64}, authenticated download ----
   if (p === 'media' && post) {
     const kind = String(body.kind || ''), rule = MEDIA_RULES[kind], data = typeof body.data === 'string' ? body.data : '';
@@ -263,8 +284,8 @@ async function route(req, env, url) {
     if (!type) return json({ error: 'This file type is not allowed' }, 415);
     const old = now - 3600000;                              // tidy up this user's uploads that were never sent in a message
     await db.batch([
-      db.prepare('DELETE FROM media_chunks WHERE key IN (SELECT key FROM media WHERE owner_id=? AND created_at<? AND key NOT IN (SELECT media_key FROM messages WHERE media_key IS NOT NULL))').bind(me.id, old),
-      db.prepare('DELETE FROM media WHERE owner_id=? AND created_at<? AND key NOT IN (SELECT media_key FROM messages WHERE media_key IS NOT NULL)').bind(me.id, old)
+      db.prepare('DELETE FROM media_chunks WHERE key IN (SELECT key FROM media WHERE owner_id=? AND created_at<? AND key NOT IN (SELECT media_key FROM messages WHERE media_key IS NOT NULL) AND key NOT IN (SELECT avatar_key FROM users WHERE avatar_key IS NOT NULL))').bind(me.id, old),
+      db.prepare('DELETE FROM media WHERE owner_id=? AND created_at<? AND key NOT IN (SELECT media_key FROM messages WHERE media_key IS NOT NULL) AND key NOT IN (SELECT avatar_key FROM users WHERE avatar_key IS NOT NULL)').bind(me.id, old)
     ]);
     const key = `u${me.id}/${rand(16)}`, stmts = [db.prepare('INSERT INTO media(key,owner_id,type,size,created_at) VALUES(?,?,?,?,?)').bind(key, me.id, type, size, now)];
     for (let i = 0, n = 0; i < data.length; i += CHUNK, n++) stmts.push(db.prepare('INSERT INTO media_chunks(key,idx,data) VALUES(?,?,?)').bind(key, n, data.slice(i, i + CHUNK)));
@@ -276,7 +297,8 @@ async function route(req, env, url) {
     const key = p.slice(6);
     if (!MEDIA_KEY.test(key)) return json({ error: 'Not found' }, 404);
     const allowed = key.startsWith('u' + me.id + '/') ||
-      await db.prepare('SELECT 1 ok FROM messages WHERE media_key=? AND deleted_at IS NULL AND (sender_id=? OR receiver_id=?)').bind(key, me.id, me.id).first();
+      await db.prepare('SELECT 1 ok FROM messages WHERE media_key=? AND deleted_at IS NULL AND (sender_id=? OR receiver_id=?)').bind(key, me.id, me.id).first() ||
+      await db.prepare('SELECT 1 ok FROM users WHERE avatar_key=?').bind(key).first();   // profile photos
     const m = allowed ? await db.prepare('SELECT type FROM media WHERE key=?').bind(key).first() : null;
     if (!m) return json({ error: 'Not found' }, 404);
     const { results } = await db.prepare('SELECT data FROM media_chunks WHERE key=? ORDER BY idx').bind(key).all();
