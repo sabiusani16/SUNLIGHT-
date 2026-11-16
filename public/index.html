@@ -19,11 +19,11 @@
 html,body{height:100%;overflow-x:hidden}
 body{font-family:'Inter',system-ui,sans-serif;background:#E9EFEC;color:var(--text);font-size:15px}
 button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
-input{font:inherit;color:inherit;border:0;outline:0;background:none}
+input,textarea{font:inherit;color:inherit;border:0;outline:0;background:none}
 ul{list-style:none}
 :focus-visible{outline:2px solid var(--gold);outline-offset:2px}
 
-.app{position:relative;display:flex;flex-direction:column;height:100dvh;max-width:480px;margin:0 auto;background:var(--bg);overflow:hidden;box-shadow:0 0 40px rgba(0,0,0,.12)}
+.app{position:relative;display:flex;flex-direction:column;height:100dvh;max-width:480px;margin:0 auto;background:var(--bg);overflow:hidden;overflow:clip;box-shadow:0 0 40px rgba(0,0,0,.12)}   /* clip: can never be scrolled sideways by focus() / scrollIntoView() */
 
 /* header */
 .top{position:relative;background:var(--green);color:#fff;padding:calc(10px + env(safe-area-inset-top,0px)) 14px 10px;z-index:20}
@@ -152,11 +152,74 @@ main::-webkit-scrollbar{display:none}
 .typing i{width:6px;height:6px;border-radius:50%;background:#9AA8A2;animation:bounce 1s infinite}
 .typing i:nth-child(2){animation-delay:.15s}.typing i:nth-child(3){animation-delay:.3s}
 @keyframes bounce{0%,60%,100%{transform:none}30%{transform:translateY(-4px)}}
-.composer{display:flex;align-items:center;gap:6px;padding:8px 8px calc(8px + env(safe-area-inset-bottom,0px));background:#fff;border-top:1px solid var(--line)}
-.composer .icon-btn{color:var(--muted)}
-.composer input{flex:1;min-width:0;background:var(--soft);border-radius:22px;padding:11px 16px}
+.composer{display:flex;align-items:flex-end;gap:6px;padding:8px 8px calc(8px + env(safe-area-inset-bottom,0px));background:#fff;border-top:1px solid var(--line)}
+.composer .icon-btn{color:var(--muted);flex:none;margin-bottom:2px}
+.composer textarea{flex:1;min-width:0;height:44px;max-height:120px;background:var(--soft);border-radius:22px;padding:12px 16px;line-height:1.3;font-size:15px;resize:none}
 .send{width:44px;height:44px;border-radius:50%;background:var(--green);color:#fff;display:grid;place-items:center;font-size:16px;flex:none;transition:transform .15s}
 .send:active{transform:scale(.9)}
+.send.mic{background:var(--gold);color:var(--green-d)}
+#chatName{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+/* chat bubbles: grouping, media, voice, replies */
+.msg{user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
+.msg.grp{margin-top:-3px}
+.msg.failed{background:#FCE9E9}
+.msg.flash{animation:flash 1.1s ease}
+@keyframes flash{0%,60%{box-shadow:0 0 0 3px var(--gold)}100%{box-shadow:0 1px 2px rgba(0,0,0,.07)}}
+.msg .cap{margin-top:4px}
+.msg .del{color:var(--muted);font-style:italic;font-size:14px}
+.msg .retry{font-size:12px;font-weight:600;color:#D64545;margin-top:4px}
+.tick.fail{color:#D64545}
+.msg.media-only{padding:4px 4px 5px}
+.msg.media-only small{padding:0 6px}
+.quote{display:block;background:rgba(7,91,66,.08);border-left:3px solid var(--green);border-radius:8px;padding:5px 9px;margin:0 0 6px;font-size:13px;cursor:pointer;min-width:120px}
+.msg.out .quote{background:rgba(7,91,66,.13)}
+.quote strong{display:block;color:var(--green);font-size:12px;font-weight:700}
+.quote span{display:block;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.img-wrap{position:relative;width:min(240px,62vw);aspect-ratio:4/3;border-radius:10px;overflow:hidden;cursor:pointer;background:linear-gradient(90deg,#E9EFEC 25%,#F4F8F6 37%,#E9EFEC 63%);background-size:400% 100%;animation:shimmer 1.3s ease infinite}
+.img-wrap img{display:block;width:100%;height:100%;object-fit:cover;opacity:0;transition:opacity .25s}
+.img-wrap.loaded{animation:none;background:#E9EFEC}
+.img-wrap.loaded img{opacity:1}
+.img-wrap.err{animation:none;display:grid;place-items:center;color:var(--muted);font-size:13px}
+.img-wrap.err::after{content:"Tap to retry"}
+.voice{display:flex;align-items:center;gap:10px;min-width:200px}
+.v-play{width:38px;height:38px;border-radius:50%;background:var(--green);color:#fff;display:grid;place-items:center;flex:none;font-size:14px}
+.v-track{flex:1;height:26px;display:flex;align-items:center;cursor:pointer}
+.v-bar{position:relative;width:100%;height:5px;border-radius:3px;background:rgba(7,91,66,.2)}
+.v-fill{position:absolute;left:0;top:0;bottom:0;width:0;border-radius:3px;background:var(--green)}
+.v-fill::after{content:"";position:absolute;right:-5px;top:-3px;width:11px;height:11px;border-radius:50%;background:var(--green);opacity:0}
+.voice.on .v-fill::after{opacity:1}
+.v-time{font-size:12px;color:var(--muted);min-width:34px;text-align:right;font-variant-numeric:tabular-nums}
+.to-bottom{position:absolute;right:14px;bottom:84px;width:40px;height:40px;border-radius:50%;background:#fff;color:var(--green);box-shadow:0 3px 12px rgba(0,0,0,.2);display:grid;place-items:center;z-index:5}
+.reply-bar{display:flex;align-items:center;gap:8px;padding:8px 8px 8px 12px;background:#fff;border-top:1px solid var(--line)}
+.rb-body{flex:1;min-width:0;border-left:3px solid var(--green);padding-left:10px}
+.rb-body strong{display:block;font-size:12px;color:var(--green)}
+.rb-body span{display:block;font-size:13px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rec-bar{display:flex;align-items:center;gap:12px;padding:8px 10px calc(8px + env(safe-area-inset-bottom,0px));background:#fff;border-top:1px solid var(--line)}
+.rec-bar .icon-btn{color:#D64545}
+.rec-dot{width:11px;height:11px;border-radius:50%;background:#D64545;animation:blink 1s infinite}
+@keyframes blink{50%{opacity:.25}}
+.rec-hint{flex:1;color:var(--muted);font-size:14px}
+#recTime{font-variant-numeric:tabular-nums;min-width:38px}
+
+/* sheets, lightbox, photo preview */
+.sheet-bg{position:absolute;inset:0;background:rgba(0,0,0,.4);z-index:40;animation:fade .2s ease}
+.sheet{position:absolute;left:0;right:0;bottom:0;z-index:41;background:#fff;border-radius:22px 22px 0 0;padding:10px 8px calc(14px + env(safe-area-inset-bottom,0px));box-shadow:0 -10px 30px rgba(0,0,0,.18);animation:rise .22s ease}
+@keyframes rise{from{transform:translateY(40px);opacity:0}to{transform:none;opacity:1}}
+.sheet .grab{width:38px;height:4px;border-radius:2px;background:#D8E2DD;margin:0 auto 8px}
+.sheet button{display:flex;align-items:center;gap:14px;width:100%;padding:12px 14px;border-radius:12px;font-weight:600;text-align:left}
+.sheet button:active{background:var(--soft)}
+.sheet .s-ico{width:42px;height:42px;border-radius:50%;display:grid;place-items:center;background:var(--gold-s);color:var(--green);flex:none}
+.sheet .danger{color:#D64545}
+.sheet .danger .s-ico{background:#FCE9E9;color:#D64545}
+.lightbox,.imgprev{position:absolute;inset:0;z-index:60;background:rgba(5,15,12,.95);display:flex;flex-direction:column;animation:fade .2s ease}
+.lb-top{display:flex;justify-content:space-between;padding:calc(8px + env(safe-area-inset-top,0px)) 8px 8px}
+.lb-top .icon-btn,.lb-top a{color:#fff;width:44px;height:44px;display:grid;place-items:center;font-size:18px;border-radius:50%}
+.lightbox img,.imgprev img{flex:1;min-height:0;max-width:100%;object-fit:contain;margin:auto}
+.ip-bar{display:flex;align-items:center;gap:10px;padding:10px 10px calc(10px + env(safe-area-inset-bottom,0px))}
+.ip-bar input{flex:1;min-width:0;background:rgba(255,255,255,.12);color:#fff;border-radius:22px;padding:12px 16px}
+.ip-bar input::placeholder{color:rgba(255,255,255,.6)}
+.preview .txt i{margin-right:4px;font-size:12px}
 
 /* new chat: search + contacts */
 .ns-wrap{flex:none;padding:12px 14px 8px;background:#fff;border-bottom:1px solid var(--line)}
@@ -334,14 +397,51 @@ mark{background:var(--gold-s);color:inherit;border-radius:3px;padding:0 1px}
       <div class="avatar sm" id="chatAvatar"></div>
       <div class="grow"><strong id="chatName"></strong><small id="chatState"></small></div>
       <button class="icon-btn light" id="favBtn" aria-label="Favorite"><i class="fa-regular fa-star"></i></button>
-      <button class="icon-btn light" data-toast="Voice call"><i class="fa-solid fa-phone"></i></button>
+      <button class="icon-btn light" data-toast="Video calls are coming in the next update" aria-label="Video call"><i class="fa-solid fa-video"></i></button>
+      <button class="icon-btn light" data-toast="Voice calls are coming in the next update" aria-label="Voice call"><i class="fa-solid fa-phone"></i></button>
     </div>
     <div class="messages" id="messages"></div>
-    <form class="composer" id="composer">
-      <button type="button" class="icon-btn" data-toast="Attachments"><i class="fa-solid fa-paperclip"></i></button>
-      <input id="msgInput" type="text" placeholder="Message" autocomplete="off">
-      <button class="send" id="sendBtn" aria-label="Send"><i class="fa-solid fa-paper-plane"></i></button>
-    </form>
+    <button type="button" class="to-bottom" id="toBottom" hidden aria-label="Scroll to latest"><i class="fa-solid fa-chevron-down"></i></button>
+    <div class="reply-bar" id="replyBar" hidden>
+      <div class="rb-body"><strong id="rbName"></strong><span id="rbText"></span></div>
+      <button type="button" class="icon-btn small" id="rbClose" aria-label="Cancel reply"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <div class="composer" id="composer">
+      <button type="button" class="icon-btn" id="attachBtn" aria-label="Attach photo"><i class="fa-solid fa-paperclip"></i></button>
+      <textarea id="msgInput" rows="1" placeholder="Message" maxlength="2000" autocomplete="off" enterkeyhint="send"></textarea>
+      <button type="button" class="send mic" id="micBtn" aria-label="Record voice note"><i class="fa-solid fa-microphone"></i></button>
+      <button type="button" class="send" id="sendBtn" aria-label="Send" hidden><i class="fa-solid fa-paper-plane"></i></button>
+    </div>
+    <div class="rec-bar" id="recBar" hidden>
+      <button type="button" class="icon-btn" id="recCancel" aria-label="Cancel recording"><i class="fa-solid fa-trash"></i></button>
+      <span class="rec-dot"></span><strong id="recTime">0:00</strong><span class="rec-hint">Recording…</span>
+      <button type="button" class="send" id="recSend" aria-label="Send voice note"><i class="fa-solid fa-paper-plane"></i></button>
+    </div>
+
+    <div class="sheet-bg" id="sheetBg" hidden></div>
+    <div class="sheet" id="attachSheet" hidden>
+      <div class="grab"></div>
+      <button type="button" id="shPhoto"><span class="s-ico"><i class="fa-solid fa-image"></i></span>Photo library</button>
+      <button type="button" id="shCamera"><span class="s-ico"><i class="fa-solid fa-camera"></i></span>Take a photo</button>
+    </div>
+    <div class="sheet" id="msgSheet" hidden>
+      <div class="grab"></div>
+      <button type="button" id="shReply"><span class="s-ico"><i class="fa-solid fa-reply"></i></span>Reply</button>
+      <button type="button" id="shCopy"><span class="s-ico"><i class="fa-regular fa-copy"></i></span>Copy text</button>
+      <button type="button" id="shDel" class="danger"><span class="s-ico"><i class="fa-solid fa-trash"></i></span><span id="shDelTxt">Delete for everyone</span></button>
+    </div>
+
+    <div class="lightbox" id="lightbox" hidden>
+      <div class="lb-top"><button type="button" class="icon-btn" id="lbClose" aria-label="Close"><i class="fa-solid fa-xmark"></i></button><a id="lbSave" download="sunlight-photo.jpg" aria-label="Save photo"><i class="fa-solid fa-download"></i></a></div>
+      <img id="lbImg" alt="Photo">
+    </div>
+    <div class="imgprev" id="imgPrev" hidden>
+      <div class="lb-top"><button type="button" class="icon-btn" id="ipCancel" aria-label="Cancel"><i class="fa-solid fa-xmark"></i></button></div>
+      <img id="ipImg" alt="Selected photo">
+      <div class="ip-bar"><input id="ipCap" type="text" placeholder="Add a caption…" maxlength="500" autocomplete="off"><button type="button" class="send" id="ipSend" aria-label="Send photo"><i class="fa-solid fa-paper-plane"></i></button></div>
+    </div>
+    <input type="file" id="photoInput" accept="image/*" hidden>
+    <input type="file" id="cameraInput" accept="image/*" capture="environment" hidden>
   </div>
 
   <!-- AUTH -->
@@ -395,7 +495,10 @@ async function api(path, opts = {}) {
 const initials = n => n.trim().split(/\s+/).map(w => w[0]).slice(0, 2).join('').toUpperCase();
 const avatar = (p, extra = '', dot = false) =>
   `<div class="avatar ${extra}" style="background:${COLORS[p.id % COLORS.length]}"><span>${esc(initials(p.name))}</span>${dot && p.online ? '<i class="dot"></i>' : ''}</div>`;
-const tickIcon = t => t ? `<i class="fa-solid fa-check-double tick ${t === 'read' ? 'read' : ''}"></i>` : '';
+const tickIcon = t => !t ? '' : t === 'sending' ? '<i class="fa-regular fa-clock tick"></i>'
+  : t === 'failed' ? '<i class="fa-solid fa-circle-exclamation tick fail"></i>'
+  : t === 'sent' ? '<i class="fa-solid fa-check tick"></i>'
+  : `<i class="fa-solid fa-check-double tick ${t === 'read' ? 'read' : ''}"></i>`;
 const clock = ts => new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
 function fmt(ts) {
   const d = new Date(ts), n = new Date();
@@ -461,6 +564,7 @@ function logout(silent) {
   localStorage.removeItem('sl_token');
   clearInterval(pollTimer); sigChats = sigContacts = sigMsgs = ''; resetSearch();
   ['chatScreen', 'newChat'].forEach(closeScreen);
+  leaveChat(); mediaDone.forEach(u => URL.revokeObjectURL(u)); media.clear(); mediaDone.clear(); thread = []; pending = [];
   openScreen('auth'); setMode('login');
 }
 
@@ -478,8 +582,9 @@ async function start(user) {
 async function loadChats() {
   const d = await api('chats');
   const next = d.chats.map(c => ({
-    id: c.id, name: c.name, online: c.online, unread: c.unread, time: fmt(c.last_at), msg: c.last_body,
-    tick: c.last_sender === me.id ? (c.last_read ? 'read' : 'delivered') : null
+    id: c.id, name: c.name, online: c.online, unread: c.unread, time: fmt(c.last_at), msg: c.last_body || '',
+    type: c.last_type || 'text', deleted: !!c.last_deleted,
+    tick: c.last_sender === me.id && !c.last_deleted ? (c.last_read ? 'read' : c.last_delivered ? 'delivered' : 'sent') : null
   }));
   const sig = JSON.stringify(next);
   chats = next;
@@ -492,12 +597,16 @@ async function loadContacts() {
   if (sig !== sigContacts) { sigContacts = sig; renderStories(); renderLists(); syncResultFlags(); }
 }
 function poll() {
-  if (!me) return;
+  if (!me || document.hidden) return;                       // no polling while the tab is hidden (saves D1 requests)
   loadChats().catch(() => {}); loadContacts().catch(() => {});
-  if ($('#chatScreen').classList.contains('open')) loadMessages().catch(() => {});
+  if ($('#chatScreen').classList.contains('open') && !pending.some(p => p.status === 'sending')) loadMessages().catch(() => {});
 }
+document.addEventListener('visibilitychange', () => { if (!document.hidden) poll(); });
 
 /* ---------- Rendering ---------- */
+const previewHTML = c => c.deleted ? '<i class="fa-solid fa-ban"></i>Deleted message'
+  : c.type === 'image' ? `<i class="fa-solid fa-camera"></i>${esc(c.msg) || 'Photo'}`
+  : c.type === 'voice' ? '<i class="fa-solid fa-microphone"></i>Voice message' : esc(c.msg);
 function renderChats() {
   const q = query.trim().toLowerCase();
   const list = chats.filter(c =>
@@ -508,7 +617,7 @@ function renderChats() {
       ${avatar(c, '', true)}
       <div class="body">
         <div class="line"><strong>${esc(c.name)}</strong><span class="time ${c.unread ? 'new' : ''}">${esc(c.time)}</span></div>
-        <div class="preview"><span class="grow">${tickIcon(c.tick)}<span class="txt">${esc(c.msg)}</span></span>
+        <div class="preview"><span class="grow">${tickIcon(c.tick)}<span class="txt">${previewHTML(c)}</span></span>
           ${favs.has(c.id) && !c.unread ? '<i class="fa-solid fa-star fav-ico"></i>' : ''}
           ${c.unread ? `<span class="badge">${c.unread}</span>` : ''}</div>
       </div>
@@ -604,27 +713,124 @@ $$('[data-act]').forEach(el => el.addEventListener('click', () => action(el.data
 
 document.addEventListener('click', e => {
   const t = e.target.closest('[data-toast]'); if (t) toast(t.dataset.toast);
-  const c = e.target.closest('[data-close]'); if (c) { closeScreen(c.dataset.close); if (c.dataset.close === 'newChat') resetSearch(); }
+  const c = e.target.closest('[data-close]'); if (c) { closeScreen(c.dataset.close); if (c.dataset.close === 'newChat') resetSearch(); if (c.dataset.close === 'chatScreen') leaveChat(); }
   const s = e.target.closest('[data-set]');
   if (s) s.dataset.set === '__logout' ? logout() : toast(s.dataset.set);
 });
 $('#fab').addEventListener('click', () => { resetSearch(); loadContacts().catch(() => {}); openScreen('newChat'); });
 
 /* ---------- Conversation ---------- */
-const bubble = m => {
-  const out = m.sender_id === me.id;
-  return `<div class="msg ${out ? 'out' : 'in'}">${esc(m.body)}<small>${clock(m.created_at)}${out ? tickIcon(m.read_at ? 'read' : 'delivered') : ''}</small></div>`;
-};
-const scrollDown = () => { const m = $('#messages'); m.scrollTop = m.scrollHeight; };
-const updateFav = () => { $('#favBtn i').className = (current && favs.has(current.id) ? 'fa-solid' : 'fa-regular') + ' fa-star'; };
+const MAX_REC = 300, MAX_VOICE_BYTES = 900000;              // longest voice note (seconds) / biggest file (D1 storage)
+let thread = [], pending = [], replyTo = null, uid = 0, rec = null, sheetMsg = null, sheetAt = 0, previewBlob = null, previewUrl = '';
+const media = new Map();                                    // media key -> Promise<blob URL>  (authenticated download, cached)
+const mediaDone = new Map();                                // media key -> blob URL once loaded
+const player = new Audio(); let playing = null;             // key of the voice note currently loaded in the player
+const $msgs = $('#messages'), $input = $('#msgInput');
+const coarse = matchMedia('(pointer:coarse)').matches;
 
+const scrollDown = () => { $msgs.scrollTop = $msgs.scrollHeight; updateToBottom(); };
+const updateToBottom = () => { $('#toBottom').hidden = $msgs.scrollHeight - $msgs.scrollTop - $msgs.clientHeight < 300; };
+const updateFav = () => { $('#favBtn i').className = (current && favs.has(current.id) ? 'fa-solid' : 'fa-regular') + ' fa-star'; };
+const fmtDur = s => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
+const dayLabel = ts => {
+  const d = new Date(ts), n = new Date();
+  return d.toDateString() === n.toDateString() ? 'Today' : d.toDateString() === new Date(n - 864e5).toDateString() ? 'Yesterday'
+    : d.toLocaleDateString([], { day: 'numeric', month: 'short', year: d.getFullYear() === n.getFullYear() ? undefined : 'numeric' });
+};
+const seenText = ts => {
+  const d = new Date(ts), n = new Date();
+  return d.toDateString() === n.toDateString() ? 'last seen today at ' + clock(ts)
+    : d.toDateString() === new Date(n - 864e5).toDateString() ? 'last seen yesterday at ' + clock(ts)
+    : 'last seen ' + d.toLocaleDateString([], { day: 'numeric', month: 'short' });
+};
+const previewText = m => m.deleted_at ? 'Deleted message' : m.type === 'image' ? (m.body ? 'Photo: ' + m.body : 'Photo') : m.type === 'voice' ? 'Voice message (' + fmtDur(m.duration || 0) + ')' : m.body;
+const tickState = m => m.status || (m.read_at ? 'read' : m.delivered_at ? 'delivered' : 'sent');
+
+function mediaUrl(key) {                                    // media is private: fetched with the login token, cached as a blob URL
+  if (!media.has(key)) media.set(key, api('media/' + key)
+    .then(d => fetch('data:' + d.type + ';base64,' + d.data)).then(r => r.blob())
+    .then(b => { const u = URL.createObjectURL(b); mediaDone.set(key, u); return u; })
+    .catch(e => { media.delete(key); throw e; }));
+  return media.get(key);
+}
+const toBase64 = blob => new Promise((ok, no) => { const r = new FileReader(); r.onload = () => ok(String(r.result).split(',')[1] || ''); r.onerror = no; r.readAsDataURL(blob); });
+async function upload(blob, kind) {                         // photos / voice notes are stored in D1, so they are kept small
+  return api('media', { body: { kind, data: await toBase64(blob) } });
+}
+
+/* --- rendering --- */
+function quoteHTML(id) {
+  const q = thread.find(x => x.id === id);
+  return `<div class="quote" data-jump="${id}"><strong>${q ? (q.sender_id === me.id ? 'You' : esc(current.name)) : 'Message'}</strong><span>${q ? esc(previewText(q)) : 'Original message'}</span></div>`;
+}
+function bodyHTML(m) {
+  if (m.deleted_at) return `<span class="del"><i class="fa-solid fa-ban"></i> ${m.sender_id === me.id ? 'You deleted this message' : 'This message was deleted'}</span>`;
+  let h = m.reply_to ? quoteHTML(m.reply_to) : '';
+  if (m.type === 'image') {
+    const u = mediaDone.get(m.media_key);
+    h += `<div class="img-wrap${u ? ' loaded' : ''}" data-img="${esc(m.media_key)}"><img alt="Photo" ${u ? `src="${u}"` : `data-key="${esc(m.media_key)}"`}></div>` + (m.body ? `<div class="cap">${esc(m.body)}</div>` : '');
+  } else if (m.type === 'voice') {
+    h += `<div class="voice" data-key="${esc(m.media_key)}" data-dur="${m.duration || 0}"><button type="button" class="v-play" aria-label="Play voice note"><i class="fa-solid fa-play"></i></button><div class="v-track"><div class="v-bar"><div class="v-fill"></div></div></div><span class="v-time">${fmtDur(m.duration || 0)}</span></div>`;
+  } else h += esc(m.body).replace(/\n/g, '<br>');
+  return h;
+}
+function renderMessages(force) {
+  if (!current) return;
+  const near = $msgs.scrollHeight - $msgs.scrollTop - $msgs.clientHeight < 140;
+  const all = [...thread, ...pending.filter(p => p.to === current.id)];
+  let html = '', lastDay = '', prev = null;
+  for (const m of all) {
+    const day = new Date(m.created_at).toDateString();
+    if (day !== lastDay) { lastDay = day; prev = null; html += `<div class="day">${dayLabel(m.created_at)}</div>`; }
+    const out = m.sender_id === me.id;
+    const cls = ['msg', out ? 'out' : 'in', prev && prev.sender_id === m.sender_id && m.created_at - prev.created_at < 3e5 ? 'grp' : '',
+      m.status === 'failed' ? 'failed' : '', m.type === 'image' && !m.body && !m.deleted_at ? 'media-only' : ''].filter(Boolean).join(' ');
+    html += `<div class="${cls}" data-mid="${m.id || ''}" data-tmp="${m.tmp || ''}">${bodyHTML(m)}<small>${clock(m.created_at)}${out && !m.deleted_at ? tickIcon(tickState(m)) : ''}</small>${m.status === 'failed' ? '<div class="retry"><i class="fa-solid fa-rotate-right"></i> Tap to retry</div>' : ''}</div>`;
+    prev = m;
+  }
+  $msgs.innerHTML = html || '<div class="day">Say hello 👋</div>';
+  hydrate(); syncVoiceUI();
+  if (force || near) scrollDown(); else updateToBottom();
+}
+function hydrate() {
+  $$('img[data-key]', $msgs).forEach(img => {
+    const wrap = img.closest('.img-wrap');
+    mediaUrl(img.dataset.key).then(u => { img.src = u; wrap.classList.add('loaded'); }).catch(() => wrap.classList.add('err'));
+  });
+}
+function syncVoiceUI() {
+  $$('.voice', $msgs).forEach(v => {
+    const on = v.dataset.key === playing, dur = +v.dataset.dur || 0;
+    v.classList.toggle('on', on);
+    v.querySelector('.v-play i').className = 'fa-solid ' + (on && !player.paused ? 'fa-pause' : 'fa-play');
+    v.querySelector('.v-fill').style.width = on && dur ? Math.min(100, player.currentTime / dur * 100) + '%' : '0%';
+    v.querySelector('.v-time').textContent = fmtDur(on && player.currentTime ? player.currentTime : dur);
+  });
+}
+['timeupdate', 'play', 'pause'].forEach(ev => player.addEventListener(ev, syncVoiceUI));
+player.addEventListener('ended', () => { playing = null; syncVoiceUI(); });
+async function toggleVoice(v) {
+  const key = v.dataset.key;
+  if (playing === key) { player.paused ? player.play().catch(() => {}) : player.pause(); return; }
+  try { const url = await mediaUrl(key); player.pause(); player.src = url; playing = key; await player.play(); }
+  catch { playing = null; toast('Could not play this voice note'); }
+  syncVoiceUI();
+}
+function seekVoice(track, e) {
+  const v = track.closest('.voice'); if (v.dataset.key !== playing) return toggleVoice(v);
+  const r = track.getBoundingClientRect(), dur = +v.dataset.dur || player.duration;
+  if (dur && isFinite(dur)) { try { player.currentTime = Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)) * dur; } catch {} }
+}
+
+/* --- open / load --- */
 function openChat(id) {
   const p = contacts.find(u => u.id === +id) || chats.find(c => c.id === +id) || results.find(u => u.id === +id); if (!p) return;
-  current = p; sigMsgs = '';
+  leaveChat();
+  current = p; sigMsgs = ''; thread = [];
   $('#chatAvatar').outerHTML = avatar(p, 'sm').replace('class="avatar sm"', 'class="avatar sm" id="chatAvatar"');
   $('#chatName').textContent = p.name;
-  $('#chatState').textContent = p.online ? 'online' : 'offline';
-  $('#messages').innerHTML = '';
+  $('#chatState').textContent = p.online ? 'online' : '';
+  $msgs.innerHTML = ''; $input.value = ''; autosize(); syncComposer();
   updateFav(); openScreen('chatScreen'); closeScreen('newChat'); resetSearch();
   loadMessages(true).then(loadChats).catch(err => toast(err.message));
 }
@@ -633,19 +839,186 @@ async function loadMessages(force) {
   const who = current;
   const d = await api('messages?with=' + who.id);
   if (current !== who) return;
-  const sig = d.messages.map(m => m.id + (m.read_at ? 'r' : '')).join();
-  $('#chatState').textContent = d.online ? 'online' : 'offline';
+  $('#chatState').textContent = d.online ? 'online' : d.last_seen ? seenText(d.last_seen) : 'offline';
+  const sig = d.messages.map(m => `${m.id}${m.read_at ? 'r' : m.delivered_at ? 'd' : ''}${m.deleted_at ? 'x' : ''}`).join();
   if (!force && sig === sigMsgs) return;
-  sigMsgs = sig;
-  const box = $('#messages'), near = box.scrollHeight - box.scrollTop - box.clientHeight < 120;
-  let lastDay = '';
-  box.innerHTML = d.messages.length ? d.messages.map(m => {
-    const day = new Date(m.created_at).toDateString(); let h = '';
-    if (day !== lastDay) { lastDay = day; h = `<div class="day">${day === new Date().toDateString() ? 'Today' : new Date(m.created_at).toLocaleDateString([], { day: 'numeric', month: 'short' })}</div>`; }
-    return h + bubble(m);
-  }).join('') : '<div class="day">Say hello 👋</div>';
-  if (force || near) scrollDown();
+  sigMsgs = sig; thread = d.messages; renderMessages(force);
 }
+function leaveChat() {
+  stopRec(false); player.pause(); playing = null; hideSheets(); clearReply();
+  $('#lightbox').hidden = true; closePreview();
+}
+
+/* --- sending (optimistic: message shows at once with a clock, then ticks; failures can be retried) --- */
+function queue(p) {
+  const m = Object.assign({ tmp: 'p' + (++uid), sender_id: me.id, created_at: Date.now(), status: 'sending', to: current.id, reply_to: replyTo ? replyTo.id : null }, p);
+  pending.push(m); clearReply(); renderMessages(true); deliver(m);
+}
+async function deliver(m) {
+  m.status = 'sending'; renderMessages();
+  try {
+    const payload = { to: m.to, type: m.type, body: m.body || '', reply_to: m.reply_to };
+    if (m.blob) {
+      if (!m.uploaded) m.uploaded = await upload(m.blob, m.type === 'image' ? 'image' : 'voice');
+      payload.media_key = m.uploaded.key; payload.duration = m.duration;
+      media.set(m.uploaded.key, media.get(m.media_key)); mediaDone.set(m.uploaded.key, mediaDone.get(m.media_key));
+    }
+    await api('messages', { body: payload });
+    pending = pending.filter(x => x !== m);
+    if (current && current.id === m.to) await loadMessages(true);
+    loadChats().catch(() => {});
+  } catch (err) { m.status = 'failed'; renderMessages(); toast(err.message); }
+}
+function localMedia(blob) {
+  const key = 'local:' + (++uid), url = URL.createObjectURL(blob);
+  media.set(key, Promise.resolve(url)); mediaDone.set(key, url); return key;
+}
+function sendText() {
+  const text = $input.value.trim(); if (!text || !current) return;
+  $input.value = ''; autosize(); syncComposer();
+  queue({ type: 'text', body: text });
+}
+
+/* --- composer --- */
+const autosize = () => { $input.style.height = 'auto'; $input.style.height = Math.min($input.scrollHeight, 120) + 'px'; };
+const syncComposer = () => { const has = !!$input.value.trim(); $('#sendBtn').hidden = !has; $('#micBtn').hidden = has; };
+$input.addEventListener('input', () => { autosize(); syncComposer(); });
+$input.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey && !coarse) { e.preventDefault(); sendText(); } });
+$('#sendBtn').addEventListener('pointerdown', e => e.preventDefault());   // keep the keyboard open
+$('#sendBtn').addEventListener('click', () => { sendText(); $input.focus(); });
+
+/* --- reply --- */
+function setReply(m) { replyTo = m; $('#rbName').textContent = m.sender_id === me.id ? 'You' : current.name; $('#rbText').textContent = previewText(m); $('#replyBar').hidden = false; $input.focus(); }
+function clearReply() { replyTo = null; $('#replyBar').hidden = true; }
+$('#rbClose').addEventListener('click', clearReply);
+
+/* --- bottom sheets (attach menu, message menu) --- */
+function showSheet(id) { sheetAt = Date.now(); $('#sheetBg').hidden = false; $('#' + id).hidden = false; }
+function hideSheets() { ['sheetBg', 'attachSheet', 'msgSheet'].forEach(i => $('#' + i).hidden = true); $('#shDelTxt').textContent = 'Delete for everyone'; sheetMsg = null; }
+$('#sheetBg').addEventListener('click', () => { if (Date.now() - sheetAt > 350) hideSheets(); });
+$('#attachBtn').addEventListener('click', () => showSheet('attachSheet'));
+$('#shPhoto').addEventListener('click', () => { hideSheets(); $('#photoInput').click(); });
+$('#shCamera').addEventListener('click', () => { hideSheets(); $('#cameraInput').click(); });
+
+function openMsgSheet(m) {
+  sheetMsg = m;
+  $('#shReply').hidden = !!m.deleted_at;
+  $('#shCopy').hidden = !(m.body && !m.deleted_at);
+  $('#shDel').hidden = !(m.sender_id === me.id && !m.deleted_at);
+  showSheet('msgSheet');
+}
+$('#shReply').addEventListener('click', () => { const m = sheetMsg; hideSheets(); if (m) setReply(m); });
+$('#shCopy').addEventListener('click', async () => {
+  const m = sheetMsg; hideSheets(); if (!m) return;
+  try { await navigator.clipboard.writeText(m.body); toast('Copied'); } catch { toast('Could not copy'); }
+});
+$('#shDel').addEventListener('click', async () => {
+  const t = $('#shDelTxt');
+  if (t.textContent === 'Delete for everyone') { t.textContent = 'Tap again to confirm delete'; return; }   // two taps, so nothing is deleted by accident
+  const m = sheetMsg; hideSheets(); if (!m) return;
+  try { await api('messages/delete', { body: { id: m.id } }); toast('Message deleted'); await loadMessages(true); loadChats().catch(() => {}); }
+  catch (err) { toast(err.message); }
+});
+
+/* --- message list interactions: long-press menu, play, open photo, jump to reply, retry --- */
+let lpTimer = null, lpX = 0, lpY = 0;
+const msgFromEl = el => { const id = +el.dataset.mid; return id ? thread.find(x => x.id === id) : null; };
+$msgs.addEventListener('pointerdown', e => {
+  const el = e.target.closest('.msg'); if (!el || !el.dataset.mid || e.target.closest('.v-play,.v-track')) return;
+  lpX = e.clientX; lpY = e.clientY;
+  lpTimer = setTimeout(() => { lpTimer = null; const m = msgFromEl(el); if (m) { if (navigator.vibrate) navigator.vibrate(15); openMsgSheet(m); } }, 450);
+});
+$msgs.addEventListener('pointermove', e => { if (lpTimer && Math.hypot(e.clientX - lpX, e.clientY - lpY) > 8) { clearTimeout(lpTimer); lpTimer = null; } });
+['pointerup', 'pointercancel', 'pointerleave'].forEach(t => $msgs.addEventListener(t, () => { clearTimeout(lpTimer); lpTimer = null; }));
+$msgs.addEventListener('contextmenu', e => { const el = e.target.closest('.msg'); if (el && el.dataset.mid) { e.preventDefault(); const m = msgFromEl(el); if (m) openMsgSheet(m); } });
+$msgs.addEventListener('scroll', updateToBottom, { passive: true });
+$msgs.addEventListener('click', e => {
+  const t = e.target;
+  const play = t.closest('.v-play'); if (play) return toggleVoice(play.closest('.voice'));
+  const track = t.closest('.v-track'); if (track) return seekVoice(track, e);
+  const img = t.closest('.img-wrap');
+  if (img) {
+    if (img.classList.contains('err')) { const k = img.dataset.img; img.classList.remove('err'); media.delete(k); hydrate(); return; }
+    if (img.classList.contains('loaded')) return openLightbox(img.dataset.img);
+    return;
+  }
+  const q = t.closest('.quote'); if (q) return jumpTo(+q.dataset.jump);
+  const failed = t.closest('.msg.failed'); if (failed) { const m = pending.find(x => x.tmp === failed.dataset.tmp); if (m) deliver(m); }
+});
+$('#toBottom').addEventListener('click', () => $msgs.scrollTo({ top: $msgs.scrollHeight, behavior: 'smooth' }));
+function jumpTo(id) {
+  const el = $msgs.querySelector(`[data-mid="${id}"]`); if (!el) return toast('Original message is not loaded');
+  el.scrollIntoView({ block: 'center', behavior: 'smooth' }); el.classList.add('flash'); setTimeout(() => el.classList.remove('flash'), 1200);
+}
+
+/* --- photos: pick, compress, preview with caption, send --- */
+async function compressImage(file) {                        // shrink until <= 900KB (photos are stored in D1)
+  let src;
+  try { src = await createImageBitmap(file); }
+  catch { src = await new Promise((ok, no) => { const i = new Image(); i.onload = () => ok(i); i.onerror = no; i.src = URL.createObjectURL(file); }); }
+  for (const [max, q] of [[1600, .82], [1280, .72], [1024, .62], [800, .55], [640, .5]]) {
+    const k = Math.min(1, max / Math.max(src.width, src.height));
+    const c = document.createElement('canvas'); c.width = Math.round(src.width * k); c.height = Math.round(src.height * k);
+    const g = c.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, c.width, c.height); g.drawImage(src, 0, 0, c.width, c.height);
+    const blob = await new Promise(ok => c.toBlob(ok, 'image/jpeg', q));
+    if (blob && blob.size <= 900000) return blob;
+  }
+  throw new Error('too large');
+}
+async function pickPhoto(input) {
+  const file = input.files[0]; input.value = ''; if (!file || !current) return;
+  if (!file.type.startsWith('image/')) return toast('Please choose a photo');
+  try { previewBlob = await compressImage(file); previewUrl = URL.createObjectURL(previewBlob); $('#ipImg').src = previewUrl; $('#ipCap').value = ''; $('#imgPrev').hidden = false; }
+  catch { toast('Could not read this photo'); }
+}
+function closePreview() { $('#imgPrev').hidden = true; if (previewUrl) URL.revokeObjectURL(previewUrl); previewUrl = ''; previewBlob = null; }
+$('#photoInput').addEventListener('change', e => pickPhoto(e.target));
+$('#cameraInput').addEventListener('change', e => pickPhoto(e.target));
+$('#ipCancel').addEventListener('click', closePreview);
+$('#ipSend').addEventListener('click', () => {
+  if (!previewBlob || !current) return;
+  const blob = previewBlob, caption = $('#ipCap').value.trim(); closePreview();
+  queue({ type: 'image', body: caption, blob, media_key: localMedia(blob) });
+});
+async function openLightbox(key) {
+  let u = mediaDone.get(key); if (!u) { try { u = await mediaUrl(key); } catch { return toast('Could not open photo'); } }
+  $('#lbImg').src = u; $('#lbSave').href = u; $('#lightbox').hidden = false;
+}
+$('#lbClose').addEventListener('click', () => { $('#lightbox').hidden = true; });
+$('#lightbox').addEventListener('click', e => { if (e.target.id === 'lightbox' || e.target.id === 'lbImg') $('#lightbox').hidden = true; });
+
+/* --- voice notes: tap mic to record, trash to cancel, send button to send --- */
+const showRec = on => { $('#recBar').hidden = !on; $('#composer').hidden = on; $('#recTime').textContent = '0:00'; };
+async function startRec() {
+  if (rec || !current) return;
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia || !window.MediaRecorder) return toast('Voice notes are not supported on this browser');
+  let stream;
+  try { stream = await navigator.mediaDevices.getUserMedia({ audio: true }); }
+  catch { return toast('Allow microphone access to record voice notes'); }
+  const mime = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/ogg;codecs=opus'].find(t => MediaRecorder.isTypeSupported(t)) || '';
+  const mr = new MediaRecorder(stream, Object.assign({ audioBitsPerSecond: 24000 }, mime ? { mimeType: mime } : {}));   // 24 kbps: clear speech, small files
+  const r = rec = { mr, chunks: [], bytes: 0, capped: false, t0: Date.now(), send: false };
+  mr.ondataavailable = e => {
+    if (!e.data || !e.data.size) return;
+    r.chunks.push(e.data); r.bytes += e.data.size;
+    if (r.bytes > MAX_VOICE_BYTES && !r.capped) { r.capped = true; toast('Maximum voice note length reached'); stopRec(true); }
+  };
+  mr.onstop = () => {
+    clearInterval(r.timer); stream.getTracks().forEach(t => t.stop()); if (rec === r) rec = null; showRec(false);
+    if (!r.send || !current) return;
+    const secs = Math.round((Date.now() - r.t0) / 1000);
+    if (secs < 1 || !r.chunks.length) return toast('Voice note too short');
+    const blob = new Blob(r.chunks, { type: mr.mimeType || mime || 'audio/webm' });
+    if (blob.size > 990000) return toast('Voice note is too long, please record a shorter one');
+    queue({ type: 'voice', body: '', blob, duration: secs, media_key: localMedia(blob) });
+  };
+  mr.start(1000); showRec(true);
+  r.timer = setInterval(() => { const s = Math.floor((Date.now() - r.t0) / 1000); $('#recTime').textContent = fmtDur(s); if (s >= MAX_REC) stopRec(true); }, 250);
+}
+function stopRec(send) { if (!rec) return; rec.send = send; if (rec.mr.state !== 'inactive') rec.mr.stop(); }
+$('#micBtn').addEventListener('click', startRec);
+$('#recCancel').addEventListener('click', () => stopRec(false));
+$('#recSend').addEventListener('click', () => stopRec(true));
 
 $('#chatList').addEventListener('click', e => { const r = e.target.closest('[data-id]'); if (r) openChat(r.dataset.id); });
 document.addEventListener('click', e => { const r = e.target.closest('[data-contact]'); if (r) openChat(r.dataset.contact); });
@@ -655,16 +1028,6 @@ $('#favBtn').addEventListener('click', () => {
   localStorage.setItem('sl_favs', JSON.stringify([...favs]));
   updateFav(); renderChats();
   toast(favs.has(current.id) ? 'Added to favorites' : 'Removed from favorites');
-});
-$('#composer').addEventListener('submit', async e => {
-  e.preventDefault();
-  const input = $('#msgInput'), body = input.value.trim();
-  if (!body || !current) return;
-  input.value = '';
-  try {
-    await api('messages', { body: { to: current.id, body } });
-    await loadMessages(true); loadChats();
-  } catch (err) { toast(err.message); input.value = body; }
 });
 
 /* ---------- Search users & contacts ---------- */
