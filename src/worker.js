@@ -168,6 +168,16 @@ async function route(req, env, url) {
     return json({ users: results.map(u => ({ ...publicUser(u, now), is_contact: !!u.is_contact })) });
   }
 
+  // ---- one user's public profile (only id, name, username, photo, online) ----
+  const pm = p.match(/^users\/(\d{1,12})$/);
+  if (pm && !post) {
+    const u = await db.prepare(
+      'SELECT u.id,u.name,u.username,u.avatar_key,u.last_seen,EXISTS(SELECT 1 FROM contacts c WHERE c.owner_id=?1 AND c.contact_id=u.id) is_contact FROM users u WHERE u.id=?2'
+    ).bind(me.id, +pm[1]).first();
+    if (!u) return json({ error: 'User not found' }, 404);
+    return json({ user: { ...publicUser(u, now), is_contact: !!u.is_contact, is_me: u.id === me.id } });
+  }
+
   // ---- my saved contacts ----
   if (p === 'contacts' && !post) {
     const { results } = await db.prepare(
