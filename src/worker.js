@@ -9,6 +9,7 @@ const EMAIL = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 const likeEsc = s => s.replace(/[\\%_]/g, '\\$&');            // escape LIKE wildcards in user input
 const MEDIA_KEY = /^u\d+\/[a-f0-9]{32}$/;                  // keys we generate: u<userId>/<random>
 const MEDIA_RULES = { image: { max: 1000000 }, voice: { max: 1000000 } };   // max raw bytes per file; files are stored in D1, so they are kept small
+const VIDEO_MAX = 20 * 1024 * 1024;                         // 20 MB per video (R2 free tier is 10 GB)
 const CHUNK = 180000;                                      // base64 characters per D1 row (many small rows, never one huge value)
 const B64 = /^[A-Za-z0-9+\/]+={0,2}$/;
 function sniff(kind, b64) {                                // what the file REALLY is (first bytes), never what the client claims
@@ -103,12 +104,19 @@ async function startSession(db, user, now) {
 async function route(req, env, url) {
   const db = env.DB, p = url.pathname.slice(5), now = Date.now();
   const post = req.method === 'POST';
-  if (post && Number(req.headers.get('content-length') || 0) > 1700000) return json({ error: 'File is too large' }, 413);
-  const body = post ? await req.json().catch(() => ({})) : {};
+  const rawVideo = post && p === 'video';                    // videos are sent as raw bytes (not JSON) and live in R2
+  if (post && !rawVideo && Number(req.headers.get('content-length') || 0) > 1700000) return json({ error: 'File is too large' }, 413);
+  const body = post && !rawVideo ? await req.json().catch(() => ({})) : {};
+
+  const dropAny = async key => {                             // delete an upload everywhere: D1 chunks, the media row and (videos) the R2 object
+    const m = await db.prepare('SELECT type FROM media WHERE key=?').bind(key).first();
+    if (m && m.type.startsWith('video/') && env.MEDIA) await env.MEDIA.delete(key).catch(() => {});
+    await db.batch([db.prepare('DELETE FROM media_chunks WHERE key=?').bind(key), db.prepare('DELETE FROM media WHERE key=?').bind(key)]);
+  };
 
   if (p === 'health') {
     const r = await db.prepare('SELECT COUNT(*) n FROM users').first();
-    return json({ ok: true, database: 'connected', assets: !!env.ASSETS, users: r.n });
+    return json({ ok: true, database: 'connected', video: !!env.MEDIA, assets: !!env.ASSETS, users: r.n });
   }
 
   if (p === 'register' && post) {
@@ -233,7 +241,7 @@ async function route(req, env, url) {
 
   if (p === 'messages' && post) {
     const to = Number(body.to), text = String(body.body || '').trim();
-    const type = ['text', 'image', 'voice'].includes(body.type) ? body.type : 'text';
+    const type = ['text', 'image', 'voice', 'video'].includes(body.type) ? body.type : 'text';
     if (text.length > 2000 || (type === 'text' && !text)) return json({ error: 'Message must be 1–2000 characters' }, 400);
     if (!Number.isInteger(to) || to === me.id || !(await db.prepare('SELECT id FROM users WHERE id=?').bind(to).first())) return json({ error: 'User not found' }, 404);
     let key = null, mtype = null, msize = null, dur = null, replyTo = null;
@@ -243,9 +251,9 @@ async function route(req, env, url) {
       const up = await db.prepare('SELECT type,size FROM media WHERE key=? AND owner_id=?').bind(key, me.id).first();
       if (!up) return json({ error: 'Upload not found. Please try again.' }, 400);
       mtype = up.type;
-      if (!mtype.startsWith(type === 'image' ? 'image/' : 'audio/')) return json({ error: 'Media type does not match' }, 400);
+      if (!mtype.startsWith(type === 'image' ? 'image/' : type === 'video' ? 'video/' : 'audio/')) return json({ error: 'Media type does not match' }, 400);
       if (await db.prepare('SELECT id FROM messages WHERE media_key=?').bind(key).first() || await db.prepare('SELECT id FROM users WHERE avatar_key=?').bind(key).first() || await db.prepare('SELECT id FROM statuses WHERE media_key=?').bind(key).first()) return json({ error: 'Media already used' }, 409);
-      msize = up.size; dur = type === 'voice' ? Math.min(3600, Math.max(0, Math.round(Number(body.duration) || 0))) : null;
+      msize = up.size; dur = type === 'voice' || type === 'video' ? Math.min(3600, Math.max(0, Math.round(Number(body.duration) || 0))) : null;
     }
     if (body.reply_to != null) {
       const rid = Number(body.reply_to);
@@ -262,7 +270,7 @@ async function route(req, env, url) {
     const m = Number.isInteger(id) ? await db.prepare('SELECT id,media_key FROM messages WHERE id=? AND sender_id=? AND deleted_at IS NULL').bind(id, me.id).first() : null;
     if (!m) return json({ error: 'Message not found' }, 404);
     await db.prepare("UPDATE messages SET deleted_at=?, body='', media_key=NULL WHERE id=?").bind(now, id).run();
-    if (m.media_key) await db.batch([db.prepare('DELETE FROM media_chunks WHERE key=?').bind(m.media_key), db.prepare('DELETE FROM media WHERE key=?').bind(m.media_key)]);
+    if (m.media_key) await dropAny(m.media_key);
     return json({ ok: true });
   }
 
@@ -274,8 +282,8 @@ async function route(req, env, url) {
   const dropStatuses = async rows => {                       // remove rows + their views + their photos
     for (const s of rows) {
       const st = [db.prepare('DELETE FROM status_views WHERE status_id=?').bind(s.id), db.prepare('DELETE FROM statuses WHERE id=?').bind(s.id)];
-      if (s.media_key) st.push(db.prepare('DELETE FROM media_chunks WHERE key=?').bind(s.media_key), db.prepare('DELETE FROM media WHERE key=?').bind(s.media_key));
       await db.batch(st);
+      if (s.media_key) await dropAny(s.media_key);
     }
   };
   if (p === 'statuses' && !post) {
@@ -294,8 +302,8 @@ async function route(req, env, url) {
     return json({ mine: mine.map(s => ({ ...shapeStatus(s), views: s.views })), users });
   }
   if (p === 'statuses' && post) {
-    const type = body.type === 'image' ? 'image' : body.type === 'text' ? 'text' : null;
-    if (!type) return json({ error: 'Status must be a photo or text' }, 400);
+    const type = ['image', 'text', 'video'].includes(body.type) ? body.type : null;
+    if (!type) return json({ error: 'Status must be a photo, video or text' }, 400);
     const stale = (await db.prepare('SELECT id,media_key FROM statuses WHERE expires_at<=? LIMIT 25').bind(now).all()).results;
     if (stale.length) await dropStatuses(stale);             // housekeeping: expired statuses and their photos are deleted for good
     if ((await db.prepare('SELECT COUNT(*) n FROM statuses WHERE user_id=? AND expires_at>?').bind(me.id, now).first()).n >= STATUS_MAX) return json({ error: 'You can have up to 30 active statuses' }, 429);
@@ -307,7 +315,7 @@ async function route(req, env, url) {
       key = String(body.key || ''); cap = String(body.caption ?? '').trim().slice(0, 200);
       if (!MEDIA_KEY.test(key) || !key.startsWith('u' + me.id + '/')) return json({ error: 'Invalid photo' }, 400);
       const up = await db.prepare('SELECT type FROM media WHERE key=? AND owner_id=?').bind(key, me.id).first();
-      if (!up || !up.type.startsWith('image/')) return json({ error: 'Upload not found. Please try again.' }, 400);
+      if (!up || !up.type.startsWith(type === 'video' ? 'video/' : 'image/')) return json({ error: 'Upload not found. Please try again.' }, 400);
       if (await db.prepare('SELECT id FROM messages WHERE media_key=?').bind(key).first() || await db.prepare('SELECT id FROM users WHERE avatar_key=?').bind(key).first() || await db.prepare('SELECT id FROM statuses WHERE media_key=?').bind(key).first()) return json({ error: 'Media already used' }, 409);
     }
     const r = await db.prepare('INSERT INTO statuses(user_id,type,body,caption,bg,media_key,created_at,expires_at) VALUES(?,?,?,?,?,?,?,?)').bind(me.id, type, text, cap, bg, key, now, now + STATUS_MS).run();
@@ -374,6 +382,27 @@ async function route(req, env, url) {
     return json({ key, size, type });
   }
 
+  // ---- video upload: raw bytes -> R2 (only when the MEDIA bucket binding exists) ----
+  if (p === 'video' && post) {
+    if (!env.MEDIA) return json({ error: 'Video storage (R2) is not set up yet' }, 501);
+    const len = Number(req.headers.get('content-length') || 0);
+    if (!len) return json({ error: 'Invalid file' }, 400);
+    if (len > VIDEO_MAX) return json({ error: 'Video is too large (max 20 MB)' }, 413);
+    const buf = await req.arrayBuffer();
+    if (buf.byteLength > VIDEO_MAX) return json({ error: 'Video is too large (max 20 MB)' }, 413);
+    if (buf.byteLength < 32) return json({ error: 'Invalid file' }, 400);
+    const h = new Uint8Array(buf.slice(0, 16)), at = (i, s) => [...s].every((c, j) => h[i + j] === c.charCodeAt(0));
+    const type = at(4, 'ftyp') ? 'video/mp4' : (h[0] === 0x1A && h[1] === 0x45 && h[2] === 0xDF && h[3] === 0xA3) ? 'video/webm' : null;   // real file signature, never the client's claim
+    if (!type) return json({ error: 'This video format is not allowed (use MP4 or WebM)' }, 415);
+    const old = now - 3600000;                              // tidy up this user's videos that were never sent
+    const stale = (await db.prepare("SELECT key FROM media WHERE owner_id=? AND created_at<? AND type LIKE 'video/%' AND key NOT IN (SELECT media_key FROM messages WHERE media_key IS NOT NULL) AND key NOT IN (SELECT media_key FROM statuses WHERE media_key IS NOT NULL) LIMIT 10").bind(me.id, old).all()).results;
+    for (const s of stale) await dropAny(s.key);
+    const key = `u${me.id}/${rand(16)}`;
+    await env.MEDIA.put(key, buf, { httpMetadata: { contentType: type } });
+    await db.prepare('INSERT INTO media(key,owner_id,type,size,created_at) VALUES(?,?,?,?,?)').bind(key, me.id, type, buf.byteLength, now).run();
+    return json({ key, size: buf.byteLength, type });
+  }
+
   if (p.startsWith('media/') && !post) {
     const key = p.slice(6);
     if (!MEDIA_KEY.test(key)) return json({ error: 'Not found' }, 404);
@@ -383,6 +412,11 @@ async function route(req, env, url) {
       await db.prepare('SELECT 1 ok FROM statuses s WHERE s.media_key=? AND s.expires_at>? AND EXISTS(SELECT 1 FROM contacts c WHERE c.owner_id=s.user_id AND c.contact_id=?)').bind(key, now, me.id).first();   // status photos: only the owner's contacts
     const m = allowed ? await db.prepare('SELECT type FROM media WHERE key=?').bind(key).first() : null;
     if (!m) return json({ error: 'Not found' }, 404);
+    if (m.type.startsWith('video/')) {                      // videos stream straight from R2 (same permission check as above)
+      const obj = env.MEDIA ? await env.MEDIA.get(key) : null;
+      if (!obj) return json({ error: 'Not found' }, 404);
+      return new Response(obj.body, { headers: { 'content-type': m.type, 'content-length': String(obj.size), 'cache-control': 'private, no-store', ...CORS } });
+    }
     const { results } = await db.prepare('SELECT data FROM media_chunks WHERE key=? ORDER BY idx').bind(key).all();
     return json({ type: m.type, data: results.map(r => r.data).join('') });
   }
