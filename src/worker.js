@@ -46,7 +46,11 @@ const TABLES = [
   `CREATE TABLE IF NOT EXISTS contacts (owner_id INTEGER NOT NULL, contact_id INTEGER NOT NULL, created_at INTEGER NOT NULL, PRIMARY KEY (owner_id, contact_id))`,
   `CREATE INDEX IF NOT EXISTS idx_contacts_contact ON contacts(contact_id)`,
   `CREATE TABLE IF NOT EXISTS media (key TEXT PRIMARY KEY, owner_id INTEGER NOT NULL, type TEXT NOT NULL, size INTEGER NOT NULL, created_at INTEGER NOT NULL)`,
-  `CREATE TABLE IF NOT EXISTS media_chunks (key TEXT NOT NULL, idx INTEGER NOT NULL, data TEXT NOT NULL, PRIMARY KEY (key, idx))`
+  `CREATE TABLE IF NOT EXISTS media_chunks (key TEXT NOT NULL, idx INTEGER NOT NULL, data TEXT NOT NULL, PRIMARY KEY (key, idx))`,
+  `CREATE TABLE IF NOT EXISTS statuses (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, type TEXT NOT NULL, body TEXT, caption TEXT, bg INTEGER, media_key TEXT, created_at INTEGER NOT NULL, expires_at INTEGER NOT NULL)`,
+  `CREATE INDEX IF NOT EXISTS idx_status_user ON statuses(user_id, expires_at)`,
+  `CREATE INDEX IF NOT EXISTS idx_status_media ON statuses(media_key)`,
+  `CREATE TABLE IF NOT EXISTS status_views (status_id INTEGER NOT NULL, viewer_id INTEGER NOT NULL, viewed_at INTEGER NOT NULL, PRIMARY KEY (status_id, viewer_id))`
 ];
 const USER_COLS = { username: "TEXT", email: 'TEXT', name: "TEXT NOT NULL DEFAULT ''", pass_hash: "TEXT NOT NULL DEFAULT ''", salt: "TEXT NOT NULL DEFAULT ''", created_at: 'INTEGER NOT NULL DEFAULT 0', last_seen: 'INTEGER NOT NULL DEFAULT 0', avatar_key: 'TEXT' };
 const MSG_COLS = { type: "TEXT NOT NULL DEFAULT 'text'", media_key: 'TEXT', media_type: 'TEXT', media_size: 'INTEGER', duration: 'INTEGER', reply_to: 'INTEGER', delivered_at: 'INTEGER', deleted_at: 'INTEGER' };
@@ -240,7 +244,7 @@ async function route(req, env, url) {
       if (!up) return json({ error: 'Upload not found. Please try again.' }, 400);
       mtype = up.type;
       if (!mtype.startsWith(type === 'image' ? 'image/' : 'audio/')) return json({ error: 'Media type does not match' }, 400);
-      if (await db.prepare('SELECT id FROM messages WHERE media_key=?').bind(key).first() || await db.prepare('SELECT id FROM users WHERE avatar_key=?').bind(key).first()) return json({ error: 'Media already used' }, 409);
+      if (await db.prepare('SELECT id FROM messages WHERE media_key=?').bind(key).first() || await db.prepare('SELECT id FROM users WHERE avatar_key=?').bind(key).first() || await db.prepare('SELECT id FROM statuses WHERE media_key=?').bind(key).first()) return json({ error: 'Media already used' }, 409);
       msize = up.size; dur = type === 'voice' ? Math.min(3600, Math.max(0, Math.round(Number(body.duration) || 0))) : null;
     }
     if (body.reply_to != null) {
@@ -262,6 +266,73 @@ async function route(req, env, url) {
     return json({ ok: true });
   }
 
+
+  // ---- status (24h) : text or photo; visible to the owner and to the people the owner has saved as contacts ----
+  const STATUS_MS = 864e5, STATUS_MAX = 30;
+  const shapeStatus = s => ({ id: s.id, type: s.type, body: s.body || '', caption: s.caption || '', bg: s.bg || 0, media: s.media_key || null, created_at: s.created_at, expires_at: s.expires_at });
+  const visibleStatus = id => db.prepare('SELECT * FROM statuses s WHERE s.id=?1 AND s.expires_at>?2 AND (s.user_id=?3 OR EXISTS(SELECT 1 FROM contacts c WHERE c.owner_id=s.user_id AND c.contact_id=?3))').bind(id, now, me.id).first();
+  const dropStatuses = async rows => {                       // remove rows + their views + their photos
+    for (const s of rows) {
+      const st = [db.prepare('DELETE FROM status_views WHERE status_id=?').bind(s.id), db.prepare('DELETE FROM statuses WHERE id=?').bind(s.id)];
+      if (s.media_key) st.push(db.prepare('DELETE FROM media_chunks WHERE key=?').bind(s.media_key), db.prepare('DELETE FROM media WHERE key=?').bind(s.media_key));
+      await db.batch(st);
+    }
+  };
+  if (p === 'statuses' && !post) {
+    const mine = (await db.prepare('SELECT s.*,(SELECT COUNT(*) FROM status_views v WHERE v.status_id=s.id) views FROM statuses s WHERE s.user_id=? AND s.expires_at>? ORDER BY s.id').bind(me.id, now).all()).results;
+    const feed = (await db.prepare(`SELECT s.*,u.name,u.username,u.avatar_key,u.last_seen,
+        EXISTS(SELECT 1 FROM status_views v WHERE v.status_id=s.id AND v.viewer_id=?1) seen
+      FROM statuses s JOIN users u ON u.id=s.user_id JOIN contacts c ON c.owner_id=s.user_id AND c.contact_id=?1
+      WHERE s.expires_at>?2 AND s.user_id!=?1 ORDER BY s.user_id, s.id LIMIT 300`).bind(me.id, now).all()).results;
+    const groups = new Map();
+    for (const s of feed) {
+      if (!groups.has(s.user_id)) groups.set(s.user_id, { user: publicUser({ id: s.user_id, name: s.name, username: s.username, avatar_key: s.avatar_key, last_seen: s.last_seen }, now), items: [] });
+      groups.get(s.user_id).items.push({ ...shapeStatus(s), seen: !!s.seen });
+    }
+    const users = [...groups.values()].map(g => ({ ...g, unseen: g.items.filter(i => !i.seen).length, latest: g.items[g.items.length - 1].created_at }));
+    users.sort((a, b) => (b.unseen > 0) - (a.unseen > 0) || b.latest - a.latest);
+    return json({ mine: mine.map(s => ({ ...shapeStatus(s), views: s.views })), users });
+  }
+  if (p === 'statuses' && post) {
+    const type = body.type === 'image' ? 'image' : body.type === 'text' ? 'text' : null;
+    if (!type) return json({ error: 'Status must be a photo or text' }, 400);
+    const stale = (await db.prepare('SELECT id,media_key FROM statuses WHERE expires_at<=? LIMIT 25').bind(now).all()).results;
+    if (stale.length) await dropStatuses(stale);             // housekeeping: expired statuses and their photos are deleted for good
+    if ((await db.prepare('SELECT COUNT(*) n FROM statuses WHERE user_id=? AND expires_at>?').bind(me.id, now).first()).n >= STATUS_MAX) return json({ error: 'You can have up to 30 active statuses' }, 429);
+    let text = null, cap = null, bg = 0, key = null;
+    if (type === 'text') {
+      text = String(body.body ?? '').trim(); bg = Number.isInteger(body.bg) ? Math.min(7, Math.max(0, body.bg)) : 0;
+      if (!text || text.length > 700) return json({ error: 'Status text must be 1–700 characters' }, 400);
+    } else {
+      key = String(body.key || ''); cap = String(body.caption ?? '').trim().slice(0, 200);
+      if (!MEDIA_KEY.test(key) || !key.startsWith('u' + me.id + '/')) return json({ error: 'Invalid photo' }, 400);
+      const up = await db.prepare('SELECT type FROM media WHERE key=? AND owner_id=?').bind(key, me.id).first();
+      if (!up || !up.type.startsWith('image/')) return json({ error: 'Upload not found. Please try again.' }, 400);
+      if (await db.prepare('SELECT id FROM messages WHERE media_key=?').bind(key).first() || await db.prepare('SELECT id FROM users WHERE avatar_key=?').bind(key).first() || await db.prepare('SELECT id FROM statuses WHERE media_key=?').bind(key).first()) return json({ error: 'Media already used' }, 409);
+    }
+    const r = await db.prepare('INSERT INTO statuses(user_id,type,body,caption,bg,media_key,created_at,expires_at) VALUES(?,?,?,?,?,?,?,?)').bind(me.id, type, text, cap, bg, key, now, now + STATUS_MS).run();
+    return json({ status: { id: r.meta.last_row_id, type, body: text || '', caption: cap || '', bg, media: key, created_at: now, expires_at: now + STATUS_MS, views: 0 } });
+  }
+  if (p === 'statuses/view' && post) {
+    const s = await visibleStatus(Number(body.id));
+    if (!s) return json({ error: 'Status not found' }, 404);
+    if (s.user_id !== me.id) await db.prepare('INSERT OR IGNORE INTO status_views(status_id,viewer_id,viewed_at) VALUES(?,?,?)').bind(s.id, me.id, now).run();
+    return json({ ok: true });
+  }
+  if (p === 'statuses/viewers' && !post) {
+    const id = Number(url.searchParams.get('id'));
+    const s = await db.prepare('SELECT id FROM statuses WHERE id=? AND user_id=? AND expires_at>?').bind(id, me.id, now).first();   // only the owner may see who viewed
+    if (!s) return json({ error: 'Status not found' }, 404);
+    const { results } = await db.prepare('SELECT u.id,u.name,u.username,u.avatar_key,u.last_seen,v.viewed_at FROM status_views v JOIN users u ON u.id=v.viewer_id WHERE v.status_id=? ORDER BY v.viewed_at DESC LIMIT 200').bind(id).all();
+    return json({ viewers: results.map(v => ({ ...publicUser(v, now), viewed_at: v.viewed_at })) });
+  }
+  if (p === 'statuses/delete' && post) {
+    const s = await db.prepare('SELECT id,media_key FROM statuses WHERE id=? AND user_id=?').bind(Number(body.id), me.id).first();
+    if (!s) return json({ error: 'Status not found' }, 404);
+    await dropStatuses([s]);
+    return json({ ok: true });
+  }
+
   // ---- profile photo (uses a previous /api/media upload of kind "image") ----
   const dropMedia = key => db.batch([db.prepare('DELETE FROM media_chunks WHERE key=?').bind(key), db.prepare('DELETE FROM media WHERE key=?').bind(key)]);
   if (p === 'profile/avatar' && post) {
@@ -270,7 +341,7 @@ async function route(req, env, url) {
     const up = await db.prepare('SELECT type,size FROM media WHERE key=? AND owner_id=?').bind(key, me.id).first();
     if (!up || !up.type.startsWith('image/')) return json({ error: 'Upload not found. Please try again.' }, 400);
     if (up.size > 250000) return json({ error: 'Profile photo is too large' }, 413);
-    if (await db.prepare('SELECT id FROM messages WHERE media_key=?').bind(key).first()) return json({ error: 'Media already used' }, 409);
+    if (await db.prepare('SELECT id FROM messages WHERE media_key=?').bind(key).first() || await db.prepare('SELECT id FROM statuses WHERE media_key=?').bind(key).first()) return json({ error: 'Media already used' }, 409);
     const prev = await db.prepare('SELECT avatar_key FROM users WHERE id=?').bind(me.id).first();
     await db.prepare('UPDATE users SET avatar_key=? WHERE id=?').bind(key, me.id).run();
     if (prev && prev.avatar_key && prev.avatar_key !== key) await dropMedia(prev.avatar_key);
@@ -294,8 +365,8 @@ async function route(req, env, url) {
     if (!type) return json({ error: 'This file type is not allowed' }, 415);
     const old = now - 3600000;                              // tidy up this user's uploads that were never sent in a message
     await db.batch([
-      db.prepare('DELETE FROM media_chunks WHERE key IN (SELECT key FROM media WHERE owner_id=? AND created_at<? AND key NOT IN (SELECT media_key FROM messages WHERE media_key IS NOT NULL) AND key NOT IN (SELECT avatar_key FROM users WHERE avatar_key IS NOT NULL))').bind(me.id, old),
-      db.prepare('DELETE FROM media WHERE owner_id=? AND created_at<? AND key NOT IN (SELECT media_key FROM messages WHERE media_key IS NOT NULL) AND key NOT IN (SELECT avatar_key FROM users WHERE avatar_key IS NOT NULL)').bind(me.id, old)
+      db.prepare('DELETE FROM media_chunks WHERE key IN (SELECT key FROM media WHERE owner_id=? AND created_at<? AND key NOT IN (SELECT media_key FROM messages WHERE media_key IS NOT NULL) AND key NOT IN (SELECT avatar_key FROM users WHERE avatar_key IS NOT NULL) AND key NOT IN (SELECT media_key FROM statuses WHERE media_key IS NOT NULL))').bind(me.id, old),
+      db.prepare('DELETE FROM media WHERE owner_id=? AND created_at<? AND key NOT IN (SELECT media_key FROM messages WHERE media_key IS NOT NULL) AND key NOT IN (SELECT avatar_key FROM users WHERE avatar_key IS NOT NULL) AND key NOT IN (SELECT media_key FROM statuses WHERE media_key IS NOT NULL)').bind(me.id, old)
     ]);
     const key = `u${me.id}/${rand(16)}`, stmts = [db.prepare('INSERT INTO media(key,owner_id,type,size,created_at) VALUES(?,?,?,?,?)').bind(key, me.id, type, size, now)];
     for (let i = 0, n = 0; i < data.length; i += CHUNK, n++) stmts.push(db.prepare('INSERT INTO media_chunks(key,idx,data) VALUES(?,?,?)').bind(key, n, data.slice(i, i + CHUNK)));
@@ -308,7 +379,8 @@ async function route(req, env, url) {
     if (!MEDIA_KEY.test(key)) return json({ error: 'Not found' }, 404);
     const allowed = key.startsWith('u' + me.id + '/') ||
       await db.prepare('SELECT 1 ok FROM messages WHERE media_key=? AND deleted_at IS NULL AND (sender_id=? OR receiver_id=?)').bind(key, me.id, me.id).first() ||
-      await db.prepare('SELECT 1 ok FROM users WHERE avatar_key=?').bind(key).first();   // profile photos
+      await db.prepare('SELECT 1 ok FROM users WHERE avatar_key=?').bind(key).first() ||   // profile photos
+      await db.prepare('SELECT 1 ok FROM statuses s WHERE s.media_key=? AND s.expires_at>? AND EXISTS(SELECT 1 FROM contacts c WHERE c.owner_id=s.user_id AND c.contact_id=?)').bind(key, now, me.id).first();   // status photos: only the owner's contacts
     const m = allowed ? await db.prepare('SELECT type FROM media WHERE key=?').bind(key).first() : null;
     if (!m) return json({ error: 'Not found' }, 404);
     const { results } = await db.prepare('SELECT data FROM media_chunks WHERE key=? ORDER BY idx').bind(key).all();
