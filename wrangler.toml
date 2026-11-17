@@ -16,3 +16,14 @@ binding = "ASSETS"
 binding = "DB"
 database_name = "sunlight-chat"
 database_id = "14778838-61d9-4fd5-a6be-a7d778348def"
+
+# ---- Cloudflare R2 (videos) ------------------------------------------------
+# Videos need an R2 bucket. The app works WITHOUT this: the Video buttons stay
+# hidden until the binding exists. To turn videos on:
+#   1. Cloudflare dashboard > Storage & Databases > R2 > Create bucket "sunlight-media"
+#      (R2 asks for a payment method; the free tier is 10 GB, you pay only above it)
+#   2. Remove the leading "# " from the 3 lines below, commit, let it deploy.
+# Do NOT enable these lines before the bucket exists, or the deploy will fail.
+# [[r2_buckets]]
+# binding = "MEDIA"
+# bucket_name = "sunlight-media"
