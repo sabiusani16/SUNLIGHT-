@@ -54,7 +54,7 @@ const TABLES = [
   `CREATE TABLE IF NOT EXISTS status_views (status_id INTEGER NOT NULL, viewer_id INTEGER NOT NULL, viewed_at INTEGER NOT NULL, PRIMARY KEY (status_id, viewer_id))`
 ];
 const USER_COLS = { username: "TEXT", email: 'TEXT', name: "TEXT NOT NULL DEFAULT ''", pass_hash: "TEXT NOT NULL DEFAULT ''", salt: "TEXT NOT NULL DEFAULT ''", created_at: 'INTEGER NOT NULL DEFAULT 0', last_seen: 'INTEGER NOT NULL DEFAULT 0', avatar_key: 'TEXT' };
-const MSG_COLS = { type: "TEXT NOT NULL DEFAULT 'text'", media_key: 'TEXT', media_type: 'TEXT', media_size: 'INTEGER', duration: 'INTEGER', reply_to: 'INTEGER', delivered_at: 'INTEGER', deleted_at: 'INTEGER' };
+const MSG_COLS = { type: "TEXT NOT NULL DEFAULT 'text'", media_key: 'TEXT', media_type: 'TEXT', media_size: 'INTEGER', duration: 'INTEGER', reply_to: 'INTEGER', delivered_at: 'INTEGER', deleted_at: 'INTEGER', status_id: 'INTEGER', status_snap: 'TEXT' };
 let ready = null;
 function ensureSchema(db) {
   ready ??= (async () => {
@@ -108,6 +108,7 @@ async function route(req, env, url) {
   if (post && !rawVideo && Number(req.headers.get('content-length') || 0) > 1700000) return json({ error: 'File is too large' }, 413);
   const body = post && !rawVideo ? await req.json().catch(() => ({})) : {};
 
+  const visibleStatus = id => db.prepare('SELECT * FROM statuses s WHERE s.id=?1 AND s.expires_at>?2 AND (s.user_id=?3 OR (EXISTS(SELECT 1 FROM contacts c WHERE c.owner_id=s.user_id AND c.contact_id=?3) AND EXISTS(SELECT 1 FROM contacts c2 WHERE c2.owner_id=?3 AND c2.contact_id=s.user_id)))').bind(id, now, me.id).first();
   const dropAny = async key => {                             // delete an upload everywhere: D1 chunks, the media row and (videos) the R2 object
     const m = await db.prepare('SELECT type FROM media WHERE key=?').bind(key).first();
     if (m && m.type.startsWith('video/') && env.MEDIA) await env.MEDIA.delete(key).catch(() => {});
@@ -233,10 +234,11 @@ async function route(req, env, url) {
     if (!peer) return json({ error: 'User not found' }, 404);
     await db.prepare('UPDATE messages SET read_at=?1, delivered_at=COALESCE(delivered_at,?1) WHERE sender_id=?2 AND receiver_id=?3 AND read_at IS NULL').bind(now, peerId, me.id).run();
     const { results } = await db.prepare(`
-      SELECT id,sender_id,body,type,media_key,media_type,media_size,duration,reply_to,created_at,delivered_at,read_at,deleted_at FROM (
+      SELECT id,sender_id,body,type,media_key,media_type,media_size,duration,reply_to,created_at,delivered_at,read_at,deleted_at,status_id,status_snap FROM (
         SELECT * FROM messages WHERE (sender_id=?1 AND receiver_id=?2) OR (sender_id=?2 AND receiver_id=?1) ORDER BY id DESC LIMIT 200
       ) ORDER BY id`).bind(me.id, peerId).all();
-    return json({ messages: results, online: now - peer.last_seen < ONLINE_MS, last_seen: peer.last_seen });
+    const messages = results.map(({ status_snap, ...m }) => { let st = null; if (status_snap && !m.deleted_at) try { st = JSON.parse(status_snap); } catch {} return { ...m, status: st }; });   // private status-reply preview
+    return json({ messages, online: now - peer.last_seen < ONLINE_MS, last_seen: peer.last_seen });
   }
 
   if (p === 'messages' && post) {
@@ -259,8 +261,15 @@ async function route(req, env, url) {
       const rid = Number(body.reply_to);
       if (Number.isInteger(rid) && await db.prepare('SELECT id FROM messages WHERE id=?1 AND ((sender_id=?2 AND receiver_id=?3) OR (sender_id=?3 AND receiver_id=?2))').bind(rid, me.id, to).first()) replyTo = rid;
     }
-    const r = await db.prepare('INSERT INTO messages(sender_id,receiver_id,body,created_at,type,media_key,media_type,media_size,duration,reply_to) VALUES(?,?,?,?,?,?,?,?,?,?)')
-      .bind(me.id, to, text, now, type, key, mtype, msize, dur, replyTo).run();
+    let stId = null, snap = null;
+    if (body.status_id != null) {                           // this message is a PRIVATE reply to someone's status
+      const s = await visibleStatus(Number(body.status_id));       // same rule as viewing: owner or mutual contact, not expired
+      if (!s || s.user_id !== to || s.user_id === me.id) return json({ error: 'This status is no longer available' }, 404);
+      const th = typeof body.thumb === 'string' && /^data:image\/jpeg;base64,[A-Za-z0-9+/=]{20,12000}$/.test(body.thumb) ? body.thumb : null;
+      stId = s.id; snap = JSON.stringify({ t: s.type, x: String(s.type === 'text' ? s.body : s.caption || '').slice(0, 120), bg: s.bg, th });
+    }
+    const r = await db.prepare('INSERT INTO messages(sender_id,receiver_id,body,created_at,type,media_key,media_type,media_size,duration,reply_to,status_id,status_snap) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)')
+      .bind(me.id, to, text, now, type, key, mtype, msize, dur, replyTo, stId, snap).run();
     return json({ id: r.meta.last_row_id, created_at: now });
   }
 
@@ -269,7 +278,7 @@ async function route(req, env, url) {
     const id = Number(body.id);
     const m = Number.isInteger(id) ? await db.prepare('SELECT id,media_key FROM messages WHERE id=? AND sender_id=? AND deleted_at IS NULL').bind(id, me.id).first() : null;
     if (!m) return json({ error: 'Message not found' }, 404);
-    await db.prepare("UPDATE messages SET deleted_at=?, body='', media_key=NULL WHERE id=?").bind(now, id).run();
+    await db.prepare("UPDATE messages SET deleted_at=?, body='', media_key=NULL, status_id=NULL, status_snap=NULL WHERE id=?").bind(now, id).run();
     if (m.media_key) await dropAny(m.media_key);
     return json({ ok: true });
   }
@@ -278,7 +287,6 @@ async function route(req, env, url) {
   // ---- status (24h) : text or photo; visible to the owner and to the people the owner has saved as contacts ----
   const STATUS_MS = 864e5, STATUS_MAX = 30;
   const shapeStatus = s => ({ id: s.id, type: s.type, body: s.body || '', caption: s.caption || '', bg: s.bg || 0, media: s.media_key || null, created_at: s.created_at, expires_at: s.expires_at });
-  const visibleStatus = id => db.prepare('SELECT * FROM statuses s WHERE s.id=?1 AND s.expires_at>?2 AND (s.user_id=?3 OR EXISTS(SELECT 1 FROM contacts c WHERE c.owner_id=s.user_id AND c.contact_id=?3))').bind(id, now, me.id).first();
   const dropStatuses = async rows => {                       // remove rows + their views + their photos
     for (const s of rows) {
       const st = [db.prepare('DELETE FROM status_views WHERE status_id=?').bind(s.id), db.prepare('DELETE FROM statuses WHERE id=?').bind(s.id)];
@@ -290,7 +298,7 @@ async function route(req, env, url) {
     const mine = (await db.prepare('SELECT s.*,(SELECT COUNT(*) FROM status_views v WHERE v.status_id=s.id) views FROM statuses s WHERE s.user_id=? AND s.expires_at>? ORDER BY s.id').bind(me.id, now).all()).results;
     const feed = (await db.prepare(`SELECT s.*,u.name,u.username,u.avatar_key,u.last_seen,
         EXISTS(SELECT 1 FROM status_views v WHERE v.status_id=s.id AND v.viewer_id=?1) seen
-      FROM statuses s JOIN users u ON u.id=s.user_id JOIN contacts c ON c.owner_id=s.user_id AND c.contact_id=?1
+      FROM statuses s JOIN users u ON u.id=s.user_id JOIN contacts c ON c.owner_id=s.user_id AND c.contact_id=?1 JOIN contacts c2 ON c2.owner_id=?1 AND c2.contact_id=s.user_id   -- mutual: they saved me AND I saved them
       WHERE s.expires_at>?2 AND s.user_id!=?1 ORDER BY s.user_id, s.id LIMIT 300`).bind(me.id, now).all()).results;
     const groups = new Map();
     for (const s of feed) {
@@ -409,7 +417,7 @@ async function route(req, env, url) {
     const allowed = key.startsWith('u' + me.id + '/') ||
       await db.prepare('SELECT 1 ok FROM messages WHERE media_key=? AND deleted_at IS NULL AND (sender_id=? OR receiver_id=?)').bind(key, me.id, me.id).first() ||
       await db.prepare('SELECT 1 ok FROM users WHERE avatar_key=?').bind(key).first() ||   // profile photos
-      await db.prepare('SELECT 1 ok FROM statuses s WHERE s.media_key=? AND s.expires_at>? AND EXISTS(SELECT 1 FROM contacts c WHERE c.owner_id=s.user_id AND c.contact_id=?)').bind(key, now, me.id).first();   // status photos: only the owner's contacts
+      await db.prepare('SELECT 1 ok FROM statuses s WHERE s.media_key=? AND s.expires_at>? AND (s.user_id=?3 OR (EXISTS(SELECT 1 FROM contacts c WHERE c.owner_id=s.user_id AND c.contact_id=?3) AND EXISTS(SELECT 1 FROM contacts c2 WHERE c2.owner_id=?3 AND c2.contact_id=s.user_id)))').bind(key, now, me.id).first();   // status media: owner and MUTUAL contacts only
     const m = allowed ? await db.prepare('SELECT type FROM media WHERE key=?').bind(key).first() : null;
     if (!m) return json({ error: 'Not found' }, 404);
     if (m.type.startsWith('video/')) {                      // videos stream straight from R2 (same permission check as above)
