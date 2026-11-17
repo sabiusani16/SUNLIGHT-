@@ -16,14 +16,14 @@
   --bg:#fff; --text:#17231F; --muted:#6B7A74; --line:#EAF0ED; --soft:#F4F8F6; --blue:#2F9BFF;
   --shadow:0 6px 20px rgba(7,91,66,.16); --r:16px;
   --page:#E9EFEC; --surface:#fff; --head:#075B42; --accent:#075B42; --chatbg:#F3F1EA; --bubble-in:#fff; --bubble-out:#D5EBDD;
-  --faint:#9AA8A2; --line2:#D8E2DD; --danger-s:#FCE9E9; --danger-line:#F1C4C4; --seen:#CBD6D1; --seen2:#E3EAE7; --skel1:#E9EFEC; --skel2:#E4ECE8; --ink:#17231F; --pshadow:rgba(0,0,0,.12);
+  --faint:#9AA8A2; --line2:#D8E2DD; --danger-s:#FCE9E9; --danger-line:#F1C4C4; --seen:#CBD6D1; --seen2:#E3EAE7; --skel1:#E9EFEC; --skel2:#E4ECE8; --ink:#17231F; --pshadow:rgba(0,0,0,.12); --toast:#17231F;
 }
 :root[data-theme="dark"]{
   --green:#075B42; --green-d:#054733; --gold:#F5C542; --gold-s:rgba(245,197,66,.22);
   --bg:#0A0D0C; --text:#EEF3F0; --muted:#98A8A1; --line:#232C28; --soft:#1A211E; --blue:#4DA8FF;
   --shadow:0 6px 20px rgba(0,0,0,.5);
   --page:#000; --surface:#131917; --head:#08130F; --accent:#F5C542; --chatbg:#050807; --bubble-in:#1A211E; --bubble-out:#0B4D38;
-  --faint:#74847D; --line2:#33403A; --danger-s:#3A1B1B; --danger-line:#5A2B2B; --seen:#3A4640; --seen2:#232C28; --skel1:#151B19; --skel2:#222B27; --ink:#EEF3F0; --pshadow:rgba(0,0,0,.6);
+  --faint:#74847D; --line2:#33403A; --danger-s:#3A1B1B; --danger-line:#5A2B2B; --seen:#3A4640; --seen2:#232C28; --skel1:#151B19; --skel2:#222B27; --ink:#EEF3F0; --pshadow:rgba(0,0,0,.6); --toast:#2B3A34;
   color-scheme:dark;
 }
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
@@ -349,6 +349,24 @@ mark{background:var(--gold-s);color:inherit;border-radius:3px;padding:0 1px}
 .prof .btns .danger{border-color:var(--danger-line);color:#D64545}
 #profBg{position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:80}
 #profSheet{position:fixed;left:50%;transform:translateX(-50%);width:100%;max-width:480px;bottom:0;z-index:81;background:var(--surface);border-radius:22px 22px 0 0;padding:10px 8px calc(16px + env(safe-area-inset-bottom,0px));box-shadow:0 -10px 30px rgba(0,0,0,.18);animation:rise .22s ease}
+/* status replies */
+.sv-foot:has(.sv-reply){display:block;padding-bottom:calc(10px + env(safe-area-inset-bottom,0px))}
+.sv-reply{width:100%;animation:rise .2s ease}
+.sv-emo{display:flex;justify-content:center;gap:6px;margin-bottom:8px}
+.sv-emo button{padding:4px 9px!important;font-size:24px!important;background:transparent!important;border-radius:14px;transition:transform .12s}
+.sv-emo button:active{transform:scale(1.35)}
+.sv-rbar{display:flex;align-items:center;gap:8px}
+.sv-rbar input{flex:1;min-width:0;height:44px;border-radius:22px;border:1.5px solid rgba(255,255,255,.28);background:rgba(0,0,0,.35);color:#fff;padding:0 16px;font:inherit;font-size:15px;outline:none}
+.sv-rbar input::placeholder{color:rgba(255,255,255,.65)}.sv-rbar input:focus{border-color:var(--gold)}
+.sv-rbar button{width:44px;height:44px;padding:0!important;justify-content:center;border-radius:50%!important;flex:none;background:rgba(255,255,255,.14)!important}
+.sv-rbar .send{background:var(--gold)!important;color:var(--green-d)!important}
+.sv-rbar .send[disabled]{opacity:.45}
+.sq{display:flex;gap:9px;align-items:center;background:rgba(7,91,66,.1);border-left:3px solid var(--gold);border-radius:8px;padding:5px 9px 5px 7px;margin:0 0 6px;cursor:pointer;min-width:150px}
+.msg.out .sq{background:rgba(7,91,66,.16)}
+.sq .th{width:42px;height:42px;border-radius:6px;object-fit:cover;flex:none;display:grid;place-items:center;color:#fff;font-size:11px;text-align:center;overflow:hidden;line-height:1.1;background-size:cover}
+.sq div{min-width:0}.sq strong{display:block;color:var(--accent);font-size:12px;font-weight:700}
+.sq span{display:block;color:var(--muted);font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sq.gone{opacity:.7}
 /* video */
 .vid{position:relative;width:min(240px,62vw);aspect-ratio:16/10;border-radius:10px;overflow:hidden;background:#0B1512;display:grid;place-items:center;cursor:pointer;color:#fff}
 .vid .pl{width:52px;height:52px;border-radius:50%;background:rgba(0,0,0,.55);border:2px solid var(--gold);display:grid;place-items:center;font-size:20px}
@@ -362,7 +380,7 @@ mark{background:var(--gold-s);color:inherit;border-radius:3px;padding:0 1px}
 .sc-prog{height:4px;background:rgba(255,255,255,.15);margin:0 16px 8px;border-radius:2px;overflow:hidden}.sc-prog i{display:block;height:100%;width:0;background:var(--gold);transition:width .2s}
 #ipVid{flex:1;min-height:0;width:100%;background:#000}
 /* toast */
-.toast{position:absolute;left:50%;bottom:100px;transform:translate(-50%,20px);background:var(--text);color:#fff;padding:10px 18px;border-radius:22px;font-size:13px;font-weight:500;opacity:0;pointer-events:none;transition:.25s;z-index:95;white-space:nowrap;max-width:90%}
+.toast{position:absolute;left:50%;bottom:100px;transform:translate(-50%,20px);background:var(--toast);color:#fff;border:1px solid rgba(245,197,66,.35);max-width:90%;text-align:center;padding:10px 18px;border-radius:22px;font-size:13px;font-weight:500;opacity:0;pointer-events:none;transition:.25s;z-index:95;white-space:normal}
 .toast.show{opacity:1;transform:translate(-50%,0)}
 
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
@@ -597,6 +615,7 @@ mark{background:var(--gold-s);color:inherit;border-radius:3px;padding:0 1px}
     <button type="button" class="sc-post" id="scPost"><span class="spin"></span><i class="fa-solid fa-paper-plane"></i>Post status</button>
   </div>
   <input type="file" id="statusPhotoInput" accept="image/*" hidden>
+  <input type="file" id="svImgInput" accept="image/*" hidden>
   <input type="file" id="statusVideoInput" accept="video/mp4,video/webm,video/*" hidden>
 
   <!-- PROFILE PHOTO VIEWER -->
@@ -965,9 +984,26 @@ function quoteHTML(id) {
   const q = thread.find(x => x.id === id);
   return `<div class="quote" data-jump="${id}"><strong>${q ? (q.sender_id === me.id ? 'You' : esc(current.name)) : 'Message'}</strong><span>${q ? esc(previewText(q)) : 'Original message'}</span></div>`;
 }
+function statusRefHTML(m) {                                 // the status this message is a private reply to
+  const s = m.status || {}, mine = m.sender_id === me.id, first = esc(((current && current.name) || '').split(' ')[0]);
+  const who = mine ? 'You replied to ' + (first ? first + "'s" : 'their') + ' status' : esc(((current && current.name) || 'Someone').split(' ')[0]) + ' replied to your status';
+  const alive = statusAvailable(m.status_id);
+  const th = s.th ? `<img class="th" alt="" src="${s.th}">` : s.t === 'text' ? `<span class="th" style="background:${SBG[(s.bg || 0) % SBG.length]}">Aa</span>` : `<span class="th" style="background:#0B1512"><i class="fa-solid fa-${s.t === 'video' ? 'video' : 'image'}"></i></span>`;
+  const txt = s.t === 'text' ? s.x || 'Status' : (s.t === 'video' ? 'Video' : 'Photo') + (s.x ? ': ' + s.x : '');
+  return `<div class="sq${alive ? '' : ' gone'}" data-sq="${m.status_id}" role="button"><div style="display:contents">${th}<div><strong>${who}</strong><span>${esc(txt)}${alive ? '' : ' · unavailable'}</span></div></div></div>`;
+}
+const statusAvailable = id => stMine.some(s => s.id === id) || stUsers.some(g => g.items.some(s => s.id === id));
+async function openStatusRef(id) {                          // tap the preview in the chat -> open the original status if it is still there
+  try { await loadStatuses(); } catch {}
+  if (stMine.some(s => s.id === id)) return svOpen('mine', 0, stMine.findIndex(s => s.id === id));
+  const gi = stUsers.findIndex(g => g.items.some(s => s.id === id));
+  if (gi >= 0) return svOpen('users', gi, stUsers[gi].items.findIndex(s => s.id === id));
+  toast('This status is no longer available');
+}
+document.addEventListener('click', e => { const q = e.target.closest('[data-sq]'); if (q) openStatusRef(+q.dataset.sq); });
 function bodyHTML(m) {
   if (m.deleted_at) return `<span class="del"><i class="fa-solid fa-ban"></i> ${m.sender_id === me.id ? 'You deleted this message' : 'This message was deleted'}</span>`;
-  let h = m.reply_to ? quoteHTML(m.reply_to) : '';
+  let h = (m.status_id ? statusRefHTML(m) : '') + (m.reply_to ? quoteHTML(m.reply_to) : '');
   if (m.type === 'image') {
     const u = mediaDone.get(m.media_key);
     h += `<div class="img-wrap${u ? ' loaded' : ''}" data-img="${esc(m.media_key)}"><img alt="Photo" ${u ? `src="${u}"` : `data-key="${esc(m.media_key)}"`}></div>` + (m.body ? `<div class="cap">${esc(m.body)}</div>` : '');
@@ -1425,7 +1461,7 @@ renderStories = function () {                               // Home story row + 
   $('#stories').innerHTML = `<div class="story" data-st-mine>${mineHtml}<span class="n">My status</span></div>` +
     stUsers.map((g, i) => `<div class="story" data-st-user="${i}">${avatar(g.user, `ring ${g.unseen ? '' : 'seen'}`)}<span class="n">${esc(g.user.name.split(' ')[0])}</span></div>`).join('');
   $('#myStatus').innerHTML = `<div class="story-av" data-st-mine style="display:flex;align-items:center;gap:13px;flex:1;min-width:0;cursor:pointer">${mineHtml}<div><strong>My status</strong><p>${stMine.length ? `${stMine.length} update${stMine.length === 1 ? '' : 's'} · ${stMine.reduce((a, s) => a + s.views, 0)} view${stMine.reduce((a, s) => a + s.views, 0) === 1 ? '' : 's'}` : 'Tap to add a status update'}</p></div></div>`;
-  const row = (g, i) => `<div class="row" data-st-user="${i}">${avatar(g.user, `ring ${g.unseen ? '' : 'seen'}`)}<div class="body"><div class="line"><strong>${esc(g.user.name)}</strong></div><div class="preview">${stTime(g.latest)}${g.unseen ? ` · ${g.unseen} new` : ''}</div></div></div>`;
+  const row = (g, i) => `<div class="row" data-st-user="${i}">${avatar(g.user, `ring ${g.unseen ? '' : 'seen'}`)}<div class="body"><div class="line"><strong>${esc(g.user.name)}</strong></div><div class="preview">@${esc(g.user.username)} · ${stTime(g.latest)}${g.unseen ? ` · ${g.unseen} new` : ''}</div></div></div>`;
   const fresh = stUsers.map((g, i) => g.unseen ? row(g, i) : '').join(''), seen = stUsers.map((g, i) => g.unseen ? '' : row(g, i)).join('');
   $('#updateList').innerHTML = stUsers.length ? (fresh ? '<h3 class="sub">New</h3>' + fresh : '') + (seen ? '<h3 class="sub">Viewed</h3>' + seen : '')
     : empty('fa-regular fa-circle-dot', 'No status updates yet<small>When your contacts post a status, it appears here.</small>');
@@ -1449,7 +1485,7 @@ function svTick(ts) {
 }
 function svRun(on) {                                        // on = run the timer; off = paused (hold, panel or Pause button)
   if (!sv) return;
-  sv.running = on && sv.ready && !sv.hold && !sv.panel && !sv.manual; sv.last = 0;
+  sv.running = on && sv.ready && !sv.hold && !sv.panel && !sv.manual && !sv.typing; sv.last = 0;
   svEl.classList.toggle('paused', !!(sv.manual || sv.hold));
   $('#svPause i').className = 'fa-solid ' + (sv.manual ? 'fa-play' : 'fa-pause');
   const vd = svStage.querySelector('video'); if (vd) { if (sv.running) vd.play().catch(() => {}); else vd.pause(); }   // a video status plays and pauses together with the timer
@@ -1471,7 +1507,9 @@ function svShow() {
   svStage.querySelectorAll('.sv-text,img,video,.sv-loading,.sv-err').forEach(n => { if (n.tagName === 'VIDEO') n.pause(); n.remove(); });
   sv.dur = STATUS_SECONDS * 1000;
   $('#svCap').textContent = it.type !== 'text' ? it.caption || '' : '';
-  $('#svFoot').innerHTML = sv.own ? `<button type="button" data-sv-views><i class="fa-regular fa-eye"></i>${it.views} view${it.views === 1 ? '' : 's'}</button><button type="button" class="del" data-sv-del aria-label="Delete status"><i class="fa-solid fa-trash"></i>Delete</button>` : '';
+  $('#svFoot').innerHTML = sv.own ? `<button type="button" data-sv-views><i class="fa-regular fa-eye"></i>${it.views} view${it.views === 1 ? '' : 's'}</button><button type="button" class="del" data-sv-del aria-label="Delete status"><i class="fa-solid fa-trash"></i>Delete</button>` : `<div class="sv-reply"><div class="sv-emo">${['❤️', '😂', '😮', '😢', '🙏', '👍'].map(x => `<button type="button" data-emo="${x}" aria-label="React ${x}">${x}</button>`).join('')}</div>
+    <div class="sv-rbar"><button type="button" data-sv-img aria-label="Reply with a photo"><i class="fa-solid fa-image"></i></button><input id="svReplyInput" maxlength="500" placeholder="Reply to ${esc(g.user.name.split(' ')[0])}…" autocomplete="off" enterkeyhint="send" aria-label="Reply to status"><button type="button" class="send" data-sv-send disabled aria-label="Send reply"><i class="fa-solid fa-paper-plane"></i></button></div></div>`;
+  sv.typing = false;
   const ready = () => { if (sv && sv.items_id === it.id) { sv.ready = true; svRun(true); } };
   sv.items_id = it.id;
   if (it.type === 'text') {
@@ -1535,7 +1573,7 @@ const svRelease = e => {
 svStage.addEventListener('pointerup', svRelease); svStage.addEventListener('pointercancel', () => { if (sv) { sv.hold = false; svRun(true); } });
 $('#svClose').addEventListener('click', svClose);
 $('#svPause').addEventListener('click', () => { if (!sv) return; sv.manual = !sv.manual; svRun(true); });
-document.addEventListener('keydown', e => { if (!sv) return; if (e.key === 'Escape') svClose(); else if (e.key === 'ArrowRight') svNext(); else if (e.key === 'ArrowLeft') svPrev(); else if (e.key === ' ') { sv.manual = !sv.manual; svRun(true); } });
+document.addEventListener('keydown', e => { if (!sv) return; if (e.target.closest && e.target.closest('#svReplyInput')) { if (e.key === 'Escape') e.target.blur(); return; } if (e.key === 'Escape') svClose(); else if (e.key === 'ArrowRight') svNext(); else if (e.key === 'ArrowLeft') svPrev(); else if (e.key === ' ') { sv.manual = !sv.manual; svRun(true); } });
 document.addEventListener('visibilitychange', () => { if (sv) { sv.hold = document.hidden; svRun(true); } });
 $('#svFoot').addEventListener('click', async e => {
   if (!sv) return; const it = svGroup().items[sv.ii];
@@ -1549,6 +1587,47 @@ $('#svFoot').addEventListener('click', async e => {
     sv.panel = true; svRun(true); const pn = $('#svPanel'); pn.hidden = false;
     pn.innerHTML = '<div class="sv-confirm"><p>Delete this status? Your contacts will no longer see it.</p><div class="btns"><button type="button" data-sv-cancel>Cancel</button><button type="button" class="dg" data-sv-yes>Delete</button></div></div>';
   }
+});
+/* private status replies: sent as an ordinary private message that remembers which status it answers */
+function svThumb() {
+  const el = svStage.querySelector('img,video'); if (!el) return null;
+  try {
+    const w = el.videoWidth || el.naturalWidth, hgt = el.videoHeight || el.naturalHeight; if (!w || !hgt) return null;
+    const k = 96 / Math.max(w, hgt), c = document.createElement('canvas'); c.width = Math.max(1, Math.round(w * k)); c.height = Math.max(1, Math.round(hgt * k));
+    c.getContext('2d').drawImage(el, 0, 0, c.width, c.height);
+    const u = c.toDataURL('image/jpeg', .6); return u.length <= 11000 ? u : null;
+  } catch { return null; }
+}
+let svReplyBusy = false;
+async function svSendReply(text, blob) {
+  if (!sv || sv.own || svReplyBusy) return;
+  const g = svGroup(), it = g.items[sv.ii]; text = (text || '').trim(); if (!text && !blob) return;
+  svReplyBusy = true; sv.typing = true; svRun(true);
+  const inp = $('#svReplyInput'), btn = $('#svFoot [data-sv-send]'); if (btn) btn.disabled = true;
+  try {
+    const payload = { to: g.user.id, status_id: it.id, thumb: svThumb(), body: text, type: 'text' };
+    if (blob) { const up = await upload(blob, 'image'); payload.type = 'image'; payload.media_key = up.key; }
+    await api('messages', { body: payload });
+    if (inp) inp.value = ''; if (inp) inp.blur();
+    toast(blob ? 'Photo sent privately to ' + g.user.name.split(' ')[0] : text.length <= 2 && !/\w/.test(text) ? 'Reaction sent' : 'Reply sent privately');
+  } catch (err) { toast(err.message); }
+  finally { svReplyBusy = false; if (sv) { sv.typing = document.activeElement === $('#svReplyInput'); svRun(true); } if ($('#svFoot [data-sv-send]')) $('#svFoot [data-sv-send]').disabled = !($('#svReplyInput') && $('#svReplyInput').value.trim()); }
+}
+$('#svFoot').addEventListener('click', e => {
+  if (!sv || sv.own) return;
+  const em = e.target.closest('[data-emo]'); if (em) return svSendReply(em.dataset.emo);
+  if (e.target.closest('[data-sv-send]')) return svSendReply($('#svReplyInput').value);
+  if (e.target.closest('[data-sv-img]')) { sv.typing = true; svRun(true); $('#svImgInput').click(); }
+});
+$('#svFoot').addEventListener('input', e => { if (e.target.id === 'svReplyInput') $('#svFoot [data-sv-send]').disabled = !e.target.value.trim(); });
+$('#svFoot').addEventListener('keydown', e => { if (e.target.id === 'svReplyInput' && e.key === 'Enter') { e.preventDefault(); svSendReply(e.target.value); } });
+$('#svFoot').addEventListener('focusin', e => { if (sv && e.target.id === 'svReplyInput') { sv.typing = true; svRun(true); } });
+$('#svFoot').addEventListener('focusout', e => { if (sv && e.target.id === 'svReplyInput' && !svReplyBusy) { sv.typing = false; svRun(true); } });
+$('#svImgInput').addEventListener('change', async e => {
+  const f = e.target.files[0]; e.target.value = '';
+  if (!f || !sv) { if (sv) { sv.typing = false; svRun(true); } return; }
+  if (!f.type.startsWith('image/')) { toast('Please choose a photo'); sv.typing = false; svRun(true); return; }
+  try { toast('Sending photo…'); await svSendReply('', await compressImage(f)); } catch (err) { toast(err.message); if (sv) { sv.typing = false; svRun(true); } }
 });
 $('#svPanel').addEventListener('click', async e => {
   if (!sv) return;
