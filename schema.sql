@@ -31,7 +31,9 @@ CREATE TABLE IF NOT EXISTS messages (
   duration INTEGER,
   reply_to INTEGER,
   delivered_at INTEGER,
-  deleted_at INTEGER
+  deleted_at INTEGER,
+  status_id INTEGER,
+  status_snap TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_msg_pair ON messages(sender_id, receiver_id, id);
 CREATE INDEX IF NOT EXISTS idx_msg_recv ON messages(receiver_id, read_at);
