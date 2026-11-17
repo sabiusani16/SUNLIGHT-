@@ -349,6 +349,18 @@ mark{background:var(--gold-s);color:inherit;border-radius:3px;padding:0 1px}
 .prof .btns .danger{border-color:var(--danger-line);color:#D64545}
 #profBg{position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:80}
 #profSheet{position:fixed;left:50%;transform:translateX(-50%);width:100%;max-width:480px;bottom:0;z-index:81;background:var(--surface);border-radius:22px 22px 0 0;padding:10px 8px calc(16px + env(safe-area-inset-bottom,0px));box-shadow:0 -10px 30px rgba(0,0,0,.18);animation:rise .22s ease}
+/* video */
+.vid{position:relative;width:min(240px,62vw);aspect-ratio:16/10;border-radius:10px;overflow:hidden;background:#0B1512;display:grid;place-items:center;cursor:pointer;color:#fff}
+.vid .pl{width:52px;height:52px;border-radius:50%;background:rgba(0,0,0,.55);border:2px solid var(--gold);display:grid;place-items:center;font-size:20px}
+.vid .vd{position:absolute;left:8px;bottom:6px;font-size:12px;background:rgba(0,0,0,.55);padding:2px 8px;border-radius:10px}
+.vid .up{position:absolute;inset:0;display:grid;place-items:center;background:rgba(0,0,0,.55);font-weight:700;font-size:15px}
+#vidView{position:absolute;inset:0;z-index:90;background:#000;display:flex;flex-direction:column}
+#vidView[hidden]{display:none}
+#vidView video{flex:1;min-height:0;width:100%;background:#000}
+.sv-stage video{max-width:100%;max-height:100%;object-fit:contain;animation:fade .25s ease}
+.sc-photo video{flex:1;min-height:0;width:100%;background:#000}
+.sc-prog{height:4px;background:rgba(255,255,255,.15);margin:0 16px 8px;border-radius:2px;overflow:hidden}.sc-prog i{display:block;height:100%;width:0;background:var(--gold);transition:width .2s}
+#ipVid{flex:1;min-height:0;width:100%;background:#000}
 /* toast */
 .toast{position:absolute;left:50%;bottom:100px;transform:translate(-50%,20px);background:var(--text);color:#fff;padding:10px 18px;border-radius:22px;font-size:13px;font-weight:500;opacity:0;pointer-events:none;transition:.25s;z-index:95;white-space:nowrap;max-width:90%}
 .toast.show{opacity:1;transform:translate(-50%,0)}
@@ -520,6 +532,7 @@ mark{background:var(--gold-s);color:inherit;border-radius:3px;padding:0 1px}
     <div class="sheet" id="attachSheet" hidden>
       <div class="grab"></div>
       <button type="button" id="shPhoto"><span class="s-ico"><i class="fa-solid fa-image"></i></span>Photo library</button>
+      <button type="button" id="shVideo" hidden><span class="s-ico"><i class="fa-solid fa-video"></i></span>Video</button>
       <button type="button" id="shCamera"><span class="s-ico"><i class="fa-solid fa-camera"></i></span>Take a photo</button>
     </div>
     <div class="sheet" id="msgSheet" hidden>
@@ -535,10 +548,12 @@ mark{background:var(--gold-s);color:inherit;border-radius:3px;padding:0 1px}
     </div>
     <div class="imgprev" id="imgPrev" hidden>
       <div class="lb-top"><button type="button" class="icon-btn" id="ipCancel" aria-label="Cancel"><i class="fa-solid fa-xmark"></i></button></div>
-      <img id="ipImg" alt="Selected photo">
+      <img id="ipImg" alt="Selected photo"><video id="ipVid" controls playsinline preload="metadata" hidden></video>
       <div class="ip-bar"><input id="ipCap" type="text" placeholder="Add a caption…" maxlength="500" autocomplete="off"><button type="button" class="send" id="ipSend" aria-label="Send photo"><i class="fa-solid fa-paper-plane"></i></button></div>
     </div>
     <input type="file" id="photoInput" accept="image/*" hidden>
+    <input type="file" id="videoInput" accept="video/mp4,video/webm,video/*" hidden>
+    <div id="vidView" hidden><div class="lb-top"><button type="button" class="icon-btn" id="vvClose" aria-label="Close"><i class="fa-solid fa-xmark"></i></button></div><video id="vvVideo" controls playsinline></video></div>
     <input type="file" id="cameraInput" accept="image/*" capture="environment" hidden>
   </div>
 
@@ -573,14 +588,16 @@ mark{background:var(--gold-s);color:inherit;border-radius:3px;padding:0 1px}
       <div class="sc-text" id="scText"><textarea id="scTextIn" maxlength="700" placeholder="Type a status" aria-label="Status text"></textarea></div>
       <div class="sc-photo" id="scPhoto" hidden>
         <button type="button" class="sc-pick" id="scPick"><i class="fa-solid fa-image"></i>Choose a photo</button>
-        <img id="scImg" alt="Status preview" hidden>
+        <img id="scImg" alt="Status preview" hidden><video id="scVid" controls playsinline preload="metadata" hidden></video>
         <div class="sc-cap" id="scCapRow" hidden><input id="scCap" maxlength="200" placeholder="Add a caption…" aria-label="Caption"></div>
       </div>
     </div>
+    <div class="sc-prog" id="scProg" hidden><i></i></div>
     <div class="sc-colors" id="scColors"></div>
     <button type="button" class="sc-post" id="scPost"><span class="spin"></span><i class="fa-solid fa-paper-plane"></i>Post status</button>
   </div>
   <input type="file" id="statusPhotoInput" accept="image/*" hidden>
+  <input type="file" id="statusVideoInput" accept="video/mp4,video/webm,video/*" hidden>
 
   <!-- PROFILE PHOTO VIEWER -->
   <div class="zoom" id="zoom" aria-hidden="true" role="dialog" aria-label="Profile photo">
@@ -765,7 +782,8 @@ document.addEventListener('visibilitychange', () => { if (!document.hidden) poll
 /* ---------- Rendering ---------- */
 const previewHTML = c => c.deleted ? '<i class="fa-solid fa-ban"></i>Deleted message'
   : c.type === 'image' ? `<i class="fa-solid fa-camera"></i>${esc(c.msg) || 'Photo'}`
-  : c.type === 'voice' ? '<i class="fa-solid fa-microphone"></i>Voice message' : esc(c.msg);
+  : c.type === 'voice' ? '<i class="fa-solid fa-microphone"></i>Voice message'
+  : c.type === 'video' ? `<i class="fa-solid fa-video"></i>${esc(c.msg) || 'Video'}` : esc(c.msg);
 function renderChats() {
   const q = query.trim().toLowerCase();
   const list = chats.filter(c =>
@@ -896,7 +914,7 @@ const seenText = ts => {
     : d.toDateString() === new Date(n - 864e5).toDateString() ? 'last seen yesterday at ' + clock(ts)
     : 'last seen ' + d.toLocaleDateString([], { day: 'numeric', month: 'short' });
 };
-const previewText = m => m.deleted_at ? 'Deleted message' : m.type === 'image' ? (m.body ? 'Photo: ' + m.body : 'Photo') : m.type === 'voice' ? 'Voice message (' + fmtDur(m.duration || 0) + ')' : m.body;
+const previewText = m => m.deleted_at ? 'Deleted message' : m.type === 'image' ? (m.body ? 'Photo: ' + m.body : 'Photo') : m.type === 'video' ? (m.body ? 'Video: ' + m.body : 'Video') : m.type === 'voice' ? 'Voice message (' + fmtDur(m.duration || 0) + ')' : m.body;
 const tickState = m => m.status || (m.read_at ? 'read' : m.delivered_at ? 'delivered' : 'sent');
 
 function mediaUrl(key) {                                    // media is private: fetched with the login token, cached as a blob URL
@@ -905,6 +923,37 @@ function mediaUrl(key) {                                    // media is private:
     .then(b => { const u = URL.createObjectURL(b); mediaDone.set(key, u); return u; })
     .catch(e => { media.delete(key); throw e; }));
   return media.get(key);
+}
+let videoOk = false;                                        // true only when the Worker has the R2 "MEDIA" binding
+fetch((window.SUNLIGHT_API || '') + '/api/health').then(r => r.json()).then(d => { videoOk = !!d.video; }).catch(() => {});
+const vmedia = new Map();
+function vidUrl(key) {                                      // videos live in R2: fetched with the login token, played from a blob URL
+  if (mediaDone.has(key)) return Promise.resolve(mediaDone.get(key));
+  if (!vmedia.has(key)) vmedia.set(key, fetch((window.SUNLIGHT_API || '') + '/api/media/' + key, { headers: { authorization: 'Bearer ' + token } })
+    .then(r => { if (!r.ok) throw new Error('Could not load the video'); return r.blob(); })
+    .then(b => { const u = URL.createObjectURL(b); mediaDone.set(key, u); return u; })
+    .catch(e => { vmedia.delete(key); throw e; }));
+  return vmedia.get(key);
+}
+function uploadVideo(blob, onProgress) {                    // raw bytes to /api/video with a real progress bar
+  return new Promise((ok, no) => {
+    const x = new XMLHttpRequest(); x.open('POST', (window.SUNLIGHT_API || '') + '/api/video');
+    x.setRequestHeader('authorization', 'Bearer ' + token); x.responseType = 'json';
+    x.upload.onprogress = e => { if (e.lengthComputable && onProgress) onProgress(Math.round(e.loaded / e.total * 100)); };
+    x.onload = () => x.status === 200 && x.response ? ok(x.response) : no(new Error((x.response && x.response.error) || 'Video upload failed (' + x.status + ')'));
+    x.onerror = () => no(new Error('Network problem while uploading the video')); x.ontimeout = () => no(new Error('Upload timed out'));
+    x.timeout = 180000; x.send(blob);
+  });
+}
+const VIDEO_MAX = 20 * 1024 * 1024;
+function checkVideo(file) {                                 // type + size + duration checks before anything is uploaded
+  return new Promise((ok, no) => {
+    if (!/^video\/(mp4|webm|quicktime|3gpp|x-m4v)/.test(file.type) && !/\.(mp4|webm|mov|m4v|3gp)$/i.test(file.name)) return no(new Error('Please choose an MP4 or WebM video'));
+    if (file.size > VIDEO_MAX) return no(new Error('Video is too large. Maximum is 20 MB'));
+    const v = document.createElement('video'), u = URL.createObjectURL(file); v.preload = 'metadata';
+    v.onloadedmetadata = () => { const d = v.duration; URL.revokeObjectURL(u); isFinite(d) ? ok(Math.round(d)) : ok(0); };
+    v.onerror = () => { URL.revokeObjectURL(u); no(new Error('This video cannot be played on your phone')); }; v.src = u;
+  });
 }
 const toBase64 = blob => new Promise((ok, no) => { const r = new FileReader(); r.onload = () => ok(String(r.result).split(',')[1] || ''); r.onerror = no; r.readAsDataURL(blob); });
 async function upload(blob, kind) {                         // photos / voice notes are stored in D1, so they are kept small
@@ -922,6 +971,8 @@ function bodyHTML(m) {
   if (m.type === 'image') {
     const u = mediaDone.get(m.media_key);
     h += `<div class="img-wrap${u ? ' loaded' : ''}" data-img="${esc(m.media_key)}"><img alt="Photo" ${u ? `src="${u}"` : `data-key="${esc(m.media_key)}"`}></div>` + (m.body ? `<div class="cap">${esc(m.body)}</div>` : '');
+  } else if (m.type === 'video') {
+    h += `<div class="vid" data-vid="${esc(m.media_key)}"><span class="pl"><i class="fa-solid fa-play"></i></span><span class="vd">${fmtDur(m.duration || 0)}</span>${m.status === 'sending' ? `<span class="up">${m.progress != null ? m.progress + '%' : '…'}</span>` : ''}</div>` + (m.body ? `<div class="cap">${esc(m.body)}</div>` : '');
   } else if (m.type === 'voice') {
     h += `<div class="voice" data-key="${esc(m.media_key)}" data-dur="${m.duration || 0}"><button type="button" class="v-play" aria-label="Play voice note"><i class="fa-solid fa-play"></i></button><div class="v-track"><div class="v-bar"><div class="v-fill"></div></div></div><span class="v-time">${fmtDur(m.duration || 0)}</span></div>`;
   } else h += esc(m.body).replace(/\n/g, '<br>');
@@ -937,7 +988,7 @@ function renderMessages(force) {
     if (day !== lastDay) { lastDay = day; prev = null; html += `<div class="day">${dayLabel(m.created_at)}</div>`; }
     const out = m.sender_id === me.id;
     const cls = ['msg', out ? 'out' : 'in', prev && prev.sender_id === m.sender_id && m.created_at - prev.created_at < 3e5 ? 'grp' : '',
-      m.status === 'failed' ? 'failed' : '', m.type === 'image' && !m.body && !m.deleted_at ? 'media-only' : ''].filter(Boolean).join(' ');
+      m.status === 'failed' ? 'failed' : '', (m.type === 'image' || m.type === 'video') && !m.body && !m.deleted_at ? 'media-only' : ''].filter(Boolean).join(' ');
     html += `<div class="${cls}" data-mid="${m.id || ''}" data-tmp="${m.tmp || ''}">${bodyHTML(m)}<small>${clock(m.created_at)}${out && !m.deleted_at ? tickIcon(tickState(m)) : ''}</small>${m.status === 'failed' ? '<div class="retry"><i class="fa-solid fa-rotate-right"></i> Tap to retry</div>' : ''}</div>`;
     prev = m;
   }
@@ -1012,7 +1063,7 @@ async function deliver(m) {
   try {
     const payload = { to: m.to, type: m.type, body: m.body || '', reply_to: m.reply_to };
     if (m.blob) {
-      if (!m.uploaded) m.uploaded = await upload(m.blob, m.type === 'image' ? 'image' : 'voice');
+      if (!m.uploaded) m.uploaded = m.type === 'video' ? await uploadVideo(m.blob, pr => { if (m.progress !== pr) { m.progress = pr; renderMessages(); } }) : await upload(m.blob, m.type === 'image' ? 'image' : 'voice');
       payload.media_key = m.uploaded.key; payload.duration = m.duration;
       media.set(m.uploaded.key, media.get(m.media_key)); mediaDone.set(m.uploaded.key, mediaDone.get(m.media_key));
     }
@@ -1046,7 +1097,7 @@ function clearReply() { replyTo = null; $('#replyBar').hidden = true; }
 $('#rbClose').addEventListener('click', clearReply);
 
 /* --- bottom sheets (attach menu, message menu) --- */
-function showSheet(id) { sheetAt = Date.now(); $('#sheetBg').hidden = false; $('#' + id).hidden = false; }
+function showSheet(id) { $('#shVideo').hidden = !videoOk; sheetAt = Date.now(); $('#sheetBg').hidden = false; $('#' + id).hidden = false; }
 function hideSheets() { ['sheetBg', 'attachSheet', 'msgSheet'].forEach(i => $('#' + i).hidden = true); $('#shDelTxt').textContent = 'Delete for everyone'; sheetMsg = null; }
 $('#sheetBg').addEventListener('click', () => { if (Date.now() - sheetAt > 350) hideSheets(); });
 $('#attachBtn').addEventListener('click', () => showSheet('attachSheet'));
@@ -1150,15 +1201,32 @@ async function pickPhoto(input) {
   try { previewBlob = await compressImage(file); previewUrl = URL.createObjectURL(previewBlob); $('#ipImg').src = previewUrl; $('#ipCap').value = ''; $('#imgPrev').hidden = false; }
   catch { toast('Could not read this photo'); }
 }
-function closePreview() { $('#imgPrev').hidden = true; if (previewUrl) URL.revokeObjectURL(previewUrl); previewUrl = ''; previewBlob = null; }
+let previewKind = 'image', previewDur = 0;
+async function pickVideo(input) {
+  const file = input.files[0]; input.value = ''; if (!file || !current) return;
+  try {
+    previewDur = await checkVideo(file); previewBlob = file; previewKind = 'video'; previewUrl = URL.createObjectURL(file);
+    $('#ipImg').hidden = true; $('#ipVid').hidden = false; $('#ipVid').src = previewUrl; $('#ipCap').value = ''; $('#imgPrev').hidden = false;
+  } catch (err) { toast(err.message); }
+}
+$('#videoInput').addEventListener('change', e => pickVideo(e.target));
+$('#shVideo').addEventListener('click', () => { hideSheets(); $('#videoInput').click(); });
+function closePreview() { $('#ipVid').pause(); $('#ipVid').hidden = true; $('#ipImg').hidden = false; previewKind = 'image'; $('#imgPrev').hidden = true; if (previewUrl) URL.revokeObjectURL(previewUrl); previewUrl = ''; previewBlob = null; }
 $('#photoInput').addEventListener('change', e => pickPhoto(e.target));
 $('#cameraInput').addEventListener('change', e => pickPhoto(e.target));
 $('#ipCancel').addEventListener('click', closePreview);
 $('#ipSend').addEventListener('click', () => {
   if (!previewBlob || !current) return;
-  const blob = previewBlob, caption = $('#ipCap').value.trim(); closePreview();
+  const blob = previewBlob, caption = $('#ipCap').value.trim(), kind = previewKind, dur = previewDur; closePreview();
+  if (kind === 'video') return queue({ type: 'video', body: caption, blob, duration: dur, media_key: localMedia(blob) });
   queue({ type: 'image', body: caption, blob, media_key: localMedia(blob) });
 });
+async function openVideo(key) {
+  try { const u = await vidUrl(key); $('#vvVideo').src = u; $('#vidView').hidden = false; $('#vvVideo').play().catch(() => {}); }
+  catch (e) { toast(e.message || 'Could not open the video'); }
+}
+$('#vvClose').addEventListener('click', () => { $('#vvVideo').pause(); $('#vvVideo').removeAttribute('src'); $('#vidView').hidden = true; });
+document.addEventListener('click', e => { const v = e.target.closest('[data-vid]'); if (v && !e.target.closest('.up')) openVideo(v.dataset.vid); });
 async function openLightbox(key) {
   let u = mediaDone.get(key); if (!u) { try { u = await mediaUrl(key); } catch { return toast('Could not open photo'); } }
   $('#lbImg').src = u; $('#lbSave').href = u; $('#lightbox').hidden = false;
@@ -1341,7 +1409,7 @@ document.addEventListener('click', async e => {              // capture: a copy 
 /* ---------- Status (24h) ---------- */
 const SBG = ['#075B42', '#0E7C5A', '#8A6D0B', '#2F6F8F', '#6B4E9B', '#B5533C', '#1F2937', '#C79A12'];
 const STATUS_SECONDS = 5;
-let stMine = [], stUsers = [], sigStatus = '', sv = null, svRaf = 0, svViewed = new Set(), scMode = 'text', scBg = 0, scBlob = null, scUrl = '', scBusy = false;
+let stMine = [], stUsers = [], sigStatus = '', sv = null, svRaf = 0, svViewed = new Set(), scMode = 'text', scBg = 0, scBlob = null, scUrl = '', scBusy = false, scDur = 0;
 const stTime = ts => { const d = new Date(ts), n = new Date(); return d.toDateString() === n.toDateString() ? 'Today, ' + clock(ts) : d.toDateString() === new Date(n - 864e5).toDateString() ? 'Yesterday, ' + clock(ts) : d.toLocaleDateString([], { day: 'numeric', month: 'short' }) + ', ' + clock(ts); };
 async function loadStatuses() {
   const d = await api('statuses');
@@ -1369,13 +1437,13 @@ const svEl = $('#sv'), svBars = $('#svBars'), svStage = $('#svStage');
 function svStopClock() { cancelAnimationFrame(svRaf); svRaf = 0; }
 function svPaintBar() {
   const bars = svBars.children;
-  for (let i = 0; i < bars.length; i++) { bars[i].className = i < sv.ii ? 'done' : ''; bars[i].firstChild.style.width = i === sv.ii ? Math.min(100, sv.elapsed / (STATUS_SECONDS * 1000) * 100) + '%' : ''; }
+  for (let i = 0; i < bars.length; i++) { bars[i].className = i < sv.ii ? 'done' : ''; bars[i].firstChild.style.width = i === sv.ii ? Math.min(100, sv.elapsed / sv.dur * 100) + '%' : ''; }
 }
 function svTick(ts) {
   if (!sv) return;
   if (sv.running) {
     sv.elapsed += ts - (sv.last || ts); sv.last = ts; svPaintBar();
-    if (sv.elapsed >= STATUS_SECONDS * 1000) { svNext(); if (sv) svRaf = requestAnimationFrame(svTick); return; }   // keep the clock alive for the next status
+    if (sv.elapsed >= sv.dur) { svNext(); if (sv) svRaf = requestAnimationFrame(svTick); return; }   // keep the clock alive for the next status
   } else sv.last = 0;
   svRaf = requestAnimationFrame(svTick);
 }
@@ -1384,10 +1452,11 @@ function svRun(on) {                                        // on = run the time
   sv.running = on && sv.ready && !sv.hold && !sv.panel && !sv.manual; sv.last = 0;
   svEl.classList.toggle('paused', !!(sv.manual || sv.hold));
   $('#svPause i').className = 'fa-solid ' + (sv.manual ? 'fa-play' : 'fa-pause');
+  const vd = svStage.querySelector('video'); if (vd) { if (sv.running) vd.play().catch(() => {}); else vd.pause(); }   // a video status plays and pauses together with the timer
 }
 function svOpen(list, gi, ii) {
   svViewed = svViewed || new Set();
-  sv = { list, gi, ii, elapsed: 0, last: 0, running: false, ready: false, hold: false, panel: false, manual: false, own: list === 'mine' };
+  sv = { dur: STATUS_SECONDS * 1000, list, gi, ii, elapsed: 0, last: 0, running: false, ready: false, hold: false, panel: false, manual: false, own: list === 'mine' };
   svEl.classList.add('open'); svEl.setAttribute('aria-hidden', 'false'); svShow();
   svStopClock(); svRaf = requestAnimationFrame(svTick);
 }
@@ -1399,13 +1468,25 @@ function svShow() {
   $('#svPanel').hidden = true;
   svBars.innerHTML = g.items.map(() => '<i><b></b></i>').join(''); svPaintBar();
   $('#svAv').innerHTML = avatar(g.user, 'sm'); $('#svName').textContent = sv.own ? 'My status' : g.user.name; $('#svTime').textContent = stTime(it.created_at);
-  svStage.querySelectorAll('.sv-text,img,.sv-loading,.sv-err').forEach(n => n.remove());
-  $('#svCap').textContent = it.type === 'image' ? it.caption || '' : '';
+  svStage.querySelectorAll('.sv-text,img,video,.sv-loading,.sv-err').forEach(n => { if (n.tagName === 'VIDEO') n.pause(); n.remove(); });
+  sv.dur = STATUS_SECONDS * 1000;
+  $('#svCap').textContent = it.type !== 'text' ? it.caption || '' : '';
   $('#svFoot').innerHTML = sv.own ? `<button type="button" data-sv-views><i class="fa-regular fa-eye"></i>${it.views} view${it.views === 1 ? '' : 's'}</button><button type="button" class="del" data-sv-del aria-label="Delete status"><i class="fa-solid fa-trash"></i>Delete</button>` : '';
   const ready = () => { if (sv && sv.items_id === it.id) { sv.ready = true; svRun(true); } };
   sv.items_id = it.id;
   if (it.type === 'text') {
     const t = document.createElement('div'); t.className = 'sv-text'; t.style.background = SBG[it.bg % SBG.length]; t.style.fontSize = it.body.length > 140 ? '20px' : it.body.length > 60 ? '25px' : '31px'; t.textContent = it.body; svStage.appendChild(t); ready();
+  } else if (it.type === 'video') {
+    const sp = document.createElement('span'); sp.className = 'sv-loading'; svStage.appendChild(sp);
+    vidUrl(it.media).then(u => {
+      if (!sv || sv.items_id !== it.id) return;
+      const v = document.createElement('video'); v.playsInline = true; v.preload = 'auto'; v.controls = false; v.src = u;
+      v.onloadedmetadata = () => { if (!sv || sv.items_id !== it.id) return; sp.remove(); sv.dur = Math.max(2000, Math.min(60000, (v.duration || 5) * 1000)); svStage.appendChild(v); ready(); };
+      v.onerror = () => { if (!sv || sv.items_id !== it.id) return; sp.remove(); const e = document.createElement('div'); e.className = 'sv-err'; e.textContent = 'Could not play this video'; svStage.appendChild(e); sv.ready = true; svRun(true); };
+    }).catch(() => {
+      if (!sv || sv.items_id !== it.id) return;
+      sp.remove(); const e = document.createElement('div'); e.className = 'sv-err'; e.textContent = 'Could not load this video'; svStage.appendChild(e); sv.ready = true; svRun(true);
+    });
   } else {
     const sp = document.createElement('span'); sp.className = 'sv-loading'; svStage.appendChild(sp);
     mediaUrl(it.media).then(u => {
@@ -1434,7 +1515,7 @@ function svPrev() {
 }
 function svClose() {
   svStopClock(); sv = null; svEl.classList.remove('open', 'paused'); svEl.setAttribute('aria-hidden', 'true');
-  $('#svPanel').hidden = true; svStage.querySelectorAll('.sv-text,img,.sv-loading,.sv-err').forEach(n => n.remove());
+  $('#svPanel').hidden = true; svStage.querySelectorAll('.sv-text,img,video,.sv-loading,.sv-err').forEach(n => { if (n.tagName === 'VIDEO') n.pause(); n.remove(); });
   stUsers.forEach(g => { g.unseen = g.items.filter(i => !i.seen).length; }); renderStories();
   loadStatuses().catch(() => {});
 }
@@ -1489,23 +1570,37 @@ svEl.addEventListener('click', e => { if (sv && sv.panel && !e.target.closest('#
 $('#scColors').innerHTML = SBG.map((c, i) => `<i data-bg="${i}" style="background:${c}" role="button" aria-label="Background ${i + 1}"></i>`).join('');
 function scPaintBg() { $('#scText').style.background = SBG[scBg]; $$('#scColors i').forEach((n, i) => n.classList.toggle('on', i === scBg)); }
 function scSetMode(m) {
-  if (m === 'video') return toast('Video needs R2 storage (not set up)');
+  if (m === 'video' && !videoOk) return toast('Video needs R2 storage (not set up yet)');
+  if ((m === 'video') !== (scMode === 'video') && (m === 'video' || m === 'image') && scBlob) scResetMedia();   // photo and video previews never mix
   scMode = m; $$('.sc-tabs button').forEach(b => b.classList.toggle('on', b.dataset.sc === m));
-  $('#scText').hidden = m !== 'text'; $('#scPhoto').hidden = m !== 'image'; $('#scColors').hidden = m !== 'text';
+  $('#scText').hidden = m !== 'text'; $('#scPhoto').hidden = m !== 'image' && m !== 'video'; $('#scPick').innerHTML = m === 'video' ? '<i class="fa-solid fa-video"></i>Choose a video (max 20 MB)' : '<i class="fa-solid fa-image"></i>Choose a photo'; $('#scColors').hidden = m !== 'text';
   $('#scBody').style.background = m === 'text' ? '' : '#0B1512'; scCheck();
 }
 function scCheck() { $('#scPost').disabled = scBusy || (scMode === 'text' ? !$('#scTextIn').value.trim() : !scBlob); }
+function scResetMedia() {
+  if (scUrl) URL.revokeObjectURL(scUrl); scUrl = ''; scBlob = null; scDur = 0;
+  $('#scVid').pause(); $('#scVid').hidden = true; $('#scVid').removeAttribute('src'); $('#scImg').hidden = true; $('#scCapRow').hidden = true; $('#scPick').hidden = false; $('#scProg').hidden = true;
+}
 function scReset() {
+  scResetMedia();
   $('#scTextIn').value = ''; $('#scCap').value = ''; if (scUrl) URL.revokeObjectURL(scUrl); scUrl = ''; scBlob = null;
   $('#scImg').hidden = true; $('#scCapRow').hidden = true; $('#scPick').hidden = false; scBg = 0; scPaintBg(); scBusy = false; $('#scPost').classList.remove('busy');
 }
 function openComposer(mode) { scReset(); scSetMode(mode || 'text'); openScreen('statusComposer'); }
 function closeComposer() { closeScreen('statusComposer'); scReset(); }
 $('#scBack').addEventListener('click', closeComposer);
-$$('.sc-tabs button').forEach(b => b.addEventListener('click', () => { scSetMode(b.dataset.sc); if (b.dataset.sc === 'image' && !scBlob) $('#statusPhotoInput').click(); }));
+$$('.sc-tabs button').forEach(b => b.addEventListener('click', () => { scSetMode(b.dataset.sc); if (b.dataset.sc === 'image' && !scBlob) $('#statusPhotoInput').click(); if (b.dataset.sc === 'video' && scMode === 'video' && !scBlob) $('#statusVideoInput').click(); }));
 $('#scColors').addEventListener('click', e => { const i = e.target.closest('[data-bg]'); if (i) { scBg = +i.dataset.bg; scPaintBg(); } });
 $('#scTextIn').addEventListener('input', scCheck);
-$('#scPick').addEventListener('click', () => $('#statusPhotoInput').click());
+$('#scPick').addEventListener('click', () => (scMode === 'video' ? $('#statusVideoInput') : $('#statusPhotoInput')).click());
+$('#statusVideoInput').addEventListener('change', async e => {
+  const f = e.target.files[0]; e.target.value = ''; if (!f) return;
+  try {
+    const d = await checkVideo(f); if (d > 60) return toast('Status videos can be up to 60 seconds');
+    scBlob = f; scDur = d; if (scUrl) URL.revokeObjectURL(scUrl); scUrl = URL.createObjectURL(f);
+    $('#scVid').src = scUrl; $('#scVid').hidden = false; $('#scCapRow').hidden = false; $('#scPick').hidden = true; scCheck();
+  } catch (err) { toast(err.message); }
+});
 $('#scImg').addEventListener('click', () => $('#statusPhotoInput').click());
 $('#statusPhotoInput').addEventListener('change', async e => {
   const f = e.target.files[0]; e.target.value = ''; if (!f) return;
@@ -1520,9 +1615,13 @@ $('#scPost').addEventListener('click', async () => {
   if (scBusy) return; scBusy = true; $('#scPost').classList.add('busy'); scCheck();
   try {
     if (scMode === 'text') await api('statuses', { body: { type: 'text', body: $('#scTextIn').value.trim(), bg: scBg } });
-    else { const up = await upload(scBlob, 'image'); await api('statuses', { body: { type: 'image', key: up.key, caption: $('#scCap').value.trim() } }); }
+    else if (scMode === 'video') {
+      $('#scProg').hidden = false;
+      const up = await uploadVideo(scBlob, pr => { $('#scProg i').style.width = pr + '%'; });
+      await api('statuses', { body: { type: 'video', key: up.key, caption: $('#scCap').value.trim() } });
+    } else { const up = await upload(scBlob, 'image'); await api('statuses', { body: { type: 'image', key: up.key, caption: $('#scCap').value.trim() } }); }
     toast('Status posted'); closeComposer(); await loadStatuses();
-  } catch (err) { toast(err.message); scBusy = false; $('#scPost').classList.remove('busy'); scCheck(); }
+  } catch (err) { toast(err.message); scBusy = false; $('#scProg').hidden = true; $('#scPost').classList.remove('busy'); scCheck(); }
 });
 
 document.addEventListener('click', e => {
