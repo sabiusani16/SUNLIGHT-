@@ -3,6 +3,8 @@ const CORS = { 'access-control-allow-origin': '*', 'access-control-allow-headers
 const json = (d, s = 200) => new Response(JSON.stringify(d), { status: s, headers: { 'content-type': 'application/json', 'cache-control': 'no-store', ...CORS } });
 const hex = b => [...new Uint8Array(b)].map(x => x.toString(16).padStart(2, '0')).join('');
 const rand = n => hex(crypto.getRandomValues(new Uint8Array(n)));
+const REPORT_REASONS = ['spam', 'harassment', 'inappropriate', 'scam', 'threats', 'other'];
+const THEME_BG = ['midnight', 'forest', 'gold', 'ocean', 'rose', 'slate', 'dots'], THEME_COLOR = ['gold', 'blue', 'purple', 'rose', 'teal'];   // allowed chat themes (anything else is rejected)
 const PAGE = null; /*__PAGE__*/
 const ONLINE_MS = 30000, SESSION_MS = 30 * 864e5;
 const EMAIL = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
@@ -49,6 +51,14 @@ const TABLES = [
   `CREATE TABLE IF NOT EXISTS media (key TEXT PRIMARY KEY, owner_id INTEGER NOT NULL, type TEXT NOT NULL, size INTEGER NOT NULL, created_at INTEGER NOT NULL)`,
   `CREATE TABLE IF NOT EXISTS media_chunks (key TEXT NOT NULL, idx INTEGER NOT NULL, data TEXT NOT NULL, PRIMARY KEY (key, idx))`,
   `CREATE TABLE IF NOT EXISTS statuses (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, type TEXT NOT NULL, body TEXT, caption TEXT, bg INTEGER, media_key TEXT, created_at INTEGER NOT NULL, expires_at INTEGER NOT NULL)`,
+  `CREATE TABLE IF NOT EXISTS chat_prefs (user_id INTEGER NOT NULL, peer_id INTEGER NOT NULL, theme TEXT, cleared_id INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (user_id, peer_id))`,
+  `CREATE TABLE IF NOT EXISTS blocks (blocker_id INTEGER NOT NULL, blocked_id INTEGER NOT NULL, created_at INTEGER NOT NULL, PRIMARY KEY (blocker_id, blocked_id))`,
+  `CREATE INDEX IF NOT EXISTS idx_blocks_blocked ON blocks(blocked_id)`,
+  `CREATE TABLE IF NOT EXISTS reports (id INTEGER PRIMARY KEY AUTOINCREMENT, reporter_id INTEGER NOT NULL, reported_id INTEGER NOT NULL, message_id INTEGER, message_text TEXT, reason TEXT NOT NULL, details TEXT, status TEXT NOT NULL DEFAULT 'open', created_at INTEGER NOT NULL)`,
+  `CREATE INDEX IF NOT EXISTS idx_reports_reported ON reports(reported_id, created_at)`,
+  `CREATE TABLE IF NOT EXISTS status_likes (status_id INTEGER NOT NULL, user_id INTEGER NOT NULL, created_at INTEGER NOT NULL, PRIMARY KEY (status_id, user_id))`,
+  `CREATE TABLE IF NOT EXISTS notifications (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, type TEXT NOT NULL, actor_id INTEGER NOT NULL, status_id INTEGER, created_at INTEGER NOT NULL, read_at INTEGER, UNIQUE (user_id, type, actor_id, status_id))`,
+  `CREATE INDEX IF NOT EXISTS idx_notif_user ON notifications(user_id, id)`,
   `CREATE INDEX IF NOT EXISTS idx_status_user ON statuses(user_id, expires_at)`,
   `CREATE INDEX IF NOT EXISTS idx_status_media ON statuses(media_key)`,
   `CREATE TABLE IF NOT EXISTS status_views (status_id INTEGER NOT NULL, viewer_id INTEGER NOT NULL, viewed_at INTEGER NOT NULL, PRIMARY KEY (status_id, viewer_id))`
@@ -108,7 +118,7 @@ async function route(req, env, url) {
   if (post && !rawVideo && Number(req.headers.get('content-length') || 0) > 1700000) return json({ error: 'File is too large' }, 413);
   const body = post && !rawVideo ? await req.json().catch(() => ({})) : {};
 
-  const visibleStatus = id => db.prepare('SELECT * FROM statuses s WHERE s.id=?1 AND s.expires_at>?2 AND (s.user_id=?3 OR (EXISTS(SELECT 1 FROM contacts c WHERE c.owner_id=s.user_id AND c.contact_id=?3) AND EXISTS(SELECT 1 FROM contacts c2 WHERE c2.owner_id=?3 AND c2.contact_id=s.user_id)))').bind(id, now, me.id).first();
+  const visibleStatus = id => db.prepare('SELECT * FROM statuses s WHERE s.id=?1 AND s.expires_at>?2 AND (s.user_id=?3 OR (EXISTS(SELECT 1 FROM contacts c WHERE c.owner_id=s.user_id AND c.contact_id=?3) AND EXISTS(SELECT 1 FROM contacts c2 WHERE c2.owner_id=?3 AND c2.contact_id=s.user_id) AND NOT EXISTS(SELECT 1 FROM blocks b WHERE (b.blocker_id=s.user_id AND b.blocked_id=?3) OR (b.blocker_id=?3 AND b.blocked_id=s.user_id))))').bind(id, now, me.id).first();
   const dropAny = async key => {                             // delete an upload everywhere: D1 chunks, the media row and (videos) the R2 object
     const m = await db.prepare('SELECT type FROM media WHERE key=?').bind(key).first();
     if (m && m.type.startsWith('video/') && env.MEDIA) await env.MEDIA.delete(key).catch(() => {});
@@ -216,13 +226,122 @@ async function route(req, env, url) {
     return json({ ok: true });
   }
 
+  const iBlocked = (a, b) => db.prepare('SELECT 1 ok FROM blocks WHERE blocker_id=? AND blocked_id=?').bind(a, b).first();
+  const eitherBlocked = (a, b) => db.prepare('SELECT 1 ok FROM blocks WHERE (blocker_id=?1 AND blocked_id=?2) OR (blocker_id=?2 AND blocked_id=?1)').bind(a, b).first();
+  const peerOf = async raw => { const id = Number(raw); return Number.isInteger(id) && id !== me.id ? await db.prepare('SELECT id,name,username,avatar_key,last_seen FROM users WHERE id=?').bind(id).first() : null; };
+  const clearedId = async peer => ((await db.prepare('SELECT cleared_id FROM chat_prefs WHERE user_id=? AND peer_id=?').bind(me.id, peer).first()) || {}).cleared_id || 0;
+
+  // ---- chat options: theme / clear / export / block / report ----
+  if (p === 'chat/theme' && post) {
+    const peer = await peerOf(body.with); if (!peer) return json({ error: 'User not found' }, 404);
+    let theme = null;
+    if (body.theme != null) {                                 // validated against a fixed list: nothing else can be stored
+      const bg = body.theme.bg == null ? null : String(body.theme.bg), c = body.theme.color == null ? null : String(body.theme.color);
+      if ((bg !== null && !THEME_BG.includes(bg)) || (c !== null && !THEME_COLOR.includes(c))) return json({ error: 'Unknown theme' }, 400);
+      theme = bg === null && c === null ? null : JSON.stringify({ bg, color: c });
+    }
+    await db.prepare('INSERT INTO chat_prefs(user_id,peer_id,theme) VALUES(?1,?2,?3) ON CONFLICT(user_id,peer_id) DO UPDATE SET theme=?3').bind(me.id, peer.id, theme).run();
+    return json({ theme: theme ? JSON.parse(theme) : null });
+  }
+  if (p === 'chat/clear' && post) {                          // hides history for ME only: nothing is deleted, the other person keeps everything
+    const peer = await peerOf(body.with); if (!peer) return json({ error: 'User not found' }, 404);
+    const last = await db.prepare('SELECT MAX(id) m FROM messages WHERE (sender_id=?1 AND receiver_id=?2) OR (sender_id=?2 AND receiver_id=?1)').bind(me.id, peer.id).first();
+    await db.prepare('INSERT INTO chat_prefs(user_id,peer_id,cleared_id) VALUES(?1,?2,?3) ON CONFLICT(user_id,peer_id) DO UPDATE SET cleared_id=?3').bind(me.id, peer.id, (last && last.m) || 0).run();
+    return json({ ok: true });
+  }
+  if (p === 'chat/export' && !post) {
+    const peer = await peerOf(url.searchParams.get('with')); if (!peer) return json({ error: 'User not found' }, 404);
+    const fmt = url.searchParams.get('format') === 'json' ? 'json' : 'txt';
+    const from = await clearedId(peer.id);
+    const { results } = await db.prepare('SELECT id,sender_id,body,type,media_key,media_type,media_size,duration,created_at,delivered_at,read_at,deleted_at,status_snap FROM messages WHERE ((sender_id=?1 AND receiver_id=?2) OR (sender_id=?2 AND receiver_id=?1)) AND id>?3 ORDER BY id LIMIT 5000').bind(me.id, peer.id, from).all();   // only a conversation I am part of, only what I can still see
+    const who = id => id === me.id ? { name: me.name, username: me.username } : { name: peer.name, username: peer.username };
+    const rows = results.map(m => {
+      const s = who(m.sender_id), media = m.media_key && !m.deleted_at ? { type: m.type, mime: m.media_type, size: m.media_size, duration: m.duration, reference: m.media_key } : null;
+      let st = null; if (m.status_snap && !m.deleted_at) try { st = JSON.parse(m.status_snap); } catch {}
+      return { id: m.id, time: new Date(m.created_at).toISOString(), from: s.name, username: s.username, type: m.deleted_at ? 'deleted' : m.type, text: m.deleted_at ? '' : m.body, media, status_reply_to: st ? { type: st.t, text: st.x } : null, delivered: !!m.delivered_at, read: !!m.read_at };
+    });
+    const stamp = new Date(now).toISOString().slice(0, 10), fname = `sunlight-chat-${peer.username || peer.id}-${stamp}.${fmt}`;
+    let out, ct;
+    if (fmt === 'json') { out = JSON.stringify({ exported_at: new Date(now).toISOString(), exported_by: { name: me.name, username: me.username }, conversation_with: { name: peer.name, username: peer.username }, messages: rows }, null, 2); ct = 'application/json; charset=utf-8'; }
+    else {
+      out = `SUNLIGHT chat with ${peer.name} (@${peer.username})\nExported ${new Date(now).toISOString()} by ${me.name} (@${me.username})\n${'-'.repeat(48)}\n` + rows.map(r => {
+        const d = r.time.replace('T', ' ').slice(0, 19) + ' UTC', body = r.type === 'deleted' ? '[message deleted]' : r.type === 'text' ? r.text : `[${r.type}${r.media ? ' ' + r.media.reference : ''}]` + (r.text ? ' ' + r.text : '');
+        return `[${d}] ${r.from}: ${r.status_reply_to ? `(reply to status: ${r.status_reply_to.text || r.status_reply_to.type}) ` : ''}${body}`;
+      }).join('\n') + '\n';
+      ct = 'text/plain; charset=utf-8';
+    }
+    return new Response(out, { headers: { 'content-type': ct, 'content-disposition': `attachment; filename="${fname}"`, 'cache-control': 'no-store', 'x-filename': fname, ...CORS } });
+  }
+  if (p === 'block' && post) {                                // blocking keeps all history; it only stops new messages / interactions
+    const peer = await peerOf(body.user_id); if (!peer) return json({ error: 'User not found' }, 404);
+    await db.prepare('INSERT OR IGNORE INTO blocks(blocker_id,blocked_id,created_at) VALUES(?,?,?)').bind(me.id, peer.id, now).run();
+    return json({ ok: true, blocked: true });
+  }
+  if (p === 'unblock' && post) {
+    const peer = await peerOf(body.user_id); if (!peer) return json({ error: 'User not found' }, 404);
+    await db.prepare('DELETE FROM blocks WHERE blocker_id=? AND blocked_id=?').bind(me.id, peer.id).run();
+    return json({ ok: true, blocked: false });
+  }
+  if (p === 'blocks' && !post) {
+    const { results } = await db.prepare('SELECT u.id,u.name,u.username,u.avatar_key,u.last_seen,b.created_at FROM blocks b JOIN users u ON u.id=b.blocked_id WHERE b.blocker_id=? ORDER BY b.created_at DESC LIMIT 200').bind(me.id).all();
+    return json({ blocked: results.map(u => ({ ...publicUser(u, now), blocked_at: u.created_at })) });
+  }
+  if (p === 'report' && post) {
+    const peer = await peerOf(body.user_id); if (!peer) return json({ error: 'User not found' }, 404);
+    const reason = String(body.reason || ''); if (!REPORT_REASONS.includes(reason)) return json({ error: 'Please choose a reason' }, 400);
+    const details = String(body.details || '').trim().slice(0, 500);
+    let mid = null, mtext = null;
+    if (body.message_id != null) {                            // only a message from the conversation between me and the reported user
+      const m = await db.prepare('SELECT id,body,type FROM messages WHERE id=?1 AND ((sender_id=?2 AND receiver_id=?3) OR (sender_id=?3 AND receiver_id=?2)) AND deleted_at IS NULL').bind(Number(body.message_id), me.id, peer.id).first();
+      if (!m) return json({ error: 'Message not found' }, 404);
+      mid = m.id; mtext = (m.type === 'text' ? m.body : '[' + m.type + '] ' + m.body).slice(0, 500);   // evidence is kept even if the message is deleted later
+    }
+    const recent = await db.prepare('SELECT COUNT(*) n FROM reports WHERE reporter_id=? AND created_at>?').bind(me.id, now - 864e5).first();
+    if (recent.n >= 20) return json({ error: 'Too many reports today. Please try again tomorrow.' }, 429);
+    const dup = await db.prepare('SELECT id FROM reports WHERE reporter_id=? AND reported_id=? AND COALESCE(message_id,0)=? AND reason=? AND created_at>?').bind(me.id, peer.id, mid || 0, reason, now - 864e5).first();
+    if (!dup) await db.prepare('INSERT INTO reports(reporter_id,reported_id,message_id,message_text,reason,details,created_at) VALUES(?,?,?,?,?,?,?)').bind(me.id, peer.id, mid, mtext, reason, details || null, now).run();
+    return json({ ok: true });                                // reports are write-only here: no API returns them, only the database owner can read them
+  }
+
+  // ---- status likes + notifications ----
+  if (p === 'statuses/like' && post) {
+    const s = await visibleStatus(Number(body.id));
+    if (!s || s.user_id === me.id) return json({ error: 'Status not found' }, 404);
+    const on = body.liked !== false;
+    if (on) {
+      const r = await db.prepare('INSERT OR IGNORE INTO status_likes(status_id,user_id,created_at) VALUES(?,?,?)').bind(s.id, me.id, now).run();
+      if (r.meta.changes) await db.prepare("INSERT OR IGNORE INTO notifications(user_id,type,actor_id,status_id,created_at) VALUES(?,'status_like',?,?,?)").bind(s.user_id, me.id, s.id, now).run();   // one notification per person per status, however often they tap
+    } else await db.prepare('DELETE FROM status_likes WHERE status_id=? AND user_id=?').bind(s.id, me.id).run();
+    const n = await db.prepare('SELECT COUNT(*) n FROM status_likes WHERE status_id=?').bind(s.id).first();
+    return json({ liked: on, likes: n.n });
+  }
+  if (p === 'statuses/likes' && !post) {
+    const id = Number(url.searchParams.get('id'));
+    const s = await db.prepare('SELECT id FROM statuses WHERE id=? AND user_id=? AND expires_at>?').bind(id, me.id, now).first();   // only the owner sees who liked
+    if (!s) return json({ error: 'Status not found' }, 404);
+    const { results } = await db.prepare('SELECT u.id,u.name,u.username,u.avatar_key,u.last_seen,l.created_at liked_at FROM status_likes l JOIN users u ON u.id=l.user_id WHERE l.status_id=? ORDER BY l.created_at DESC LIMIT 200').bind(id).all();
+    return json({ likes: results.map(v => ({ ...publicUser(v, now), liked_at: v.liked_at })) });
+  }
+  if (p === 'notifications' && !post) {
+    const { results } = await db.prepare(`SELECT n.id,n.type,n.status_id,n.created_at,n.read_at,u.id uid,u.name,u.username,u.avatar_key,u.last_seen,
+        EXISTS(SELECT 1 FROM statuses s WHERE s.id=n.status_id AND s.expires_at>?2) available
+      FROM notifications n JOIN users u ON u.id=n.actor_id WHERE n.user_id=?1 ORDER BY n.id DESC LIMIT 50`).bind(me.id, now).all();
+    const unread = await db.prepare('SELECT COUNT(*) n FROM notifications WHERE user_id=? AND read_at IS NULL').bind(me.id).first();
+    return json({ unread: unread.n, notifications: results.map(n => ({ id: n.id, type: n.type, status_id: n.status_id, created_at: n.created_at, read: !!n.read_at, available: !!n.available, user: publicUser({ id: n.uid, name: n.name, username: n.username, avatar_key: n.avatar_key, last_seen: n.last_seen }, now) })) });
+  }
+  if (p === 'notifications/read' && post) {
+    if (body.id != null) await db.prepare('UPDATE notifications SET read_at=? WHERE id=? AND user_id=? AND read_at IS NULL').bind(now, Number(body.id), me.id).run();
+    else await db.prepare('UPDATE notifications SET read_at=? WHERE user_id=? AND read_at IS NULL').bind(now, me.id).run();
+    return json({ ok: true });
+  }
+
   if (p === 'chats') {
     await db.prepare('UPDATE messages SET delivered_at=? WHERE receiver_id=? AND delivered_at IS NULL').bind(now, me.id).run();
     const { results } = await db.prepare(`
       SELECT u.id,u.name,u.avatar_key,u.last_seen,m.body last_body,m.type last_type,m.created_at last_at,m.sender_id last_sender,m.read_at last_read,m.delivered_at last_delivered,
         m.deleted_at last_deleted,
-        (SELECT COUNT(*) FROM messages x WHERE x.sender_id=u.id AND x.receiver_id=?1 AND x.read_at IS NULL) unread
-      FROM users u JOIN messages m ON m.id=(SELECT MAX(id) FROM messages WHERE (sender_id=?1 AND receiver_id=u.id) OR (sender_id=u.id AND receiver_id=?1))
+        (SELECT COUNT(*) FROM messages x WHERE x.sender_id=u.id AND x.receiver_id=?1 AND x.read_at IS NULL AND x.id>COALESCE((SELECT cleared_id FROM chat_prefs WHERE user_id=?1 AND peer_id=u.id),0)) unread
+      FROM users u JOIN messages m ON m.id=(SELECT MAX(id) FROM messages WHERE ((sender_id=?1 AND receiver_id=u.id) OR (sender_id=u.id AND receiver_id=?1)) AND id>COALESCE((SELECT cleared_id FROM chat_prefs WHERE user_id=?1 AND peer_id=u.id),0))
       WHERE u.id!=?1 ORDER BY m.id DESC LIMIT 200`).bind(me.id).all();
     return json({ chats: results.map(c => ({ ...c, avatar: c.avatar_key || null, avatar_key: undefined, online: now - c.last_seen < ONLINE_MS, last_seen: undefined })) });
   }
@@ -235,10 +354,13 @@ async function route(req, env, url) {
     await db.prepare('UPDATE messages SET read_at=?1, delivered_at=COALESCE(delivered_at,?1) WHERE sender_id=?2 AND receiver_id=?3 AND read_at IS NULL').bind(now, peerId, me.id).run();
     const { results } = await db.prepare(`
       SELECT id,sender_id,body,type,media_key,media_type,media_size,duration,reply_to,created_at,delivered_at,read_at,deleted_at,status_id,status_snap FROM (
-        SELECT * FROM messages WHERE (sender_id=?1 AND receiver_id=?2) OR (sender_id=?2 AND receiver_id=?1) ORDER BY id DESC LIMIT 200
-      ) ORDER BY id`).bind(me.id, peerId).all();
+        SELECT * FROM messages WHERE ((sender_id=?1 AND receiver_id=?2) OR (sender_id=?2 AND receiver_id=?1)) AND id>?3 ORDER BY id DESC LIMIT 200
+      ) ORDER BY id`).bind(me.id, peerId, await clearedId(peerId)).all();
+    const pref = await db.prepare('SELECT theme FROM chat_prefs WHERE user_id=? AND peer_id=?').bind(me.id, peerId).first();
+    let theme = null; if (pref && pref.theme) try { theme = JSON.parse(pref.theme); } catch {}
+    const blocked = !!(await iBlocked(me.id, peerId));
     const messages = results.map(({ status_snap, ...m }) => { let st = null; if (status_snap && !m.deleted_at) try { st = JSON.parse(status_snap); } catch {} return { ...m, status: st }; });   // private status-reply preview
-    return json({ messages, online: now - peer.last_seen < ONLINE_MS, last_seen: peer.last_seen });
+    return json({ messages, theme, blocked, online: now - peer.last_seen < ONLINE_MS, last_seen: peer.last_seen });
   }
 
   if (p === 'messages' && post) {
@@ -246,6 +368,7 @@ async function route(req, env, url) {
     const type = ['text', 'image', 'voice', 'video'].includes(body.type) ? body.type : 'text';
     if (text.length > 2000 || (type === 'text' && !text)) return json({ error: 'Message must be 1–2000 characters' }, 400);
     if (!Number.isInteger(to) || to === me.id || !(await db.prepare('SELECT id FROM users WHERE id=?').bind(to).first())) return json({ error: 'User not found' }, 404);
+    if (await eitherBlocked(me.id, to)) return json({ error: (await iBlocked(me.id, to)) ? 'You blocked this user. Unblock them to send messages.' : 'You cannot send messages to this user.' }, 403);
     let key = null, mtype = null, msize = null, dur = null, replyTo = null;
     if (type !== 'text') {
       key = String(body.media_key || '');
@@ -289,25 +412,26 @@ async function route(req, env, url) {
   const shapeStatus = s => ({ id: s.id, type: s.type, body: s.body || '', caption: s.caption || '', bg: s.bg || 0, media: s.media_key || null, created_at: s.created_at, expires_at: s.expires_at });
   const dropStatuses = async rows => {                       // remove rows + their views + their photos
     for (const s of rows) {
-      const st = [db.prepare('DELETE FROM status_views WHERE status_id=?').bind(s.id), db.prepare('DELETE FROM statuses WHERE id=?').bind(s.id)];
+      const st = [db.prepare('DELETE FROM status_views WHERE status_id=?').bind(s.id), db.prepare('DELETE FROM status_likes WHERE status_id=?').bind(s.id), db.prepare('DELETE FROM notifications WHERE status_id=?').bind(s.id), db.prepare('DELETE FROM statuses WHERE id=?').bind(s.id)];
       await db.batch(st);
       if (s.media_key) await dropAny(s.media_key);
     }
   };
   if (p === 'statuses' && !post) {
-    const mine = (await db.prepare('SELECT s.*,(SELECT COUNT(*) FROM status_views v WHERE v.status_id=s.id) views FROM statuses s WHERE s.user_id=? AND s.expires_at>? ORDER BY s.id').bind(me.id, now).all()).results;
+    const mine = (await db.prepare('SELECT s.*,(SELECT COUNT(*) FROM status_views v WHERE v.status_id=s.id) views,(SELECT COUNT(*) FROM status_likes l WHERE l.status_id=s.id) likes FROM statuses s WHERE s.user_id=? AND s.expires_at>? ORDER BY s.id').bind(me.id, now).all()).results;
     const feed = (await db.prepare(`SELECT s.*,u.name,u.username,u.avatar_key,u.last_seen,
-        EXISTS(SELECT 1 FROM status_views v WHERE v.status_id=s.id AND v.viewer_id=?1) seen
+        EXISTS(SELECT 1 FROM status_views v WHERE v.status_id=s.id AND v.viewer_id=?1) seen,
+        (SELECT COUNT(*) FROM status_likes l WHERE l.status_id=s.id) likes, EXISTS(SELECT 1 FROM status_likes l WHERE l.status_id=s.id AND l.user_id=?1) liked
       FROM statuses s JOIN users u ON u.id=s.user_id JOIN contacts c ON c.owner_id=s.user_id AND c.contact_id=?1 JOIN contacts c2 ON c2.owner_id=?1 AND c2.contact_id=s.user_id   -- mutual: they saved me AND I saved them
-      WHERE s.expires_at>?2 AND s.user_id!=?1 ORDER BY s.user_id, s.id LIMIT 300`).bind(me.id, now).all()).results;
+      WHERE s.expires_at>?2 AND s.user_id!=?1 AND NOT EXISTS(SELECT 1 FROM blocks b WHERE (b.blocker_id=s.user_id AND b.blocked_id=?1) OR (b.blocker_id=?1 AND b.blocked_id=s.user_id)) ORDER BY s.user_id, s.id LIMIT 300`).bind(me.id, now).all()).results;
     const groups = new Map();
     for (const s of feed) {
       if (!groups.has(s.user_id)) groups.set(s.user_id, { user: publicUser({ id: s.user_id, name: s.name, username: s.username, avatar_key: s.avatar_key, last_seen: s.last_seen }, now), items: [] });
-      groups.get(s.user_id).items.push({ ...shapeStatus(s), seen: !!s.seen });
+      groups.get(s.user_id).items.push({ ...shapeStatus(s), seen: !!s.seen, likes: s.likes, liked: !!s.liked });
     }
     const users = [...groups.values()].map(g => ({ ...g, unseen: g.items.filter(i => !i.seen).length, latest: g.items[g.items.length - 1].created_at }));
     users.sort((a, b) => (b.unseen > 0) - (a.unseen > 0) || b.latest - a.latest);
-    return json({ mine: mine.map(s => ({ ...shapeStatus(s), views: s.views })), users });
+    return json({ mine: mine.map(s => ({ ...shapeStatus(s), views: s.views, likes: s.likes })), users });
   }
   if (p === 'statuses' && post) {
     const type = ['image', 'text', 'video'].includes(body.type) ? body.type : null;
@@ -417,7 +541,7 @@ async function route(req, env, url) {
     const allowed = key.startsWith('u' + me.id + '/') ||
       await db.prepare('SELECT 1 ok FROM messages WHERE media_key=? AND deleted_at IS NULL AND (sender_id=? OR receiver_id=?)').bind(key, me.id, me.id).first() ||
       await db.prepare('SELECT 1 ok FROM users WHERE avatar_key=?').bind(key).first() ||   // profile photos
-      await db.prepare('SELECT 1 ok FROM statuses s WHERE s.media_key=? AND s.expires_at>? AND (s.user_id=?3 OR (EXISTS(SELECT 1 FROM contacts c WHERE c.owner_id=s.user_id AND c.contact_id=?3) AND EXISTS(SELECT 1 FROM contacts c2 WHERE c2.owner_id=?3 AND c2.contact_id=s.user_id)))').bind(key, now, me.id).first();   // status media: owner and MUTUAL contacts only
+      await db.prepare('SELECT 1 ok FROM statuses s WHERE s.media_key=? AND s.expires_at>? AND (s.user_id=?3 OR (EXISTS(SELECT 1 FROM contacts c WHERE c.owner_id=s.user_id AND c.contact_id=?3) AND EXISTS(SELECT 1 FROM contacts c2 WHERE c2.owner_id=?3 AND c2.contact_id=s.user_id) AND NOT EXISTS(SELECT 1 FROM blocks b WHERE (b.blocker_id=s.user_id AND b.blocked_id=?3) OR (b.blocker_id=?3 AND b.blocked_id=s.user_id))))').bind(key, now, me.id).first();   // status media: owner and MUTUAL contacts only
     const m = allowed ? await db.prepare('SELECT type FROM media WHERE key=?').bind(key).first() : null;
     if (!m) return json({ error: 'Not found' }, 404);
     if (m.type.startsWith('video/')) {                      // videos stream straight from R2 (same permission check as above)
