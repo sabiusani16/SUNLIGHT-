@@ -80,6 +80,8 @@ function ensureSchema(db) {
     await db.prepare('CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email ON users(email) WHERE email IS NOT NULL').run();
     const haveM = (await db.prepare('PRAGMA table_info(messages)').all()).results.map(c => c.name);
     for (const [col, type] of Object.entries(MSG_COLS)) if (!haveM.includes(col)) await db.prepare(`ALTER TABLE messages ADD COLUMN ${col} ${type}`).run();
+    const haveC = (await db.prepare('PRAGMA table_info(calls)').all()).results.map(c => c.name);
+    if (!haveC.includes('video')) await db.prepare('ALTER TABLE calls ADD COLUMN video INTEGER NOT NULL DEFAULT 0').run();
     await db.prepare('CREATE INDEX IF NOT EXISTS idx_msg_media ON messages(media_key)').run();
     await db.prepare('CREATE INDEX IF NOT EXISTS idx_msg_deliv ON messages(receiver_id, delivered_at)').run();
   })().catch(e => { ready = null; throw e; });
@@ -358,7 +360,7 @@ async function route(req, env, url) {
       return db.prepare('SELECT * FROM calls WHERE id=?').bind(c.id).first();
     };
     const mine = async id => { const c = await db.prepare('SELECT * FROM calls WHERE id=? AND (caller_id=? OR callee_id=?)').bind(Number(id) || 0, me.id, me.id).first(); return c || null; };
-    const view = c => ({ id: c.id, state: c.state, ringing: !!c.ringing_at, answered_at: c.answered_at, end_reason: c.end_reason, duration: c.duration, caller_id: c.caller_id, callee_id: c.callee_id });
+    const view = c => ({ id: c.id, state: c.state, ringing: !!c.ringing_at, video: !!c.video, answered_at: c.answered_at, end_reason: c.end_reason, duration: c.duration, caller_id: c.caller_id, callee_id: c.callee_id });
 
     if (p === 'calls/ice' && !post) {
       let ice = STUN, turn = false;
@@ -381,8 +383,8 @@ async function route(req, env, url) {
       if (busy) return json({ error: 'Line is busy. Try again in a moment.' }, 409);
       const recent = await db.prepare('SELECT COUNT(*) n FROM calls WHERE caller_id=? AND created_at>?').bind(me.id, now - 3600000).first();
       if (recent.n >= 40) return json({ error: 'Too many calls. Please wait a while.' }, 429);
-      const r = await db.prepare("INSERT INTO calls(caller_id,callee_id,state,created_at,caller_beat,callee_beat) VALUES(?,?,'ringing',?,?,?)").bind(me.id, to, now, now, now).run();
-      return json({ call: { id: r.meta.last_row_id, state: 'ringing' }, peer: publicUser(callee, now) });
+      const r = await db.prepare("INSERT INTO calls(caller_id,callee_id,state,created_at,caller_beat,callee_beat,video) VALUES(?,?,'ringing',?,?,?,?)").bind(me.id, to, now, now, now, body.video ? 1 : 0).run();
+      return json({ call: { id: r.meta.last_row_id, state: 'ringing', video: !!body.video }, peer: publicUser(callee, now) });
     }
     if (p === 'calls/poll' && !post) {
       const cid = Number(url.searchParams.get('call_id')) || 0, since = Number(url.searchParams.get('since')) || 0;
@@ -393,7 +395,7 @@ async function route(req, env, url) {
       if (inc && !inc.ringing_at) await db.prepare('UPDATE calls SET ringing_at=? WHERE id=?').bind(now, inc.id).run();   // the caller now sees "Ringing"
       const sig = call && (call.state === 'ringing' || call.state === 'active') ? (await db.prepare('SELECT id,kind,payload FROM call_signals WHERE call_id=? AND to_user=? AND id>? ORDER BY id LIMIT 100').bind(call.id, me.id, since).all()).results : [];
       if (cid) call = await mine(cid);
-      return json({ incoming: inc ? { id: inc.id, from: publicUser({ id: inc.caller_id, name: inc.name, username: inc.username, avatar_key: inc.avatar_key, last_seen: inc.last_seen }, now) } : null, call: call ? view(call) : null, signals: sig });
+      return json({ incoming: inc ? { id: inc.id, video: !!inc.video, from: publicUser({ id: inc.caller_id, name: inc.name, username: inc.username, avatar_key: inc.avatar_key, last_seen: inc.last_seen }, now) } : null, call: call ? view(call) : null, signals: sig });
     }
     if (p === 'calls/answer' && post) {
       const c = await mine(body.id); if (!c || c.callee_id !== me.id) return json({ error: 'Call not found' }, 404);
@@ -415,15 +417,15 @@ async function route(req, env, url) {
       const c = await mine(body.id); if (!c) return json({ error: 'Call not found' }, 404);
       if (c.state !== 'ringing' && c.state !== 'active') return json({ error: 'This call has ended', call: view(c) }, 409);
       const kind = String(body.kind || ''), payload = typeof body.payload === 'string' ? body.payload : JSON.stringify(body.payload || null);
-      if (!['offer', 'answer', 'ice'].includes(kind) || payload.length > 16000) return json({ error: 'Invalid signal' }, 400);
+      if (!['offer', 'answer', 'ice', 'cam'].includes(kind) || payload.length > 16000) return json({ error: 'Invalid signal' }, 400);
       if ((kind === 'offer' && c.caller_id !== me.id) || (kind === 'answer' && c.callee_id !== me.id)) return json({ error: 'Not allowed' }, 403);
-      if (kind !== 'ice' && c.state !== 'active') return json({ error: 'Call not accepted yet' }, 409);
+      if (kind !== 'ice' && kind !== 'cam' && c.state !== 'active') return json({ error: 'Call not accepted yet' }, 409);
       await db.prepare('INSERT INTO call_signals(call_id,to_user,kind,payload,created_at) VALUES(?,?,?,?,?)').bind(c.id, c.caller_id === me.id ? c.callee_id : c.caller_id, kind, payload, now).run();
       return json({ ok: true });
     }
     if (p === 'calls/history' && !post) {
-      const { results } = await db.prepare(`SELECT c.id,c.caller_id,c.state,c.created_at,c.duration,u.id uid,u.name,u.username,u.avatar_key,u.last_seen FROM calls c JOIN users u ON u.id=CASE WHEN c.caller_id=?1 THEN c.callee_id ELSE c.caller_id END WHERE (c.caller_id=?1 OR c.callee_id=?1) AND c.state!='ringing' ORDER BY c.id DESC LIMIT 100`).bind(me.id).all();
-      return json({ calls: results.map(c => ({ id: c.id, direction: c.caller_id === me.id ? 'out' : 'in', state: c.state, created_at: c.created_at, duration: c.duration, peer: publicUser({ id: c.uid, name: c.name, username: c.username, avatar_key: c.avatar_key, last_seen: c.last_seen }, now) })) });
+      const { results } = await db.prepare(`SELECT c.id,c.caller_id,c.state,c.video,c.created_at,c.duration,u.id uid,u.name,u.username,u.avatar_key,u.last_seen FROM calls c JOIN users u ON u.id=CASE WHEN c.caller_id=?1 THEN c.callee_id ELSE c.caller_id END WHERE (c.caller_id=?1 OR c.callee_id=?1) AND c.state!='ringing' ORDER BY c.id DESC LIMIT 100`).bind(me.id).all();
+      return json({ calls: results.map(c => ({ id: c.id, direction: c.caller_id === me.id ? 'out' : 'in', video: !!c.video, state: c.state, created_at: c.created_at, duration: c.duration, peer: publicUser({ id: c.uid, name: c.name, username: c.username, avatar_key: c.avatar_key, last_seen: c.last_seen }, now) })) });
     }
     return json({ error: 'Not found' }, 404);
   }
