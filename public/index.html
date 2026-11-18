@@ -349,6 +349,69 @@ mark{background:var(--gold-s);color:inherit;border-radius:3px;padding:0 1px}
 .prof .btns .danger{border-color:var(--danger-line);color:#D64545}
 #profBg{position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:80}
 #profSheet{position:fixed;left:50%;transform:translateX(-50%);width:100%;max-width:480px;bottom:0;z-index:81;background:var(--surface);border-radius:22px 22px 0 0;padding:10px 8px calc(16px + env(safe-area-inset-bottom,0px));box-shadow:0 -10px 30px rgba(0,0,0,.18);animation:rise .22s ease}
+/* chat options menu, dialogs, sheets */
+.cmenu{position:absolute;right:8px;top:calc(56px + env(safe-area-inset-top,0px));width:222px;background:#141A17;color:#EEF3F0;border:1px solid rgba(245,197,66,.22);border-radius:14px;padding:6px;box-shadow:0 14px 36px rgba(0,0,0,.5);z-index:60;transform-origin:top right;opacity:0;transform:scale(.86) translateY(-6px);pointer-events:none;transition:opacity .16s ease,transform .18s cubic-bezier(.3,.9,.4,1.1)}
+.cmenu.open{opacity:1;transform:none;pointer-events:auto}
+.cmenu button{display:flex;align-items:center;gap:13px;width:100%;padding:12px 12px;border-radius:10px;font-weight:600;font-size:13px;letter-spacing:.04em;text-align:left;color:#EEF3F0}
+.cmenu button i{width:18px;text-align:center;color:var(--gold);font-size:15px}
+.cmenu button:active,.cmenu button:hover{background:rgba(255,255,255,.08)}
+.cmenu button.warn,.cmenu button.warn i{color:#FF8A8A}
+#cmBg{position:absolute;inset:0;z-index:59;background:transparent}
+.dlg-bg{position:fixed;inset:0;z-index:90;background:rgba(0,0,0,.6);animation:fadeO .18s ease}
+@keyframes fadeO{from{opacity:0}to{opacity:1}}
+@keyframes gsRise{from{transform:translate(-50%,40px);opacity:0}to{transform:translateX(-50%);opacity:1}}
+.dlg{position:fixed;z-index:91;left:50%;top:50%;transform:translate(-50%,-50%);width:min(340px,calc(100vw - 40px));background:var(--surface);color:var(--text);border:1px solid var(--line);border-radius:20px;padding:20px 20px 14px;box-shadow:0 20px 50px rgba(0,0,0,.5);animation:dlgIn .2s cubic-bezier(.3,.9,.4,1.1)}
+.dlg h4{margin:0 0 8px;font-size:18px}.dlg p{margin:0;color:var(--muted);font-size:14px;line-height:1.5}
+.dlg .btns{display:flex;justify-content:flex-end;gap:8px;margin-top:18px}
+.dlg .btns button{padding:10px 18px;border-radius:20px;font-weight:700;font-size:14px;color:var(--accent)}
+.dlg .btns .go{background:var(--gold);color:var(--green-d)}.dlg .btns .go.danger{background:#E5484D;color:#fff}
+@keyframes dlgIn{from{opacity:0;transform:translate(-50%,-46%) scale(.94)}to{opacity:1;transform:translate(-50%,-50%)}}
+.gsheet-bg{position:fixed;inset:0;z-index:85;background:rgba(0,0,0,.55);animation:fadeO .2s ease}
+.gsheet{position:fixed;z-index:86;left:50%;transform:translateX(-50%);bottom:0;width:100%;max-width:480px;max-height:88vh;overflow-y:auto;background:var(--surface);color:var(--text);border-radius:22px 22px 0 0;padding:10px 16px calc(16px + env(safe-area-inset-bottom,0px));box-shadow:0 -10px 30px rgba(0,0,0,.4);animation:gsRise .24s cubic-bezier(.3,.8,.3,1)}
+.gsheet .grab{width:38px;height:4px;border-radius:2px;background:var(--line2);margin:0 auto 12px}
+.gsheet h4{margin:0 0 4px;font-size:18px}.gsheet .sub2{color:var(--muted);font-size:13px;margin:0 0 14px}
+.gsheet .row-btns{display:flex;gap:10px;margin-top:16px}
+.gsheet .row-btns button{flex:1;height:46px;border-radius:23px;font-weight:700;border:1.5px solid var(--line2);color:var(--text)}
+.gsheet .row-btns .go{background:var(--gold);border-color:var(--gold);color:var(--green-d)}
+.gsheet .row-btns .go[disabled]{opacity:.45}
+.opt{display:flex;align-items:center;gap:12px;width:100%;padding:13px 12px;border-radius:12px;font-size:15px;text-align:left}
+.opt .rd{width:20px;height:20px;border-radius:50%;border:2px solid var(--line2);flex:none;display:grid;place-items:center}
+.opt.sel{background:var(--gold-s)}.opt.sel .rd{border-color:var(--gold)}.opt.sel .rd::after{content:'';width:10px;height:10px;border-radius:50%;background:var(--gold)}
+.gsheet textarea{width:100%;min-height:78px;margin-top:10px;border:1.5px solid var(--line2);border-radius:12px;background:var(--soft);color:var(--text);padding:10px 12px;font:inherit;font-size:14px;resize:none;outline:none}
+.gsheet textarea:focus{border-color:var(--gold)}
+.tp{height:150px;border-radius:14px;margin:6px 0 12px;padding:14px 12px;display:flex;flex-direction:column;gap:8px;overflow:hidden;background:var(--chatbg);border:1px solid var(--line)}
+.pv{max-width:75%;padding:8px 12px;border-radius:14px;font-size:14px}
+.pv.in{align-self:flex-start;background:var(--bubble-in);color:var(--text);border-top-left-radius:4px}
+.pv.out{align-self:flex-end;background:var(--out-bg,var(--bubble-out));color:var(--out-fg,var(--text));border-top-right-radius:4px}
+.sw-row{display:flex;gap:10px;flex-wrap:wrap;margin:6px 0 14px}
+.sw{width:46px;height:46px;border-radius:12px;border:2px solid var(--line2);position:relative;transition:transform .15s}
+.sw:active{transform:scale(.92)}.sw.sel{border-color:var(--gold);box-shadow:0 0 0 2px var(--gold-s)}
+.sw.sel::after{content:'\2713';position:absolute;inset:0;display:grid;place-items:center;color:#fff;font-weight:800;text-shadow:0 1px 3px rgba(0,0,0,.7)}
+.lbl{font-size:12px;font-weight:700;letter-spacing:.06em;color:var(--muted);text-transform:uppercase}
+.chat-screen[data-bg="midnight"],.tp[data-bg="midnight"]{background:linear-gradient(170deg,#04070D,#0B1424)}
+.chat-screen[data-bg="forest"],.tp[data-bg="forest"]{background:linear-gradient(160deg,#04170F,#0E3A28)}
+.chat-screen[data-bg="gold"],.tp[data-bg="gold"]{background:linear-gradient(160deg,#1B1405,#4A3808)}
+.chat-screen[data-bg="ocean"],.tp[data-bg="ocean"]{background:linear-gradient(160deg,#03121C,#0F4468)}
+.chat-screen[data-bg="rose"],.tp[data-bg="rose"]{background:linear-gradient(160deg,#1C0A12,#53193A)}
+.chat-screen[data-bg="slate"],.tp[data-bg="slate"]{background:#1C2227}
+.chat-screen[data-bg="dots"],.tp[data-bg="dots"]{background:#06100C radial-gradient(rgba(245,197,66,.13) 1.3px,transparent 1.5px) 0 0/22px 22px}
+[data-bc="gold"]{--out-bg:#F5C542;--out-fg:#1B1405}[data-bc="blue"]{--out-bg:#1D5FB8;--out-fg:#fff}[data-bc="purple"]{--out-bg:#6B3FB5;--out-fg:#fff}[data-bc="rose"]{--out-bg:#B33A63;--out-fg:#fff}[data-bc="teal"]{--out-bg:#0F766E;--out-fg:#fff}
+.msg.out{background:var(--out-bg,var(--bubble-out));color:var(--out-fg,inherit)}
+.msg.out small,.msg.out .cap{color:var(--out-fg,inherit)}
+.blocked-bar{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 14px calc(12px + env(safe-area-inset-bottom,0px));background:var(--surface);border-top:1px solid var(--line);font-size:14px;color:var(--muted)}
+.blocked-bar button{padding:8px 16px;border-radius:18px;background:var(--gold);color:var(--green-d);font-weight:700}
+#composer[hidden],#blockedBar[hidden]{display:none}
+.bell{position:relative}.bell .bd{position:absolute;top:4px;right:3px;min-width:17px;height:17px;border-radius:9px;background:#E5484D;color:#fff;font-size:10px;font-weight:700;display:grid;place-items:center;padding:0 4px;border:2px solid var(--head);box-sizing:content-box;animation:pop .25s ease}
+.nrow{position:relative}.nrow.unread{background:var(--gold-s)}.nrow .heart-ic{color:#FF5A7A;margin-right:6px}
+.nrow.gone{opacity:.6}
+.heart{display:flex;align-items:center;gap:6px;color:#fff;font-weight:700;font-size:14px}
+.heart i{font-size:21px;transition:transform .2s,color .2s}
+.heart.on i{color:#FF4D6D}
+.heart.pop i{animation:heartPop .5s cubic-bezier(.2,.9,.3,1.4)}
+@keyframes heartPop{0%{transform:scale(1)}30%{transform:scale(1.6)}60%{transform:scale(.9)}100%{transform:scale(1)}}
+.fl-heart{position:absolute;bottom:90px;color:#FF4D6D;font-size:22px;pointer-events:none;z-index:6;animation:flHeart 1s ease-out forwards}
+@keyframes flHeart{0%{opacity:0;transform:translateY(0) scale(.5)}15%{opacity:1}100%{opacity:0;transform:translateY(-190px) scale(1.2) rotate(var(--r,10deg))}}
+.lk-count{display:flex;align-items:center;gap:8px}
 /* status replies */
 .sv-foot:has(.sv-reply){display:block;padding-bottom:calc(10px + env(safe-area-inset-bottom,0px))}
 .sv-reply{width:100%;animation:rise .2s ease}
@@ -418,6 +481,7 @@ mark{background:var(--gold-s);color:inherit;border-radius:3px;padding:0 1px}
         <h1>SUNLIGHT</h1>
       </div>
       <div class="top-actions">
+        <button class="icon-btn bell" id="bellBtn" aria-label="Notifications"><i class="fa-regular fa-bell"></i><span class="bd" id="bellBadge" hidden></span></button>
         <button class="icon-btn" id="cameraBtn" aria-label="Camera"><i class="fa-solid fa-camera"></i></button>
         <button class="icon-btn" id="searchBtn" aria-label="Search"><i class="fa-solid fa-magnifying-glass"></i></button>
         <button class="icon-btn" id="menuBtn" aria-label="Menu"><i class="fa-solid fa-ellipsis-vertical"></i></button>
@@ -518,6 +582,25 @@ mark{background:var(--gold-s);color:inherit;border-radius:3px;padding:0 1px}
     </div>
   </div>
 
+  <!-- BLOCKED USERS -->
+  <div class="screen" id="blockedScreen">
+    <div class="screen-head">
+      <button class="icon-btn light" data-close="blockedScreen" aria-label="Back"><i class="fa-solid fa-arrow-left"></i></button>
+      <div><strong>Blocked users</strong><small id="blockedCount"></small></div>
+    </div>
+    <div class="chat-list" id="blockedList" style="overflow-y:auto;flex:1"></div>
+  </div>
+
+  <!-- NOTIFICATIONS -->
+  <div class="screen" id="notifScreen">
+    <div class="screen-head">
+      <button class="icon-btn light" data-close="notifScreen" aria-label="Back"><i class="fa-solid fa-arrow-left"></i></button>
+      <div class="grow"><strong>Notifications</strong><small id="notifCount"></small></div>
+      <button type="button" class="icon-btn light" id="notifReadAll" aria-label="Mark all as read" title="Mark all as read"><i class="fa-solid fa-check-double"></i></button>
+    </div>
+    <div class="chat-list" id="notifList" style="overflow-y:auto;flex:1"></div>
+  </div>
+
   <!-- CONVERSATION -->
   <div class="screen chat-screen" id="chatScreen">
     <div class="screen-head">
@@ -527,6 +610,16 @@ mark{background:var(--gold-s);color:inherit;border-radius:3px;padding:0 1px}
       <button class="icon-btn light" id="favBtn" aria-label="Favorite"><i class="fa-regular fa-star"></i></button>
       <button class="icon-btn light" data-toast="Video calls are coming in the next update" aria-label="Video call"><i class="fa-solid fa-video"></i></button>
       <button class="icon-btn light" data-toast="Voice calls are coming in the next update" aria-label="Voice call"><i class="fa-solid fa-phone"></i></button>
+      <button class="icon-btn light" id="chatMenuBtn" aria-label="Chat options" aria-haspopup="true" aria-expanded="false"><i class="fa-solid fa-ellipsis-vertical"></i></button>
+    </div>
+    <div id="cmBg" hidden></div>
+    <div class="cmenu" id="chatMenu" role="menu" aria-hidden="true">
+      <button type="button" role="menuitem" data-co="theme"><i class="fa-solid fa-palette"></i>CHAT THEME</button>
+      <button type="button" role="menuitem" data-co="report"><i class="fa-solid fa-flag"></i>REPORT</button>
+      <button type="button" role="menuitem" data-co="block" class="warn"><i class="fa-solid fa-ban"></i><span id="coBlockTxt">BLOCK</span></button>
+      <button type="button" role="menuitem" data-co="clear"><i class="fa-solid fa-broom"></i>CLEAR CHAT</button>
+      <button type="button" role="menuitem" data-co="export"><i class="fa-solid fa-file-export"></i>EXPORT CHAT</button>
+      <button type="button" role="menuitem" data-co="shortcut"><i class="fa-solid fa-square-plus"></i>ADD SHORTCUT</button>
     </div>
     <div class="messages" id="messages"></div>
     <button type="button" class="to-bottom" id="toBottom" hidden aria-label="Scroll to latest"><i class="fa-solid fa-chevron-down"></i></button>
@@ -534,6 +627,7 @@ mark{background:var(--gold-s);color:inherit;border-radius:3px;padding:0 1px}
       <div class="rb-body"><strong id="rbName"></strong><span id="rbText"></span></div>
       <button type="button" class="icon-btn small" id="rbClose" aria-label="Cancel reply"><i class="fa-solid fa-xmark"></i></button>
     </div>
+    <div class="blocked-bar" id="blockedBar" hidden><span id="blockedTxt"></span><button type="button" id="unblockBtn">Unblock</button></div>
     <div class="composer" id="composer">
       <button type="button" class="icon-btn" id="attachBtn" aria-label="Attach photo"><i class="fa-solid fa-paperclip"></i></button>
       <textarea id="msgInput" rows="1" placeholder="Message" maxlength="2000" autocomplete="off" enterkeyhint="send"></textarea>
@@ -557,6 +651,7 @@ mark{background:var(--gold-s);color:inherit;border-radius:3px;padding:0 1px}
       <div class="grab"></div>
       <button type="button" id="shReply"><span class="s-ico"><i class="fa-solid fa-reply"></i></span>Reply</button>
       <button type="button" id="shCopy"><span class="s-ico"><i class="fa-regular fa-copy"></i></span>Copy text</button>
+      <button type="button" id="shReport" class="danger"><span class="s-ico"><i class="fa-solid fa-flag"></i></span>Report message</button>
       <button type="button" id="shDel" class="danger"><span class="s-ico"><i class="fa-solid fa-trash"></i></span><span id="shDelTxt">Delete for everyone</span></button>
     </div>
 
@@ -644,6 +739,8 @@ mark{background:var(--gold-s);color:inherit;border-radius:3px;padding:0 1px}
     <div class="sv-panel" id="svPanel" hidden></div>
   </div>
   <input type="file" id="avatarInput" accept="image/*" hidden>
+  <div class="dlg-bg" id="dlgBg" hidden></div><div class="dlg" id="dlg" hidden role="alertdialog" aria-modal="true"></div>
+  <div class="gsheet-bg" id="gsBg" hidden></div><div class="gsheet" id="gsheet" hidden role="dialog"></div>
   <div id="profBg" hidden></div><div id="profSheet" hidden role="dialog" aria-label="Profile"></div>
   <div class="toast" id="toast"></div>
 </div>
@@ -767,6 +864,7 @@ async function start(user) {
   renderProfile();
   await Promise.all([loadChats(), loadContacts(), loadStatuses()]).catch(() => {});
   showView('chats');
+  openChatFromLink(); notifFirst = true; pollNotifs().catch(() => {});
   clearInterval(pollTimer);
   pollTimer = setInterval(poll, 4000);
 }
@@ -793,7 +891,7 @@ let pollN = 0;
 function poll() {
   if (!me || document.hidden) return;
   if (++pollN % 5 === 0) loadStatuses().catch(() => {});   // statuses change slowly: every ~20s                       // no polling while the tab is hidden (saves D1 requests)
-  loadChats().catch(() => {}); loadContacts().catch(() => {});
+  loadChats().catch(() => {}); loadContacts().catch(() => {}); pollNotifs().catch(() => {});
   if ($('#chatScreen').classList.contains('open') && !pending.some(p => p.status === 'sending')) loadMessages().catch(() => {});
 }
 document.addEventListener('visibilitychange', () => { if (!document.hidden) poll(); });
@@ -834,6 +932,7 @@ function renderProfile() {
   renderStories();
   $('#settingsList').innerHTML = [
     ['fa-moon', 'Appearance', theme() === 'dark' ? 'Dark theme (tap for light)' : 'Light theme (tap for dark)', '__theme'],
+    ['fa-ban', 'Blocked users', 'People you blocked', '__blocked'],
     ['fa-camera', 'Profile photo', me.avatar ? 'Change your photo' : 'Add a photo so friends recognise you', '__photo'],
     ...(me.avatar ? [['fa-trash', 'Remove photo', 'Go back to your initials', '__rmphoto']] : []),
     ['fa-key', 'Account', '@' + me.username, 'Account'],
@@ -905,7 +1004,7 @@ document.addEventListener('click', e => {
   const t = e.target.closest('[data-toast]'); if (t) toast(t.dataset.toast);
   const c = e.target.closest('[data-close]'); if (c) { closeScreen(c.dataset.close); if (c.dataset.close === 'newChat') resetSearch(); if (c.dataset.close === 'chatScreen') leaveChat(); }
   const s = e.target.closest('[data-set]');
-  if (s) { const k = s.dataset.set; k === '__logout' ? logout() : k === '__theme' ? toggleTheme() : k === '__photo' ? $('#avatarInput').click() : k === '__rmphoto' ? removeAvatar() : toast(k); }
+  if (s) { const k = s.dataset.set; k === '__logout' ? logout() : k === '__blocked' ? (openScreen('blockedScreen'), loadBlocked()) : k === '__theme' ? toggleTheme() : k === '__photo' ? $('#avatarInput').click() : k === '__rmphoto' ? removeAvatar() : toast(k); }
 });
 $('#fab').addEventListener('click', () => { resetSearch(); loadContacts().catch(showContactsError); openScreen('newChat'); });
 
@@ -1080,13 +1179,16 @@ async function loadMessages(force) {
   const d = await api('messages?with=' + who.id);
   if (current !== who) return;
   $('#chatState').textContent = d.online ? 'online' : d.last_seen ? seenText(d.last_seen) : 'offline';
+  applyChatState(d);
   const sig = d.messages.map(m => `${m.id}${m.read_at ? 'r' : m.delivered_at ? 'd' : ''}${m.deleted_at ? 'x' : ''}`).join();
   if (!force && sig === sigMsgs) return;
-  sigMsgs = sig; thread = d.messages; renderMessages(force);
+  applyChatState(d); sigMsgs = sig; thread = d.messages; renderMessages(force);
 }
 function leaveChat() {
   stopRec(false); player.pause(); playing = null; hideSheets(); clearReply();
-  $('#lightbox').hidden = true; closePreview();
+  $('#lightbox').hidden = true; closePreview(); closeChatMenu(); closeGSheet(); restoreShortcutPage();
+  if (current) { current.themeSig = undefined; current.blocked = false; }
+  $('#chatScreen').removeAttribute('data-bg'); $('#chatScreen').removeAttribute('data-bc'); $('#composer').hidden = false; $('#blockedBar').hidden = true;
 }
 
 /* --- sending (optimistic: message shows at once with a clock, then ticks; failures can be retried) --- */
@@ -1145,6 +1247,7 @@ function openMsgSheet(m) {
   $('#shReply').hidden = !!m.deleted_at;
   $('#shCopy').hidden = !(m.body && !m.deleted_at);
   $('#shDel').hidden = !(m.sender_id === me.id && !m.deleted_at);
+  $('#shReport').hidden = !(m.sender_id !== me.id && !m.deleted_at);
   showSheet('msgSheet');
 }
 $('#shReply').addEventListener('click', () => { const m = sheetMsg; hideSheets(); if (m) setReply(m); });
@@ -1460,7 +1563,7 @@ renderStories = function () {                               // Home story row + 
   const mineHtml = mineAv.replace(/<\/div>$/, plus + '</div>');
   $('#stories').innerHTML = `<div class="story" data-st-mine>${mineHtml}<span class="n">My status</span></div>` +
     stUsers.map((g, i) => `<div class="story" data-st-user="${i}">${avatar(g.user, `ring ${g.unseen ? '' : 'seen'}`)}<span class="n">${esc(g.user.name.split(' ')[0])}</span></div>`).join('');
-  $('#myStatus').innerHTML = `<div class="story-av" data-st-mine style="display:flex;align-items:center;gap:13px;flex:1;min-width:0;cursor:pointer">${mineHtml}<div><strong>My status</strong><p>${stMine.length ? `${stMine.length} update${stMine.length === 1 ? '' : 's'} · ${stMine.reduce((a, s) => a + s.views, 0)} view${stMine.reduce((a, s) => a + s.views, 0) === 1 ? '' : 's'}` : 'Tap to add a status update'}</p></div></div>`;
+  $('#myStatus').innerHTML = `<div class="story-av" data-st-mine style="display:flex;align-items:center;gap:13px;flex:1;min-width:0;cursor:pointer">${mineHtml}<div><strong>My status</strong><p>${stMine.length ? `${stMine.length} update${stMine.length === 1 ? '' : 's'} · ${stMine.reduce((a, s) => a + s.views, 0)} view${stMine.reduce((a, s) => a + s.views, 0) === 1 ? '' : 's'}${stMine.some(s => s.likes) ? ' · ❤ ' + stMine.reduce((a, s) => a + (s.likes || 0), 0) : ''}` : 'Tap to add a status update'}</p></div></div>`;
   const row = (g, i) => `<div class="row" data-st-user="${i}">${avatar(g.user, `ring ${g.unseen ? '' : 'seen'}`)}<div class="body"><div class="line"><strong>${esc(g.user.name)}</strong></div><div class="preview">@${esc(g.user.username)} · ${stTime(g.latest)}${g.unseen ? ` · ${g.unseen} new` : ''}</div></div></div>`;
   const fresh = stUsers.map((g, i) => g.unseen ? row(g, i) : '').join(''), seen = stUsers.map((g, i) => g.unseen ? '' : row(g, i)).join('');
   $('#updateList').innerHTML = stUsers.length ? (fresh ? '<h3 class="sub">New</h3>' + fresh : '') + (seen ? '<h3 class="sub">Viewed</h3>' + seen : '')
@@ -1507,8 +1610,8 @@ function svShow() {
   svStage.querySelectorAll('.sv-text,img,video,.sv-loading,.sv-err').forEach(n => { if (n.tagName === 'VIDEO') n.pause(); n.remove(); });
   sv.dur = STATUS_SECONDS * 1000;
   $('#svCap').textContent = it.type !== 'text' ? it.caption || '' : '';
-  $('#svFoot').innerHTML = sv.own ? `<button type="button" data-sv-views><i class="fa-regular fa-eye"></i>${it.views} view${it.views === 1 ? '' : 's'}</button><button type="button" class="del" data-sv-del aria-label="Delete status"><i class="fa-solid fa-trash"></i>Delete</button>` : `<div class="sv-reply"><div class="sv-emo">${['❤️', '😂', '😮', '😢', '🙏', '👍'].map(x => `<button type="button" data-emo="${x}" aria-label="React ${x}">${x}</button>`).join('')}</div>
-    <div class="sv-rbar"><button type="button" data-sv-img aria-label="Reply with a photo"><i class="fa-solid fa-image"></i></button><input id="svReplyInput" maxlength="500" placeholder="Reply to ${esc(g.user.name.split(' ')[0])}…" autocomplete="off" enterkeyhint="send" aria-label="Reply to status"><button type="button" class="send" data-sv-send disabled aria-label="Send reply"><i class="fa-solid fa-paper-plane"></i></button></div></div>`;
+  $('#svFoot').innerHTML = sv.own ? `<button type="button" data-sv-views><i class="fa-regular fa-eye"></i>${it.views} view${it.views === 1 ? '' : 's'}</button><button type="button" class="lk-count" data-sv-likes aria-label="Who liked this"><span class="heart on"><i class="fa-solid fa-heart"></i></span><span id="svLkN">${it.likes || 0} Like${it.likes === 1 ? '' : 's'}</span></button><button type="button" class="del" data-sv-del aria-label="Delete status"><i class="fa-solid fa-trash"></i>Delete</button>` : `<div class="sv-reply"><div class="sv-emo">${['❤️', '😂', '😮', '😢', '🙏', '👍'].map(x => `<button type="button" data-emo="${x}" aria-label="React ${x}">${x}</button>`).join('')}</div>
+    <div class="sv-rbar"><button type="button" data-sv-img aria-label="Reply with a photo"><i class="fa-solid fa-image"></i></button><input id="svReplyInput" maxlength="500" placeholder="Reply to ${esc(g.user.name.split(' ')[0])}…" autocomplete="off" enterkeyhint="send" aria-label="Reply to status"><button type="button" class="heart${it.liked ? ' on' : ''}" data-sv-like aria-pressed="${!!it.liked}" aria-label="${it.liked ? 'Unlike' : 'Like'}"><i class="fa-${it.liked ? 'solid' : 'regular'} fa-heart"></i></button><button type="button" class="send" data-sv-send disabled aria-label="Send reply"><i class="fa-solid fa-paper-plane"></i></button></div></div>`;
   sv.typing = false;
   const ready = () => { if (sv && sv.items_id === it.id) { sv.ready = true; svRun(true); } };
   sv.items_id = it.id;
@@ -1814,6 +1917,278 @@ zImg.addEventListener('dragstart', e => e.preventDefault());
 $('#zClose').addEventListener('click', () => closePhoto());
 $('#zInfo').addEventListener('click', () => { if (!z) return; const u = z.user; closePhoto(true); openProfile(u.id); });
 document.addEventListener('keydown', e => { if (z && e.key === 'Escape') closePhoto(); });
+
+
+/* ---------- Dialogs and sheets (shared) ---------- */
+function confirmBox({ title, text, ok = 'OK', danger = false, cancel = 'Cancel' }) {
+  return new Promise(res => {
+    const d = $('#dlg'), bg = $('#dlgBg');
+    d.innerHTML = `<h4>${esc(title)}</h4><p>${text}</p><div class="btns"><button type="button" data-no>${esc(cancel)}</button><button type="button" class="go${danger ? ' danger' : ''}" data-yes>${esc(ok)}</button></div>`;
+    d.hidden = bg.hidden = false;
+    const done = v => { d.hidden = bg.hidden = true; d.onclick = bg.onclick = null; document.removeEventListener('keydown', esc_); res(v); };
+    const esc_ = e => { if (e.key === 'Escape') done(false); };
+    d.onclick = e => { if (e.target.closest('[data-yes]')) done(true); else if (e.target.closest('[data-no]')) done(false); };
+    bg.onclick = () => done(false); document.addEventListener('keydown', esc_);
+    setTimeout(() => { const y = d.querySelector('[data-yes]'); if (y) y.focus(); }, 30);
+  });
+}
+function openGSheet(html) { $('#gsheet').innerHTML = '<div class="grab"></div>' + html; $('#gsheet').hidden = $('#gsBg').hidden = false; $('#gsheet').scrollTop = 0; }
+function closeGSheet() { $('#gsheet').hidden = $('#gsBg').hidden = true; $('#gsheet').innerHTML = ''; }
+$('#gsBg').addEventListener('click', closeGSheet);
+const initialsOf = n => initials(n);
+
+/* ---------- Chat options menu (three dots) ---------- */
+const THEME_BG = [['default', 'Default', 'var(--chatbg)'], ['midnight', 'Midnight', 'linear-gradient(170deg,#04070D,#0B1424)'], ['forest', 'Forest', 'linear-gradient(160deg,#04170F,#0E3A28)'], ['gold', 'Gold dust', 'linear-gradient(160deg,#1B1405,#4A3808)'], ['ocean', 'Ocean', 'linear-gradient(160deg,#03121C,#0F4468)'], ['rose', 'Rose', 'linear-gradient(160deg,#1C0A12,#53193A)'], ['slate', 'Slate', '#1C2227'], ['dots', 'Starlight', '#06100C radial-gradient(rgba(245,197,66,.5) 1.3px,transparent 1.5px) 0 0/10px 10px']];
+const THEME_COLOR = [['default', 'Green', 'var(--bubble-out)'], ['gold', 'Gold', '#F5C542'], ['blue', 'Blue', '#1D5FB8'], ['purple', 'Purple', '#6B3FB5'], ['rose', 'Rose', '#B33A63'], ['teal', 'Teal', '#0F766E']];
+function applyChatTheme(t) {                                // theme belongs to ONE conversation: set on the chat screen only
+  const el = $('#chatScreen'); t = t || {};
+  t.bg ? el.dataset.bg = t.bg : delete el.dataset.bg; t.color ? el.dataset.bc = t.color : delete el.dataset.bc;
+}
+function applyChatState(d) {                                // theme + blocked state come with every messages response
+  if (!current) return;
+  const th = JSON.stringify(d.theme || null);
+  if (th !== current.themeSig) { current.themeSig = th; current.theme = d.theme || null; applyChatTheme(current.theme); }
+  const b = !!d.blocked; current.blocked = b;
+  $('#composer').hidden = b; $('#blockedBar').hidden = !b; $('#coBlockTxt').textContent = b ? 'UNBLOCK' : 'BLOCK';
+  if (b) $('#blockedTxt').innerHTML = `You blocked <b>${esc(current.name)}</b>.`;
+}
+function openChatMenu() { $('#chatMenu').classList.add('open'); $('#cmBg').hidden = false; $('#chatMenuBtn').setAttribute('aria-expanded', 'true'); $('#chatMenu').setAttribute('aria-hidden', 'false'); }
+function closeChatMenu() { $('#chatMenu').classList.remove('open'); $('#cmBg').hidden = true; $('#chatMenuBtn').setAttribute('aria-expanded', 'false'); $('#chatMenu').setAttribute('aria-hidden', 'true'); }
+$('#chatMenuBtn').addEventListener('click', () => $('#chatMenu').classList.contains('open') ? closeChatMenu() : openChatMenu());
+$('#cmBg').addEventListener('click', closeChatMenu);
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeChatMenu(); });
+$('#chatMenu').addEventListener('click', e => {
+  const b = e.target.closest('[data-co]'); if (!b || !current) return; closeChatMenu();
+  ({ theme: openThemeSheet, report: () => openReportSheet(null), block: toggleBlock, clear: clearChat, export: openExportSheet, shortcut: addShortcut })[b.dataset.co]();
+});
+
+/* 1. chat theme (preview first, then apply; saved per conversation) */
+function openThemeSheet() {
+  const start = current.theme || {}; let sel = { bg: start.bg || 'default', color: start.color || 'default' };
+  const draw = () => {
+    openGSheet(`<h4>Chat theme</h4><p class="sub2">Only for your chat with ${esc(current.name)}. Other chats are not changed.</p>
+      <div class="tp" id="tPrev" ${sel.bg !== 'default' ? `data-bg="${sel.bg}"` : ''} ${sel.color !== 'default' ? `data-bc="${sel.color}"` : ''}><div class="pv in">Salam! Ina kwana?</div><div class="pv out">Lafiya lau, na gode 🌞</div></div>
+      <div class="lbl">Wallpaper</div><div class="sw-row">${THEME_BG.map(([k, n, bg]) => `<button type="button" class="sw${sel.bg === k ? ' sel' : ''}" data-tbg="${k}" style="background:${bg}" aria-label="${n}" title="${n}"></button>`).join('')}</div>
+      <div class="lbl">Chat colour</div><div class="sw-row">${THEME_COLOR.map(([k, n, bg]) => `<button type="button" class="sw${sel.color === k ? ' sel' : ''}" data-tcl="${k}" style="background:${bg}" aria-label="${n}" title="${n}"></button>`).join('')}</div>
+      <div class="row-btns"><button type="button" data-treset>Restore default</button><button type="button" class="go" data-tapply>Apply</button></div>
+      <div class="row-btns" style="margin-top:8px"><button type="button" data-tcancel>Cancel</button></div>`);
+  };
+  draw();
+  $('#gsheet').onclick = async e => {
+    const bg = e.target.closest('[data-tbg]'), cl = e.target.closest('[data-tcl]');
+    if (bg) { sel.bg = bg.dataset.tbg; draw(); } else if (cl) { sel.color = cl.dataset.tcl; draw(); }
+    else if (e.target.closest('[data-tcancel]')) closeGSheet();
+    else if (e.target.closest('[data-treset]') || e.target.closest('[data-tapply]')) {
+      const reset = !!e.target.closest('[data-treset]'), t = reset ? null : { bg: sel.bg === 'default' ? null : sel.bg, color: sel.color === 'default' ? null : sel.color };
+      try {
+        const d = await api('chat/theme', { body: { with: current.id, theme: t } });
+        current.theme = d.theme; current.themeSig = JSON.stringify(d.theme || null); applyChatTheme(d.theme); closeGSheet(); toast(reset || !d.theme ? 'Default theme restored' : 'Theme applied');
+      } catch (err) { toast(err.message); }
+    }
+  };
+}
+
+/* 2. report (user, or one message) */
+const REPORT_WHY = [['spam', 'Spam or unwanted messages'], ['harassment', 'Harassment or bullying'], ['inappropriate', 'Inappropriate or offensive content'], ['scam', 'Scam or fake account'], ['threats', 'Threats or violence'], ['other', 'Something else']];
+function openReportSheet(msg) {
+  let why = '';
+  const draw = () => {
+    const keep = $('#rpText') ? $('#rpText').value : '';
+    openGSheet(`<h4>${msg ? 'Report this message' : 'Report ' + esc(current.name)}</h4><p class="sub2">${msg ? 'The message and your details are sent to SUNLIGHT for review.' : 'Your report is private. ' + esc(current.name) + ' will not be told.'}</p>
+      ${msg ? `<div class="quote" style="cursor:default"><strong>${esc(current.name)}</strong><span>${esc(previewText(msg))}</span></div>` : ''}
+      ${REPORT_WHY.map(([k, n]) => `<button type="button" class="opt${why === k ? ' sel' : ''}" data-why="${k}"><span class="rd"></span>${n}</button>`).join('')}
+      <textarea id="rpText" maxlength="500" placeholder="Add details (optional)">${esc(keep)}</textarea>
+      <div class="row-btns"><button type="button" data-rcancel>Cancel</button><button type="button" class="go" data-rsend ${why ? '' : 'disabled'}>Submit report</button></div>`);
+  };
+  draw();
+  $('#gsheet').onclick = async e => {
+    const w = e.target.closest('[data-why]');
+    if (w) { why = w.dataset.why; draw(); }
+    else if (e.target.closest('[data-rcancel]')) closeGSheet();
+    else if (e.target.closest('[data-rsend]') && why) {
+      const btn = e.target.closest('[data-rsend]'); btn.disabled = true; btn.textContent = 'Sending…';
+      try { await api('report', { body: { user_id: current.id, reason: why, details: $('#rpText').value.trim(), message_id: msg ? msg.id : undefined } }); closeGSheet(); toast('Report submitted. Thank you.'); }
+      catch (err) { toast(err.message); btn.disabled = false; btn.textContent = 'Submit report'; }
+    }
+  };
+}
+$('#shReport').addEventListener('click', () => { const m = sheetMsg; hideSheets(); if (m && current) openReportSheet(m); });
+
+/* 3. block / unblock */
+async function toggleBlock() {
+  const p = current;
+  if (p.blocked) { if (await confirmBox({ title: 'Unblock ' + p.name + '?', text: 'They will be able to message you again.', ok: 'Unblock' })) doUnblock(p); return; }
+  const yes = await confirmBox({ title: 'Block ' + p.name + '?', text: `${esc(p.name)} will not be able to message you or interact with you. Your chat history is kept. You can unblock them any time in <b>Settings → Blocked users</b>.`, ok: 'Block', danger: true });
+  if (!yes) return;
+  try { await api('block', { body: { user_id: p.id } }); if (current === p) applyChatState({ theme: p.theme, blocked: true }); toast(p.name + ' blocked'); }
+  catch (err) { toast(err.message); }
+}
+async function doUnblock(p) {
+  try { await api('unblock', { body: { user_id: p.id } }); if (current === p) applyChatState({ theme: p.theme, blocked: false }); toast(p.name + ' unblocked'); if ($('#blockedScreen').classList.contains('open')) loadBlocked(); }
+  catch (err) { toast(err.message); }
+}
+$('#unblockBtn').addEventListener('click', () => current && doUnblock(current));
+async function loadBlocked() {
+  $('#blockedList').innerHTML = skeleton();
+  try {
+    const d = await api('blocks'); $('#blockedCount').textContent = d.blocked.length ? d.blocked.length + ' blocked' : '';
+    $('#blockedList').innerHTML = d.blocked.length ? d.blocked.map(u => `<div class="row" data-bl="${u.id}">${avatar(u)}<div class="body"><div class="line"><strong>${esc(u.name)}</strong></div><div class="preview">@${esc(u.username)}</div></div><button type="button" class="act-btn add" data-unblock="${u.id}">Unblock</button></div>`).join('')
+      : empty('fa-solid fa-ban', 'No blocked users<small>People you block appear here. You can unblock them any time.</small>');
+    $('#blockedList').dataset.users = JSON.stringify(d.blocked);
+  } catch (err) { $('#blockedList').innerHTML = empty('fa-solid fa-triangle-exclamation', `${esc(err.message)}<small><button type="button" class="act-btn add" id="blRetry" style="margin-top:12px">Try again</button></small>`); }
+}
+$('#blockedList').addEventListener('click', async e => {
+  if (e.target.closest('#blRetry')) return loadBlocked();
+  const b = e.target.closest('[data-unblock]'); if (!b) return; b.disabled = true;
+  try { await api('unblock', { body: { user_id: +b.dataset.unblock } }); toast('Unblocked'); if (current && current.id === +b.dataset.unblock) applyChatState({ theme: current.theme, blocked: false }); loadBlocked(); }
+  catch (err) { toast(err.message); b.disabled = false; }
+});
+
+/* 4. clear chat (my view only) */
+async function clearChat() {
+  const p = current;
+  const yes = await confirmBox({ title: 'Clear this chat?', text: `This removes the conversation history from <b>your view only</b>. ${esc(p.name)} keeps their own copy, and new messages will still arrive.`, ok: 'Clear chat', danger: true });
+  if (!yes) return;
+  try { await api('chat/clear', { body: { with: p.id } }); if (current === p) { thread = []; pending = pending.filter(x => x.to !== p.id); sigMsgs = ''; renderMessages(true); } toast('Chat cleared'); loadChats().catch(() => {}); }
+  catch (err) { toast(err.message); }
+}
+
+/* 5. export chat (TXT or JSON, downloaded to the phone) */
+function openExportSheet() {
+  openGSheet(`<h4>Export chat</h4><p class="sub2">Saves your chat with ${esc(current.name)} (messages you can see, with times, senders and media references) as a file on your phone.</p>
+    <button type="button" class="opt" data-exp="txt"><i class="fa-solid fa-file-lines" style="width:20px;color:var(--gold)"></i>Text file (.txt)</button>
+    <button type="button" class="opt" data-exp="json"><i class="fa-solid fa-file-code" style="width:20px;color:var(--gold)"></i>JSON file (.json)</button>
+    <div class="row-btns"><button type="button" data-ecancel>Cancel</button></div>`);
+  $('#gsheet').onclick = async e => {
+    if (e.target.closest('[data-ecancel]')) return closeGSheet();
+    const b = e.target.closest('[data-exp]'); if (!b) return; const fmtx = b.dataset.exp, p = current;
+    b.style.opacity = '.6'; b.disabled = true;
+    try {
+      const r = await fetch((window.SUNLIGHT_API || '') + `/api/chat/export?with=${p.id}&format=${fmtx}`, { headers: { authorization: 'Bearer ' + token } });
+      if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'Export failed');
+      const name = r.headers.get('x-filename') || `sunlight-chat.${fmtx}`, blob = await r.blob(), u = URL.createObjectURL(blob);
+      const a = document.createElement('a'); a.href = u; a.download = name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(u), 8000);
+      closeGSheet(); toast('Chat exported: ' + name);
+    } catch (err) { toast(err.message); b.style.opacity = ''; b.disabled = false; }
+  };
+}
+
+/* 6. add shortcut (home-screen shortcut that opens this chat; needs Chrome on Android) */
+let shortcutBackup = null;
+function avatarIcon(p) {                                    // 192px round icon: the contact's photo, or coloured initials
+  return new Promise(ok => {
+    const c = document.createElement('canvas'); c.width = c.height = 192; const g = c.getContext('2d');
+    const base = () => { g.fillStyle = COLORS[p.id % COLORS.length]; g.fillRect(0, 0, 192, 192); g.fillStyle = '#fff'; g.font = '700 84px Inter,Arial,sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(initials(p.name), 96, 100); };
+    const finish = () => { try { ok(c.toDataURL('image/png')); } catch { ok(null); } };
+    if (p.avatar && mediaDone.has(p.avatar)) { const im = new Image(); im.onload = () => { g.drawImage(im, 0, 0, 192, 192); finish(); }; im.onerror = () => { base(); finish(); }; im.src = mediaDone.get(p.avatar); }
+    else { base(); finish(); }
+  });
+}
+function restoreShortcutPage() {
+  if (!shortcutBackup) return; document.title = shortcutBackup.title; shortcutBackup.links.forEach(l => { l.el.setAttribute('href', l.href); }); shortcutBackup.extra.forEach(e => e.remove());
+  try { history.replaceState(null, '', shortcutBackup.url); } catch {} shortcutBackup = null;
+}
+async function addShortcut() {
+  const p = current, ua = navigator.userAgent || '', link = `${location.origin}/?chat=${p.id}`;
+  const supported = /Android/i.test(ua) && /Chrome|SamsungBrowser/i.test(ua) && !/(; wv\)|Version\/[\d.]+ Chrome)/i.test(ua) && window.isSecureContext;
+  if (!supported) {
+    const yes = await confirmBox({ title: 'Shortcut not supported here', text: 'Home-screen chat shortcuts need <b>Chrome on Android</b>. This browser cannot create them. You can copy the chat link instead and add it yourself.', ok: 'Copy chat link', cancel: 'Close' });
+    if (yes) { try { await navigator.clipboard.writeText(link); toast('Chat link copied'); } catch { toast('Could not copy. Link: ' + link); } }
+    return;
+  }
+  restoreShortcutPage();
+  const icon = await avatarIcon(p); shortcutBackup = { title: document.title, url: location.pathname + location.search, links: [], extra: [] };
+  document.title = p.name;
+  $$('link[rel~="icon"]').forEach(el => shortcutBackup.links.push({ el, href: el.getAttribute('href') }));
+  if (icon) {
+    if (!shortcutBackup.links.length) { const l = document.createElement('link'); l.rel = 'icon'; document.head.appendChild(l); shortcutBackup.extra.push(l); l.href = icon; }
+    shortcutBackup.links.forEach(l => l.el.setAttribute('href', icon));
+    const t = document.createElement('link'); t.rel = 'apple-touch-icon'; t.href = icon; document.head.appendChild(t); shortcutBackup.extra.push(t);
+  }
+  try { history.replaceState(null, '', '/?chat=' + p.id); } catch {}
+  openGSheet(`<h4>Add shortcut</h4><p class="sub2">The shortcut will be named <b>${esc(p.name)}</b> and will open this chat.</p>
+    <ol style="margin:0 0 6px 18px;padding:0;color:var(--text);font-size:14px;line-height:1.8"><li>Tap the <b>⋮</b> menu of Chrome (top right)</li><li>Tap <b>Add to Home screen</b></li><li>Confirm the name, then tap <b>Add</b></li></ol>
+    <p class="sub2" style="margin-top:8px">Whether the contact's photo appears as the icon depends on your phone.</p>
+    <div class="row-btns"><button type="button" data-copylink>Copy link</button><button type="button" class="go" data-sdone>OK</button></div>`);
+  $('#gsheet').onclick = async e => {
+    if (e.target.closest('[data-sdone]')) closeGSheet();
+    else if (e.target.closest('[data-copylink]')) { try { await navigator.clipboard.writeText(link); toast('Chat link copied'); } catch { toast('Could not copy the link'); } }
+  };
+}
+async function openChatFromLink() {                         // opened from a home-screen shortcut: /?chat=<id>
+  const id = +new URLSearchParams(location.search).get('chat'); if (!id || !me || id === me.id) return;
+  try { history.replaceState(null, '', location.pathname); } catch {}
+  let p = contacts.find(u => u.id === id) || chats.find(c => c.id === id);
+  if (!p) { try { const d = await api('users/' + id); p = d.user; results = [p, ...results.filter(r => r.id !== id)]; } catch { return toast('Could not open that chat'); } }
+  openChat(id);
+}
+
+
+/* ---------- Status likes ---------- */
+function floatHearts() {
+  for (let i = 0; i < 6; i++) {
+    const s = document.createElement('i'); s.className = 'fa-solid fa-heart fl-heart'; s.style.left = (38 + Math.random() * 24) + '%'; s.style.setProperty('--r', (Math.random() * 40 - 20) + 'deg'); s.style.animationDelay = (i * 70) + 'ms';
+    svEl.appendChild(s); setTimeout(() => s.remove(), 1300);
+  }
+}
+let likeBusy = false;
+async function svToggleLike(btn) {
+  if (!sv || sv.own || likeBusy) return;
+  const it = svGroup().items[sv.ii], want = !it.liked; likeBusy = true;
+  const paint = on => {
+    btn.classList.toggle('on', on); btn.setAttribute('aria-pressed', on); btn.setAttribute('aria-label', on ? 'Unlike' : 'Like');
+    btn.querySelector('i').className = `fa-${on ? 'solid' : 'regular'} fa-heart`;
+    if (on) { btn.classList.remove('pop'); void btn.offsetWidth; btn.classList.add('pop'); floatHearts(); }
+  };
+  it.liked = want; paint(want);                                // optimistic, rolled back if the server refuses
+  try { const d = await api('statuses/like', { body: { id: it.id, liked: want } }); it.liked = d.liked; it.likes = d.likes; if (d.liked !== want) paint(d.liked); }
+  catch (err) { it.liked = !want; paint(!want); toast(err.message); }
+  finally { likeBusy = false; }
+}
+$('#svFoot').addEventListener('click', async e => {
+  if (!sv) return;
+  const lk = e.target.closest('[data-sv-like]'); if (lk) return svToggleLike(lk);
+  if (!e.target.closest('[data-sv-likes]') || !sv.own) return;
+  const it = svGroup().items[sv.ii];
+  sv.panel = true; svRun(true); const pn = $('#svPanel'); pn.hidden = false; pn.innerHTML = '<h4>Liked by</h4><div class="skel"><i class="c"></i><div style="flex:1"><i class="l" style="width:45%"></i></div></div>';
+  try {
+    const d = await api('statuses/likes?id=' + it.id); it.likes = d.likes.length;
+    pn.innerHTML = `<h4>❤️ ${d.likes.length} Like${d.likes.length === 1 ? '' : 's'}</h4>` + (d.likes.length ? d.likes.map(v => `<div class="row">${avatar(v)}<div class="body"><div class="line"><strong>${esc(v.name)}</strong></div><div class="preview">@${esc(v.username)} · ${stTime(v.liked_at)}</div></div></div>`).join('') : empty('fa-regular fa-heart', 'No likes yet'));
+    const n = $('#svLkN'); if (n) n.textContent = `${d.likes.length} Like${d.likes.length === 1 ? '' : 's'}`;
+  } catch (err) { pn.innerHTML = empty('fa-solid fa-triangle-exclamation', esc(err.message)); }
+});
+
+/* ---------- Notifications ---------- */
+let notifUnread = 0, notifFirst = true;
+function paintBell(n) { const b = $('#bellBadge'); b.hidden = !n; b.textContent = n > 99 ? '99+' : n; }
+async function pollNotifs() {
+  const d = await api('notifications');
+  if (!notifFirst && d.unread > notifUnread) { const n = d.notifications.find(x => !x.read); if (n && !$('#notifScreen').classList.contains('open')) toast(`${n.user.name} liked your status`); }
+  notifFirst = false; notifUnread = d.unread; paintBell(d.unread);
+  if ($('#notifScreen').classList.contains('open')) renderNotifs(d);
+  return d;
+}
+let notifData = [];
+function renderNotifs(d) {
+  notifData = d.notifications; $('#notifCount').textContent = d.unread ? d.unread + ' new' : '';
+  $('#notifList').innerHTML = d.notifications.length ? d.notifications.map(n => `<div class="row nrow${n.read ? '' : ' unread'}${n.available ? '' : ' gone'}" data-nid="${n.id}">${avatar(n.user)}<div class="body"><div class="line"><strong>${esc(n.user.name)}</strong><span class="time">${stTime(n.created_at)}</span></div><div class="preview"><i class="fa-solid fa-heart heart-ic"></i>liked your status${n.available ? '' : ' · no longer available'}</div></div></div>`).join('')
+    : empty('fa-regular fa-bell', 'No notifications yet<small>When someone likes your status, you will see it here.</small>');
+}
+async function openNotifs() {
+  openScreen('notifScreen'); $('#notifList').innerHTML = skeleton();
+  try { renderNotifs(await pollNotifs()); } catch (err) { $('#notifList').innerHTML = empty('fa-solid fa-triangle-exclamation', esc(err.message)); }
+}
+$('#bellBtn').addEventListener('click', openNotifs);
+$('#notifReadAll').addEventListener('click', async () => { try { await api('notifications/read', { body: {} }); await pollNotifs(); } catch (err) { toast(err.message); } });
+$('#notifList').addEventListener('click', async e => {
+  const r = e.target.closest('[data-nid]'); if (!r) return; const n = notifData.find(x => x.id === +r.dataset.nid); if (!n) return;
+  if (!n.read) api('notifications/read', { body: { id: n.id } }).then(() => pollNotifs()).catch(() => {});
+  if (!n.available) return toast('This status is no longer available');
+  try { await loadStatuses(); } catch {}
+  const i = stMine.findIndex(s => s.id === n.status_id);
+  if (i < 0) return toast('This status is no longer available');
+  closeScreen('notifScreen'); svOpen('mine', 0, i);
+});
 
 /* ---------- View profile ---------- */
 let profUser = null;
