@@ -245,6 +245,8 @@ main::-webkit-scrollbar{display:none}
 .callscr .cun{color:rgba(255,255,255,.65);font-size:14px}
 .callscr .cst{margin-top:14px;font-size:16px;color:var(--gold);font-weight:600;min-height:24px;text-align:center}
 .callscr .cst.bad{color:#FF8A8A}
+.callscr .cdiag{margin-top:8px;font-size:11px;color:rgba(255,255,255,.5);text-align:center;min-height:14px;max-width:92%}
+.callscr.vlive .cdiag{align-self:flex-start;text-align:left}
 .callscr .cbtns{margin-top:auto;display:flex;gap:38px;align-items:flex-start;justify-content:center}
 .cbtn{display:flex;flex-direction:column;align-items:center;gap:8px;font-size:12px;color:rgba(255,255,255,.8)}
 .cbtn button{width:68px;height:68px;border-radius:50%;display:grid;place-items:center;font-size:25px;color:#fff;background:rgba(255,255,255,.16);transition:transform .15s,background .2s}
@@ -751,7 +753,7 @@ mark{background:var(--gold-s);color:inherit;border-radius:3px;padding:0 1px}
     <div class="cun" id="callKind">SUNLIGHT voice call</div>
     <div class="cav" id="callAv"></div>
     <h2 id="callName"></h2><div class="cun" id="callUser"></div>
-    <div class="cst" id="callState" aria-live="polite"></div>
+    <div class="cst" id="callState" aria-live="polite"></div><div class="cdiag" id="callDiag"></div>
     <div class="cbtns cact">
       <div class="cbtn mute" id="callMuteW"><button type="button" id="callMute" aria-label="Mute microphone" aria-pressed="false"><i class="fa-solid fa-microphone"></i></button><span id="callMuteTxt">Mute</span></div>
       <div class="cbtn ccam vonly" id="callCamW"><button type="button" id="callCam" aria-label="Turn camera off"><i class="fa-solid fa-video"></i></button><span id="callCamTxt">Camera</span></div>
@@ -1592,7 +1594,7 @@ function callShow(peer, incoming, video) {
 const callClock = () => call && call.t0 ? fmtDur(Math.floor((Date.now() - call.t0) / 1000)) : '0:00';
 function callCleanup(finalText, bad, delay = 1600) {          // stops the microphone, closes the connection, then closes the screen
   const c = call; if (!c || c.done) return; c.done = true;
-  clearTimeout(callTimer); clearInterval(c.clock); clearTimeout(c.lost); ringStop();
+  clearTimeout(callTimer); clearInterval(c.clock); clearTimeout(c.lost); clearTimeout(c.restartT); clearTimeout(c.connT); clearInterval(c.diag); $('#callDiag').textContent = ''; ringStop();
   if (c.stream) c.stream.getTracks().forEach(t => t.stop());
   if (c.pc) { try { c.pc.getSenders().forEach(s => { try { s.track && s.track.stop(); } catch {} }); c.pc.close(); } catch {} }
   callAudio.srcObject = null; $('#callRemote').srcObject = null; $('#callLocal').srcObject = null; callScr.classList.remove('vlive');
@@ -1600,7 +1602,8 @@ function callCleanup(finalText, bad, delay = 1600) {          // stops the micro
   setTimeout(() => { if (call === c) { call = null; callScr.classList.remove('open', 'ring', 'incoming', 'vcall'); callScr.setAttribute('aria-hidden', 'true'); } }, delay);
   loadCalls().catch(() => {}); callTick(3000);
 }
-async function getIce() { if (!iceCfg) { try { iceCfg = (await api('calls/ice')).iceServers; } catch { iceCfg = [{ urls: 'stun:stun.l.google.com:19302' }]; } } return iceCfg; }
+let iceInfo = { turn: false };
+async function getIce() { if (!iceCfg) { try { const d = await api('calls/ice'); iceCfg = d.iceServers; iceInfo = { turn: !!d.turn }; } catch { iceCfg = [{ urls: 'stun:stun.l.google.com:19302' }]; } } return iceCfg; }
 const VCON = f => ({ facingMode: f || 'user', width: { ideal: 640 }, height: { ideal: 480 }, frameRate: { ideal: 20, max: 24 } });   // modest video keeps data use low
 async function micStream(video) {
   try { return await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }, video: video ? VCON() : false }); }
@@ -1610,7 +1613,7 @@ async function micStream(video) {
   }
 }
 async function makePC() {
-  const c = call; const pc = c.pc = new RTCPeerConnection({ iceServers: await getIce() });
+  const c = call; const pc = c.pc = new RTCPeerConnection({ iceServers: await getIce(), iceCandidatePoolSize: 2 });
   c.stream.getTracks().forEach(t => pc.addTrack(t, c.stream));
   pc.onicecandidate = e => { if (e.candidate) api('calls/signal', { body: { id: c.id, kind: 'ice', payload: JSON.stringify(e.candidate) } }).catch(() => {}); };
   const lv = $('#callLocal'); if (c.stream.getVideoTracks().length) { lv.srcObject = new MediaStream(c.stream.getVideoTracks()); lv.play().catch(() => {}); }
@@ -1622,25 +1625,50 @@ async function makePC() {
     }
   };
   const st = () => {
-    if (call !== c || c.done) return; const s = pc.iceConnectionState;
+    if (call !== c || c.done) return; const s = pc.iceConnectionState; c.ice = s;
     if (s === 'connected' || s === 'completed') {
-      clearTimeout(c.lost); if (!c.t0) { c.t0 = Date.now(); c.clock = setInterval(() => { if (c.ui === 'connected') $('#callState').textContent = callClock(); }, 500); }
+      clearTimeout(c.lost); clearTimeout(c.restartT); clearTimeout(c.connT); if (!c.t0) { c.t0 = Date.now(); c.clock = setInterval(() => { if (c.ui === 'connected') $('#callState').textContent = callClock(); }, 500); }
       callUI('connected', callClock());
-    } else if (s === 'disconnected') { callUI('reconnecting', 'Reconnecting…'); clearTimeout(c.lost); c.lost = setTimeout(() => hangup('connection lost', 'Connection lost', true), 15000); }
-    else if (s === 'failed') hangup('failed', 'Connection failed', true);
+    } else if (s === 'disconnected' || s === 'failed') {
+      callUI('reconnecting', 'Reconnecting…'); clearTimeout(c.lost); c.lost = setTimeout(() => hangup('connection lost', 'Connection lost', true), 25000);
+      clearTimeout(c.restartT); c.restartT = setTimeout(() => iceRestart(c), s === 'failed' ? 300 : 3000);    // the caller renegotiates the network path
+    }
   };
   pc.oniceconnectionstatechange = st;
+  if (!c.t0) { clearTimeout(c.connT); c.connT = setTimeout(() => { if (call === c && !c.done && !c.t0) hangup('failed', 'Could not connect', true); }, 40000); }
+  c.diag = setInterval(() => diagTick(c), 2000);
   return pc;
+}
+async function iceRestart(c) {
+  if (call !== c || c.done || c.dir !== 'out' || !c.pc || c.restarting || (c.restarts = (c.restarts || 0) + 1) > 4) return;
+  c.restarting = true;
+  try { const o = await c.pc.createOffer({ iceRestart: true }); await c.pc.setLocalDescription(o); await api('calls/signal', { body: { id: c.id, kind: 'offer', payload: JSON.stringify(c.pc.localDescription) } }); } catch {}
+  c.restarting = false;
+  if (call === c && !c.done && c.pc.iceConnectionState !== 'connected' && c.pc.iceConnectionState !== 'completed') { clearTimeout(c.restartT); c.restartT = setTimeout(() => iceRestart(c), 6000); }
+}
+async function diagTick(c) {                     // one small line under the call state: what the network is actually doing
+  if (call !== c || c.done || !c.pc) return;
+  try {
+    const st = await c.pc.getStats(); let pair = null, inB = 0; const all = {};
+    st.forEach(s => { all[s.id] = s; });
+    st.forEach(s => { if (s.type === 'transport' && s.selectedCandidatePairId) pair = all[s.selectedCandidatePairId]; if (s.type === 'inbound-rtp') inB += s.bytesReceived || 0; });
+    if (!pair) st.forEach(s => { if (s.type === 'candidate-pair' && s.nominated && s.state === 'succeeded') pair = s; });
+    const path = pair ? ((all[pair.localCandidateId] || {}).candidateType || '?') + '/' + ((all[pair.remoteCandidateId] || {}).candidateType || '?') : 'none yet';
+    const flowing = inB > (c.lastIn || 0); c.lastIn = inB;
+    if (c.t0 && !flowing) c.quiet = (c.quiet || 0) + 1; else c.quiet = 0;
+    $('#callDiag').textContent = `${c.ice || c.pc.iceConnectionState} · path ${path} · ${iceInfo.turn ? 'TURN on' : 'no TURN'}` + (c.quiet >= 4 ? ' · no media received' : '');
+  } catch {}
 }
 const liveRefresh = c => { if (call === c) callScr.classList.toggle('vlive', !!(c.rvTrack && !c.rvTrack.muted && c.rvTrack.readyState === 'live' && !c.peerCamOff)); };
 async function flushIce(c) { while (c.pendingIce.length) { try { await c.pc.addIceCandidate(JSON.parse(c.pendingIce.shift())); } catch {} } }
 async function onSignal(c, s) {
   try {
-    if (s.kind === 'offer' && c.dir === 'in' && c.pc && !c.pc.remoteDescription) {
+    if (s.kind === 'offer' && c.dir === 'in' && !c.pc) c.pendingOffer = s;                  // the offer can arrive before our connection object exists: keep it
+    else if (s.kind === 'offer' && c.dir === 'in' && c.pc) {
       await c.pc.setRemoteDescription(JSON.parse(s.payload)); await flushIce(c);
       const ans = await c.pc.createAnswer(); await c.pc.setLocalDescription(ans);
       await api('calls/signal', { body: { id: c.id, kind: 'answer', payload: JSON.stringify(c.pc.localDescription) } });
-    } else if (s.kind === 'answer' && c.dir === 'out' && c.pc && !c.pc.remoteDescription) { await c.pc.setRemoteDescription(JSON.parse(s.payload)); await flushIce(c); }
+    } else if (s.kind === 'answer' && c.dir === 'out' && c.pc && c.pc.signalingState === 'have-local-offer') { await c.pc.setRemoteDescription(JSON.parse(s.payload)); await flushIce(c); }
     else if (s.kind === 'cam') { c.peerCamOff = s.payload === 'off'; liveRefresh(c); }
     else if (s.kind === 'ice') { if (c.pc && c.pc.remoteDescription) { try { await c.pc.addIceCandidate(JSON.parse(s.payload)); } catch {} } else c.pendingIce.push(s.payload); }
   } catch (e) { hangup('failed', 'Connection failed', true); }
@@ -1656,7 +1684,7 @@ async function startCall(peer, video) {
   const stream = await micStream(video); if (!stream) return;
   let d; try { d = await api('calls/start', { body: { to: peer.id, video: !!video } }); } catch (err) { stream.getTracks().forEach(t => t.stop()); return toast(err.message); }
   call = { id: d.call.id, video: !!video, peer: d.peer, dir: 'out', stream, since: 0, pendingIce: [], fails: 0 };
-  callShow(d.peer, false, video); const lv = $('#callLocal'); if (video) { lv.srcObject = new MediaStream(stream.getVideoTracks()); lv.play().catch(() => {}); } callUI('calling', video ? 'Video calling…' : 'Calling…'); callTick(600);
+  getIce(); callShow(d.peer, false, video); const lv = $('#callLocal'); if (video) { lv.srcObject = new MediaStream(stream.getVideoTracks()); lv.play().catch(() => {}); } callUI('calling', video ? 'Video calling…' : 'Calling…'); callTick(600);
 }
 async function acceptCall() {
   const c = call; if (!c || c.dir !== 'in' || c.accepting) return; c.accepting = true; ringStop();
@@ -1665,7 +1693,7 @@ async function acceptCall() {
   if (!stream && c.video && !c.stream) { stream = await micStream(false); if (stream) toast('Camera unavailable. Joining with voice only'); }
   if (!stream) { api('calls/reject', { body: { id: c.id } }).catch(() => {}); return callCleanup('Call declined', false, 500); }
   c.stream = stream; callUI('connecting', 'Connecting…');
-  try { await api('calls/answer', { body: { id: c.id } }); await makePC(); callTick(300); }
+  try { await api('calls/answer', { body: { id: c.id } }); await makePC(); if (c.pendingOffer) { const o = c.pendingOffer; c.pendingOffer = null; await onSignal(c, o); } callTick(300); }
   catch (err) { toast(err.message); callCleanup('Call ended', false, 600); }
 }
 async function rejectCall() { const c = call; if (!c) return; ringStop(); api('calls/reject', { body: { id: c.id } }).catch(() => {}); callCleanup('Call declined', false, 400); }
@@ -1697,7 +1725,7 @@ async function callTick(delay) {
       const d = await api('calls/poll');                     // idle: is someone calling me?
       if (d.incoming && !call) {
         call = { id: d.incoming.id, video: !!d.incoming.video, peer: d.incoming.from, dir: 'in', since: 0, pendingIce: [], fails: 0 };
-        callShow(d.incoming.from, true, call.video); callUI('incoming', call.video ? 'Incoming video call…' : 'Incoming voice call…'); ringStart(); return callTick(1500);
+        getIce(); callShow(d.incoming.from, true, call.video); callUI('incoming', call.video ? 'Incoming video call…' : 'Incoming voice call…'); ringStart(); return callTick(1500);
       }
     } catch (err) {
       if (c && ++c.fails >= 12) return callCleanup('Connection lost', true);      // ~12 seconds without reaching the server
