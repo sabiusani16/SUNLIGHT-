@@ -27,3 +27,14 @@ database_id = "14778838-61d9-4fd5-a6be-a7d778348def"
 # [[r2_buckets]]
 # binding = "MEDIA"
 # bucket_name = "sunlight-media"
+
+# ---- Voice calls: TURN (optional but strongly recommended) ------------------
+# Calls work without any setup on most networks (STUN is built in). On some
+# mobile networks the audio can only get through a TURN relay. To enable it:
+#   1. Cloudflare dashboard > Realtime > TURN Server > Create a TURN key
+#      (copy the Key ID and the API token)
+#   2. Workers & Pages > sunlight > Settings > Variables and Secrets > add TWO secrets:
+#        TURN_KEY_ID         = <the Key ID>
+#        TURN_KEY_API_TOKEN  = <the API token>
+#   3. Redeploy. The app then asks Cloudflare for short-lived credentials per call.
+# Never write these two values into this file or into GitHub.
