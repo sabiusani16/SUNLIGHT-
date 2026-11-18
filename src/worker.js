@@ -6,6 +6,7 @@ const rand = n => hex(crypto.getRandomValues(new Uint8Array(n)));
 const REPORT_REASONS = ['spam', 'harassment', 'inappropriate', 'scam', 'threats', 'other'];
 const THEME_BG = ['midnight', 'forest', 'gold', 'ocean', 'rose', 'slate', 'dots'], THEME_COLOR = ['gold', 'blue', 'purple', 'rose', 'teal'];   // allowed chat themes (anything else is rejected)
 const PAGE = null; /*__PAGE__*/
+const RING_MS = 45000, BEAT_MS = 25000, STUN = [{ urls: ['stun:stun.cloudflare.com:3478', 'stun:stun.l.google.com:19302'] }];
 const ONLINE_MS = 30000, SESSION_MS = 30 * 864e5;
 const EMAIL = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 const likeEsc = s => s.replace(/[\\%_]/g, '\\$&');            // escape LIKE wildcards in user input
@@ -59,6 +60,11 @@ const TABLES = [
   `CREATE TABLE IF NOT EXISTS status_likes (status_id INTEGER NOT NULL, user_id INTEGER NOT NULL, created_at INTEGER NOT NULL, PRIMARY KEY (status_id, user_id))`,
   `CREATE TABLE IF NOT EXISTS notifications (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, type TEXT NOT NULL, actor_id INTEGER NOT NULL, status_id INTEGER, created_at INTEGER NOT NULL, read_at INTEGER, UNIQUE (user_id, type, actor_id, status_id))`,
   `CREATE INDEX IF NOT EXISTS idx_notif_user ON notifications(user_id, id)`,
+  `CREATE TABLE IF NOT EXISTS calls (id INTEGER PRIMARY KEY AUTOINCREMENT, caller_id INTEGER NOT NULL, callee_id INTEGER NOT NULL, state TEXT NOT NULL DEFAULT 'ringing', created_at INTEGER NOT NULL, ringing_at INTEGER, answered_at INTEGER, ended_at INTEGER, end_reason TEXT, duration INTEGER NOT NULL DEFAULT 0, caller_beat INTEGER NOT NULL DEFAULT 0, callee_beat INTEGER NOT NULL DEFAULT 0)`,
+  `CREATE INDEX IF NOT EXISTS idx_calls_caller ON calls(caller_id, id)`,
+  `CREATE INDEX IF NOT EXISTS idx_calls_callee ON calls(callee_id, id)`,
+  `CREATE TABLE IF NOT EXISTS call_signals (id INTEGER PRIMARY KEY AUTOINCREMENT, call_id INTEGER NOT NULL, to_user INTEGER NOT NULL, kind TEXT NOT NULL, payload TEXT NOT NULL, created_at INTEGER NOT NULL)`,
+  `CREATE INDEX IF NOT EXISTS idx_signals_to ON call_signals(to_user, call_id, id)`,
   `CREATE INDEX IF NOT EXISTS idx_status_user ON statuses(user_id, expires_at)`,
   `CREATE INDEX IF NOT EXISTS idx_status_media ON statuses(media_key)`,
   `CREATE TABLE IF NOT EXISTS status_views (status_id INTEGER NOT NULL, viewer_id INTEGER NOT NULL, viewed_at INTEGER NOT NULL, PRIMARY KEY (status_id, viewer_id))`
@@ -333,6 +339,93 @@ async function route(req, env, url) {
     if (body.id != null) await db.prepare('UPDATE notifications SET read_at=? WHERE id=? AND user_id=? AND read_at IS NULL').bind(now, Number(body.id), me.id).run();
     else await db.prepare('UPDATE notifications SET read_at=? WHERE user_id=? AND read_at IS NULL').bind(now, me.id).run();
     return json({ ok: true });
+  }
+
+  // ---- voice calls: WebRTC audio, signaling relayed through D1 (the audio itself never touches the Worker) ----
+  if (p.startsWith('calls/')) {
+    const sweep = async () => {                             // time out unanswered calls, end calls whose other side stopped sending heartbeats, drop old signals
+      const dead = await db.prepare("SELECT id FROM calls WHERE state='ringing' AND created_at<?").bind(now - RING_MS).all();
+      await db.prepare("UPDATE calls SET state='missed',ended_at=?1,end_reason='no answer' WHERE state='ringing' AND created_at<?2").bind(now, now - RING_MS).run();
+      await db.prepare("UPDATE calls SET state='ended',ended_at=?1,end_reason='connection lost',duration=MAX(0,(?1-answered_at)/1000) WHERE state='active' AND (caller_beat<?2 OR callee_beat<?2)").bind(now, now - BEAT_MS).run();
+      await db.prepare('DELETE FROM call_signals WHERE created_at<?').bind(now - 600000).run();
+      for (const d of dead.results) await db.prepare('DELETE FROM call_signals WHERE call_id=?').bind(d.id).run();
+    };
+    const finish = async (c, state, reason) => {            // one row per call: its state is updated in place, never duplicated
+      if (c.state !== 'ringing' && c.state !== 'active') return c;
+      const dur = c.state === 'active' && c.answered_at ? Math.max(0, Math.round((now - c.answered_at) / 1000)) : 0;
+      await db.prepare("UPDATE calls SET state=?,ended_at=?,end_reason=?,duration=? WHERE id=? AND state IN ('ringing','active')").bind(state, now, reason, dur, c.id).run();
+      await db.prepare('DELETE FROM call_signals WHERE call_id=?').bind(c.id).run();
+      return db.prepare('SELECT * FROM calls WHERE id=?').bind(c.id).first();
+    };
+    const mine = async id => { const c = await db.prepare('SELECT * FROM calls WHERE id=? AND (caller_id=? OR callee_id=?)').bind(Number(id) || 0, me.id, me.id).first(); return c || null; };
+    const view = c => ({ id: c.id, state: c.state, ringing: !!c.ringing_at, answered_at: c.answered_at, end_reason: c.end_reason, duration: c.duration, caller_id: c.caller_id, callee_id: c.callee_id });
+
+    if (p === 'calls/ice' && !post) {
+      let ice = STUN, turn = false;
+      if (env.TURN_KEY_ID && env.TURN_KEY_API_TOKEN) {      // TURN credentials are minted per call by Cloudflare from YOUR key; nothing is hard-coded
+        try {
+          const r = await fetch(`https://rtc.live.cloudflare.com/v1/turn/keys/${env.TURN_KEY_ID}/credentials/generate-ice-servers`, { method: 'POST', headers: { authorization: 'Bearer ' + env.TURN_KEY_API_TOKEN, 'content-type': 'application/json' }, body: JSON.stringify({ ttl: 3600 }) });
+          if (r.ok) { const d = await r.json(), s = Array.isArray(d.iceServers) ? d.iceServers : d.iceServers ? [d.iceServers] : []; if (s.length) { ice = s; turn = s.some(x => [].concat(x.urls).some(u => /^turns?:/.test(u))); } }
+        } catch {}
+      }
+      return json({ iceServers: ice, turn });
+    }
+    await sweep();
+    if (p === 'calls/start' && post) {
+      const to = Number(body.to), callee = to && to !== me.id ? await db.prepare('SELECT id,name,username,avatar_key,last_seen FROM users WHERE id=?').bind(to).first() : null;
+      if (!callee) return json({ error: 'User not found' }, 404);
+      if (await eitherBlocked(me.id, to)) return json({ error: 'You cannot call this user' }, 403);
+      const known = await db.prepare('SELECT 1 ok FROM contacts WHERE (owner_id=?1 AND contact_id=?2) OR (owner_id=?2 AND contact_id=?1) UNION SELECT 1 FROM messages WHERE (sender_id=?1 AND receiver_id=?2) OR (sender_id=?2 AND receiver_id=?1) LIMIT 1').bind(me.id, to).first();
+      if (!known) return json({ error: 'You can only call your contacts' }, 403);
+      const busy = await db.prepare("SELECT id FROM calls WHERE state IN ('ringing','active') AND (caller_id IN (?1,?2) OR callee_id IN (?1,?2)) LIMIT 1").bind(me.id, to).first();
+      if (busy) return json({ error: 'Line is busy. Try again in a moment.' }, 409);
+      const recent = await db.prepare('SELECT COUNT(*) n FROM calls WHERE caller_id=? AND created_at>?').bind(me.id, now - 3600000).first();
+      if (recent.n >= 40) return json({ error: 'Too many calls. Please wait a while.' }, 429);
+      const r = await db.prepare("INSERT INTO calls(caller_id,callee_id,state,created_at,caller_beat,callee_beat) VALUES(?,?,'ringing',?,?,?)").bind(me.id, to, now, now, now).run();
+      return json({ call: { id: r.meta.last_row_id, state: 'ringing' }, peer: publicUser(callee, now) });
+    }
+    if (p === 'calls/poll' && !post) {
+      const cid = Number(url.searchParams.get('call_id')) || 0, since = Number(url.searchParams.get('since')) || 0;
+      let call = cid ? await mine(cid) : null;
+      if (call && call.state === 'active') await db.prepare(`UPDATE calls SET ${call.caller_id === me.id ? 'caller_beat' : 'callee_beat'}=? WHERE id=?`).bind(now, call.id).run();
+      if (call && call.state === 'ringing' && call.caller_id === me.id) await db.prepare('UPDATE calls SET caller_beat=? WHERE id=?').bind(now, call.id).run();
+      const inc = await db.prepare("SELECT c.*,u.name,u.username,u.avatar_key,u.last_seen FROM calls c JOIN users u ON u.id=c.caller_id WHERE c.callee_id=? AND c.state='ringing' ORDER BY c.id DESC LIMIT 1").bind(me.id).first();
+      if (inc && !inc.ringing_at) await db.prepare('UPDATE calls SET ringing_at=? WHERE id=?').bind(now, inc.id).run();   // the caller now sees "Ringing"
+      const sig = call && (call.state === 'ringing' || call.state === 'active') ? (await db.prepare('SELECT id,kind,payload FROM call_signals WHERE call_id=? AND to_user=? AND id>? ORDER BY id LIMIT 100').bind(call.id, me.id, since).all()).results : [];
+      if (cid) call = await mine(cid);
+      return json({ incoming: inc ? { id: inc.id, from: publicUser({ id: inc.caller_id, name: inc.name, username: inc.username, avatar_key: inc.avatar_key, last_seen: inc.last_seen }, now) } : null, call: call ? view(call) : null, signals: sig });
+    }
+    if (p === 'calls/answer' && post) {
+      const c = await mine(body.id); if (!c || c.callee_id !== me.id) return json({ error: 'Call not found' }, 404);
+      if (c.state !== 'ringing') return json({ error: 'This call has ended', call: view(c) }, 409);
+      await db.prepare("UPDATE calls SET state='active',answered_at=?1,caller_beat=?1,callee_beat=?1 WHERE id=? AND state='ringing'").bind(now, c.id).run();
+      return json({ call: view(await mine(c.id)) });
+    }
+    if (p === 'calls/reject' && post) {
+      const c = await mine(body.id); if (!c || c.callee_id !== me.id) return json({ error: 'Call not found' }, 404);
+      return json({ call: view(await finish(c, 'rejected', 'declined')) });
+    }
+    if (p === 'calls/end' && post) {                        // idempotent: ending a finished call changes nothing
+      const c = await mine(body.id); if (!c) return json({ error: 'Call not found' }, 404);
+      const reason = ['hangup', 'failed', 'connection lost'].includes(body.reason) ? body.reason : 'hangup';
+      const state = c.state === 'ringing' ? (c.caller_id === me.id ? 'missed' : 'rejected') : reason === 'failed' ? 'failed' : 'ended';
+      return json({ call: view(await finish(c, state, c.state === 'ringing' ? (c.caller_id === me.id ? 'cancelled' : 'declined') : reason)) });
+    }
+    if (p === 'calls/signal' && post) {
+      const c = await mine(body.id); if (!c) return json({ error: 'Call not found' }, 404);
+      if (c.state !== 'ringing' && c.state !== 'active') return json({ error: 'This call has ended', call: view(c) }, 409);
+      const kind = String(body.kind || ''), payload = typeof body.payload === 'string' ? body.payload : JSON.stringify(body.payload || null);
+      if (!['offer', 'answer', 'ice'].includes(kind) || payload.length > 16000) return json({ error: 'Invalid signal' }, 400);
+      if ((kind === 'offer' && c.caller_id !== me.id) || (kind === 'answer' && c.callee_id !== me.id)) return json({ error: 'Not allowed' }, 403);
+      if (kind !== 'ice' && c.state !== 'active') return json({ error: 'Call not accepted yet' }, 409);
+      await db.prepare('INSERT INTO call_signals(call_id,to_user,kind,payload,created_at) VALUES(?,?,?,?,?)').bind(c.id, c.caller_id === me.id ? c.callee_id : c.caller_id, kind, payload, now).run();
+      return json({ ok: true });
+    }
+    if (p === 'calls/history' && !post) {
+      const { results } = await db.prepare(`SELECT c.id,c.caller_id,c.state,c.created_at,c.duration,u.id uid,u.name,u.username,u.avatar_key,u.last_seen FROM calls c JOIN users u ON u.id=CASE WHEN c.caller_id=?1 THEN c.callee_id ELSE c.caller_id END WHERE (c.caller_id=?1 OR c.callee_id=?1) AND c.state!='ringing' ORDER BY c.id DESC LIMIT 100`).bind(me.id).all();
+      return json({ calls: results.map(c => ({ id: c.id, direction: c.caller_id === me.id ? 'out' : 'in', state: c.state, created_at: c.created_at, duration: c.duration, peer: publicUser({ id: c.uid, name: c.name, username: c.username, avatar_key: c.avatar_key, last_seen: c.last_seen }, now) })) });
+    }
+    return json({ error: 'Not found' }, 404);
   }
 
   if (p === 'chats') {
