@@ -232,6 +232,34 @@ main::-webkit-scrollbar{display:none}
 .cam.err .cam-msg{display:flex}.cam.err .cam-bot{visibility:hidden}
 .cam-msg button{background:var(--gold);color:var(--green-d);font-weight:700;padding:11px 22px;border-radius:22px}
 .ip-retake{background:rgba(255,255,255,.14);color:#fff;border-radius:22px;padding:11px 16px;font-weight:600;font-size:14px;flex:none;display:flex;gap:6px;align-items:center}
+
+/* voice calls */
+.callscr{position:fixed;inset:0;z-index:110;display:flex;flex-direction:column;align-items:center;padding:calc(64px + env(safe-area-inset-top,0px)) 24px calc(40px + env(safe-area-inset-bottom,0px));background:radial-gradient(120% 80% at 50% 0%,#0E4A37 0%,#06241A 55%,#030D09 100%);color:#fff;opacity:0;pointer-events:none;transform:translateY(14px);transition:opacity .25s ease,transform .25s ease}
+.callscr.open{opacity:1;pointer-events:auto;transform:none}
+.callscr .cav{position:relative;margin-top:26px}
+.callscr .cav .avatar{width:132px;height:132px;font-size:46px;border:3px solid rgba(245,197,66,.55)}
+.callscr.ring .cav::before,.callscr.ring .cav::after{content:"";position:absolute;inset:-4px;border-radius:50%;border:2px solid rgba(245,197,66,.55);animation:cring 2s ease-out infinite}
+.callscr.ring .cav::after{animation-delay:1s}
+@keyframes cring{from{transform:scale(1);opacity:.8}to{transform:scale(1.7);opacity:0}}
+.callscr h2{margin:26px 0 4px;font-size:26px;font-weight:700;text-align:center}
+.callscr .cun{color:rgba(255,255,255,.65);font-size:14px}
+.callscr .cst{margin-top:14px;font-size:16px;color:var(--gold);font-weight:600;min-height:24px;text-align:center}
+.callscr .cst.bad{color:#FF8A8A}
+.callscr .cbtns{margin-top:auto;display:flex;gap:38px;align-items:flex-start;justify-content:center}
+.cbtn{display:flex;flex-direction:column;align-items:center;gap:8px;font-size:12px;color:rgba(255,255,255,.8)}
+.cbtn button{width:68px;height:68px;border-radius:50%;display:grid;place-items:center;font-size:25px;color:#fff;background:rgba(255,255,255,.16);transition:transform .15s,background .2s}
+.cbtn button:active{transform:scale(.92)}
+.cbtn.end button,.cbtn.rej button{background:#E5484D}
+.cbtn.acc button{background:#2FB86B;animation:cpulse 1.4s ease-in-out infinite}
+@keyframes cpulse{50%{transform:scale(1.08)}}
+.cbtn.mute.on button{background:#fff;color:#06241A}
+.callscr .cinc{display:none}
+.callscr.incoming .cinc{display:flex}.callscr.incoming .cact{display:none}
+.callscr:not(.incoming) .cinc{display:none}
+.callscr .cenc{margin-top:18px;font-size:12px;color:rgba(255,255,255,.45)}
+.crow .cmeta{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--muted)}
+.crow .cmeta .miss{color:#FF6B6B}.crow strong.miss{color:#FF6B6B}
+.crow .cback{flex:none;color:var(--gold);width:40px;height:40px;border-radius:50%;display:grid;place-items:center;font-size:18px}
 .rec-dot{width:11px;height:11px;border-radius:50%;background:#D64545;animation:blink 1s infinite}
 @keyframes blink{50%{opacity:.25}}
 .rec-hint{flex:1;color:var(--muted);font-size:14px}
@@ -633,7 +661,7 @@ mark{background:var(--gold-s);color:inherit;border-radius:3px;padding:0 1px}
       <div class="grow"><strong id="chatName"></strong><small id="chatState"></small></div>
       <button class="icon-btn light" id="favBtn" aria-label="Favorite"><i class="fa-regular fa-star"></i></button>
       <button class="icon-btn light" data-toast="Video calls are coming in the next update" aria-label="Video call"><i class="fa-solid fa-video"></i></button>
-      <button class="icon-btn light" data-toast="Voice calls are coming in the next update" aria-label="Voice call"><i class="fa-solid fa-phone"></i></button>
+      <button class="icon-btn light" id="callBtn" aria-label="Voice call"><i class="fa-solid fa-phone"></i></button>
       <button class="icon-btn light" id="chatMenuBtn" aria-label="Chat options" aria-haspopup="true" aria-expanded="false"><i class="fa-solid fa-ellipsis-vertical"></i></button>
     </div>
     <div id="cmBg" hidden></div>
@@ -701,6 +729,22 @@ mark{background:var(--gold-s);color:inherit;border-radius:3px;padding:0 1px}
       <div class="cam-bot"><div class="cam-modes" id="camModes"><button type="button" class="on" data-cm="photo">Photo</button><button type="button" data-cm="video" id="camVidMode">Video</button></div>
         <div class="cam-row"><button type="button" class="shutter" id="camShutter" aria-label="Take photo"><i></i></button></div></div>
     </div>
+  </div>
+
+  <div class="callscr" id="callScr" role="dialog" aria-label="Voice call" aria-hidden="true">
+    <div class="cun" id="callKind">SUNLIGHT voice call</div>
+    <div class="cav" id="callAv"></div>
+    <h2 id="callName"></h2><div class="cun" id="callUser"></div>
+    <div class="cst" id="callState" aria-live="polite"></div>
+    <div class="cbtns cact">
+      <div class="cbtn mute" id="callMuteW"><button type="button" id="callMute" aria-label="Mute microphone" aria-pressed="false"><i class="fa-solid fa-microphone"></i></button><span id="callMuteTxt">Mute</span></div>
+      <div class="cbtn end"><button type="button" id="callEnd" aria-label="End call"><i class="fa-solid fa-phone-slash"></i></button><span>End</span></div>
+    </div>
+    <div class="cbtns cinc">
+      <div class="cbtn rej"><button type="button" id="callReject" aria-label="Reject call"><i class="fa-solid fa-phone-slash"></i></button><span>Reject</span></div>
+      <div class="cbtn acc"><button type="button" id="callAccept" aria-label="Accept call"><i class="fa-solid fa-phone"></i></button><span>Accept</span></div>
+    </div>
+    <audio id="callAudio" autoplay playsinline></audio>
   </div>
 
   <!-- AUTH -->
@@ -882,6 +926,7 @@ $('#authForm').addEventListener('submit', async e => {
 });
 
 function logout(silent) {
+  if (typeof call !== 'undefined' && call && !call.done) hangup();
   if (token && !silent) api('logout', { method: 'POST', body: {} }).catch(() => {});
   token = null; me = null; current = null; chats = []; contacts = []; results = [];
   localStorage.removeItem('sl_token');
@@ -897,7 +942,7 @@ async function start(user) {
   renderProfile();
   await Promise.all([loadChats(), loadContacts(), loadStatuses()]).catch(() => {});
   showView('chats');
-  openChatFromLink(); notifFirst = true; pollNotifs().catch(() => {});
+  openChatFromLink(); callTick(1200); notifFirst = true; pollNotifs().catch(() => {});
   clearInterval(pollTimer);
   pollTimer = setInterval(poll, 4000);
 }
@@ -987,7 +1032,7 @@ function renderLists() {
   $('#contactCount').textContent = `${contacts.length} contact${contacts.length === 1 ? '' : 's'}`;
 }
 $('#communityList').innerHTML = empty('fa-solid fa-users', 'Communities are coming soon');
-$('#callList').innerHTML = empty('fa-solid fa-phone', 'Voice and video calls are coming soon');
+$('#callList').innerHTML = empty('fa-solid fa-phone', 'No calls yet<small>Open a chat and tap the phone icon to call.</small>');
 
 /* ---------- Navigation ---------- */
 function showView(name) {
@@ -996,6 +1041,7 @@ function showView(name) {
   $('#fab').classList.toggle('hide', name !== 'chats');
   $('#main').scrollTop = 0;
   if (name !== 'chats') closeSearch();
+  if (name === 'calls' && typeof loadCalls === 'function') loadCalls();
 }
 $('#bottomNav').addEventListener('click', e => { const b = e.target.closest('.nav-item'); if (b) showView(b.dataset.view); });
 $('#tabs').addEventListener('click', e => {
@@ -1496,6 +1542,158 @@ $('#camModes').addEventListener('click', async e => { const b = e.target.closest
 $('#camShutter').addEventListener('click', () => { if (camEl.classList.contains('err')) return; camMode === 'photo' ? camShoot() : camRec ? camRecordStop() : camRecordStart(); });
 $('#ipRetake').addEventListener('click', () => { closePreview(); openCamera(); });
 document.addEventListener('visibilitychange', () => { if (document.hidden && camEl.classList.contains('open')) closeCamera(); });   // never keep the camera on in the background
+
+
+/* ---------- Voice calls (WebRTC audio; the Worker only relays the offer/answer/ICE messages) ---------- */
+let call = null, callTimer = 0, iceCfg = null, ringCtx = null, ringTimer = 0, idleBusy = false;
+const callScr = $('#callScr'), callAudio = $('#callAudio');
+const rtcOk = () => !!(window.RTCPeerConnection && navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
+function ringStart() {
+  ringStop();
+  const beep = () => { try {
+    ringCtx = ringCtx || new (window.AudioContext || window.webkitAudioContext)(); if (ringCtx.state === 'suspended') ringCtx.resume();
+    [0, .35].forEach(d => { const o = ringCtx.createOscillator(), g = ringCtx.createGain(); o.frequency.value = 440 + d * 400; o.connect(g); g.connect(ringCtx.destination); const t = ringCtx.currentTime + d; g.gain.setValueAtTime(.0001, t); g.gain.exponentialRampToValueAtTime(.12, t + .03); g.gain.exponentialRampToValueAtTime(.0001, t + .3); o.start(t); o.stop(t + .32); });
+  } catch {} try { navigator.vibrate && navigator.vibrate([300, 150, 300]); } catch {} };
+  beep(); ringTimer = setInterval(beep, 2200);
+}
+function ringStop() { clearInterval(ringTimer); ringTimer = 0; try { navigator.vibrate && navigator.vibrate(0); } catch {} }
+function callUI(state, text, bad) {
+  const c = call; if (c) c.ui = state;
+  callScr.classList.toggle('incoming', state === 'incoming'); callScr.classList.toggle('ring', state === 'calling' || state === 'ringing' || state === 'incoming');
+  const el = $('#callState'); el.textContent = text; el.classList.toggle('bad', !!bad);
+}
+function callShow(peer, incoming) {
+  $('#callAv').innerHTML = avatar(peer); $('#callName').textContent = peer.name; $('#callUser').textContent = '@' + peer.username;
+  $('#callKind').textContent = incoming ? 'Incoming voice call' : 'SUNLIGHT voice call';
+  $('#callMute').classList.remove('on'); $('#callMuteW').classList.remove('on'); $('#callMuteTxt').textContent = 'Mute';
+  callScr.classList.add('open'); callScr.setAttribute('aria-hidden', 'false');
+}
+const callClock = () => call && call.t0 ? fmtDur(Math.floor((Date.now() - call.t0) / 1000)) : '0:00';
+function callCleanup(finalText, bad, delay = 1600) {          // stops the microphone, closes the connection, then closes the screen
+  const c = call; if (!c || c.done) return; c.done = true;
+  clearTimeout(callTimer); clearInterval(c.clock); clearTimeout(c.lost); ringStop();
+  if (c.stream) c.stream.getTracks().forEach(t => t.stop());
+  if (c.pc) { try { c.pc.getSenders().forEach(s => { try { s.track && s.track.stop(); } catch {} }); c.pc.close(); } catch {} }
+  callAudio.srcObject = null;
+  callUI('ended', finalText, bad);
+  setTimeout(() => { if (call === c) { call = null; callScr.classList.remove('open', 'ring', 'incoming'); callScr.setAttribute('aria-hidden', 'true'); } }, delay);
+  loadCalls().catch(() => {}); callTick(3000);
+}
+async function getIce() { if (!iceCfg) { try { iceCfg = (await api('calls/ice')).iceServers; } catch { iceCfg = [{ urls: 'stun:stun.l.google.com:19302' }]; } } return iceCfg; }
+async function micStream() {
+  try { return await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }, video: false }); }
+  catch (e) {
+    toast(e.name === 'NotAllowedError' || e.name === 'SecurityError' ? 'Allow microphone access to make calls' : e.name === 'NotFoundError' ? 'No microphone found on this device' : e.name === 'NotReadableError' ? 'The microphone is being used by another app' : 'Could not start the microphone');
+    return null;
+  }
+}
+async function makePC() {
+  const c = call; const pc = c.pc = new RTCPeerConnection({ iceServers: await getIce() });
+  c.stream.getTracks().forEach(t => pc.addTrack(t, c.stream));
+  pc.onicecandidate = e => { if (e.candidate) api('calls/signal', { body: { id: c.id, kind: 'ice', payload: JSON.stringify(e.candidate) } }).catch(() => {}); };
+  pc.ontrack = e => { callAudio.srcObject = e.streams[0] || new MediaStream([e.track]); callAudio.play().catch(() => {}); };
+  const st = () => {
+    if (call !== c || c.done) return; const s = pc.iceConnectionState;
+    if (s === 'connected' || s === 'completed') {
+      clearTimeout(c.lost); if (!c.t0) { c.t0 = Date.now(); c.clock = setInterval(() => { if (c.ui === 'connected') $('#callState').textContent = callClock(); }, 500); }
+      callUI('connected', callClock());
+    } else if (s === 'disconnected') { callUI('reconnecting', 'Reconnecting…'); clearTimeout(c.lost); c.lost = setTimeout(() => hangup('connection lost', 'Connection lost', true), 15000); }
+    else if (s === 'failed') hangup('failed', 'Connection failed', true);
+  };
+  pc.oniceconnectionstatechange = st;
+  return pc;
+}
+async function flushIce(c) { while (c.pendingIce.length) { try { await c.pc.addIceCandidate(JSON.parse(c.pendingIce.shift())); } catch {} } }
+async function onSignal(c, s) {
+  try {
+    if (s.kind === 'offer' && c.dir === 'in' && c.pc && !c.pc.remoteDescription) {
+      await c.pc.setRemoteDescription(JSON.parse(s.payload)); await flushIce(c);
+      const ans = await c.pc.createAnswer(); await c.pc.setLocalDescription(ans);
+      await api('calls/signal', { body: { id: c.id, kind: 'answer', payload: JSON.stringify(c.pc.localDescription) } });
+    } else if (s.kind === 'answer' && c.dir === 'out' && c.pc && !c.pc.remoteDescription) { await c.pc.setRemoteDescription(JSON.parse(s.payload)); await flushIce(c); }
+    else if (s.kind === 'ice') { if (c.pc && c.pc.remoteDescription) { try { await c.pc.addIceCandidate(JSON.parse(s.payload)); } catch {} } else c.pendingIce.push(s.payload); }
+  } catch (e) { hangup('failed', 'Connection failed', true); }
+}
+async function startOffer(c) {
+  if (c.offered) return; c.offered = true; callUI('connecting', 'Connecting…');
+  try { await makePC(); const o = await c.pc.createOffer(); await c.pc.setLocalDescription(o); await api('calls/signal', { body: { id: c.id, kind: 'offer', payload: JSON.stringify(c.pc.localDescription) } }); }
+  catch { hangup('failed', 'Connection failed', true); }
+}
+async function startCall(peer) {
+  if (call) return toast('You are already in a call');
+  if (!rtcOk() || !window.isSecureContext) return toast('Voice calls are not supported on this browser');
+  const stream = await micStream(); if (!stream) return;
+  let d; try { d = await api('calls/start', { body: { to: peer.id } }); } catch (err) { stream.getTracks().forEach(t => t.stop()); return toast(err.message); }
+  call = { id: d.call.id, peer: d.peer, dir: 'out', stream, since: 0, pendingIce: [], fails: 0 };
+  callShow(d.peer, false); callUI('calling', 'Calling…'); callTick(600);
+}
+async function acceptCall() {
+  const c = call; if (!c || c.dir !== 'in' || c.accepting) return; c.accepting = true; ringStop();
+  if (!rtcOk()) { hangup('failed', 'Calls are not supported here', true); return; }
+  const stream = await micStream();
+  if (!stream) { api('calls/reject', { body: { id: c.id } }).catch(() => {}); return callCleanup('Call declined', false, 500); }
+  c.stream = stream; callUI('connecting', 'Connecting…');
+  try { await api('calls/answer', { body: { id: c.id } }); await makePC(); callTick(300); }
+  catch (err) { toast(err.message); callCleanup('Call ended', false, 600); }
+}
+async function rejectCall() { const c = call; if (!c) return; ringStop(); api('calls/reject', { body: { id: c.id } }).catch(() => {}); callCleanup('Call declined', false, 400); }
+async function hangup(reason = 'hangup', text = 'Call ended', bad = false) {
+  const c = call; if (!c || c.done) return;
+  if (c.dir === 'in' && c.ui === 'incoming') return rejectCall();
+  api('calls/end', { body: { id: c.id, reason } }).catch(() => {}); callCleanup(text, bad);
+}
+const FINAL = { rejected: ['Declined', false], missed: ['No answer', false], ended: ['Call ended', false], failed: ['Connection failed', true] };
+async function callTick(delay) {
+  clearTimeout(callTimer); callTimer = setTimeout(async () => {
+    if (!me) return; const c = call;
+    try {
+      if (c && c.done) return callTick(3000);
+      if (c) {
+        const d = await api(`calls/poll?call_id=${c.id}&since=${c.since}`); c.fails = 0; if (call !== c || c.done) return;
+        const sv = d.call;
+        if (!sv || FINAL[sv.state]) {
+          const k = sv ? FINAL[sv.state] : ['Call ended', false];
+          return callCleanup(c.dir === 'in' && sv && sv.state === 'missed' ? 'Missed call' : sv && sv.end_reason === 'connection lost' ? 'Connection lost' : k[0], k[1] || (sv && sv.end_reason === 'connection lost'));
+        }
+        for (const s of d.signals) { c.since = Math.max(c.since, s.id); await onSignal(c, s); }
+        if (c.dir === 'out') {
+          if (sv.state === 'ringing') callUI('ringing', sv.ringing ? 'Ringing…' : 'Calling…');
+          else if (sv.state === 'active' && !c.offered) await startOffer(c);
+        }
+        return callTick(c.ui === 'incoming' ? 1500 : 1000);
+      }
+      const d = await api('calls/poll');                     // idle: is someone calling me?
+      if (d.incoming && !call) {
+        call = { id: d.incoming.id, peer: d.incoming.from, dir: 'in', since: 0, pendingIce: [], fails: 0 };
+        callShow(d.incoming.from, true); callUI('incoming', 'Incoming voice call…'); ringStart(); return callTick(1500);
+      }
+    } catch (err) {
+      if (c && ++c.fails >= 12) return callCleanup('Connection lost', true);      // ~12 seconds without reaching the server
+    }
+    callTick(call && !call.done ? 1000 : 3000);
+  }, delay);
+}
+$('#callBtn').addEventListener('click', () => { if (!current) return; if (current.blocked) return toast('Unblock this user to call them'); startCall(current); });
+$('#callAccept').addEventListener('click', acceptCall); $('#callReject').addEventListener('click', rejectCall);
+$('#callEnd').addEventListener('click', () => hangup());
+$('#callMute').addEventListener('click', () => {
+  const c = call; if (!c || !c.stream) return; const on = !c.muted; c.muted = on;
+  c.stream.getAudioTracks().forEach(t => t.enabled = !on);
+  $('#callMute').classList.toggle('on', on); $('#callMuteW').classList.toggle('on', on); $('#callMute').setAttribute('aria-pressed', on);
+  $('#callMute i').className = 'fa-solid ' + (on ? 'fa-microphone-slash' : 'fa-microphone'); $('#callMuteTxt').textContent = on ? 'Unmute' : 'Mute';
+});
+window.addEventListener('beforeunload', () => { if (call && !call.done && token) { try { fetch((window.SUNLIGHT_API || '') + '/api/calls/end', { method: 'POST', keepalive: true, headers: { 'content-type': 'application/json', authorization: 'Bearer ' + token }, body: JSON.stringify({ id: call.id, reason: 'hangup' }) }); } catch {} } });
+
+/* call history in the Calls tab: one row per call */
+async function loadCalls() {
+  if (!me) return; const d = await api('calls/history');
+  $('#callList').innerHTML = d.calls.length ? d.calls.map(c => {
+    const missed = c.state === 'missed' && c.direction === 'in', out = c.direction === 'out';
+    const lab = c.state === 'missed' ? (out ? 'No answer' : 'Missed') : c.state === 'rejected' ? (out ? 'Declined' : 'Declined') : c.state === 'failed' ? 'Failed' : c.duration ? fmtDur(c.duration) : 'Ended';
+    return `<div class="row crow" data-callback="${c.peer.id}">${avatar(c.peer)}<div class="body"><div class="line"><strong class="${missed ? 'miss' : ''}">${esc(c.peer.name)}</strong></div><div class="cmeta"><i class="fa-solid ${out ? 'fa-arrow-up-right' : 'fa-arrow-down-left'} ${missed ? 'miss' : ''}" style="font-size:11px"></i><span class="${missed ? 'miss' : ''}">${out ? 'Outgoing' : 'Incoming'} · ${lab}</span><span>· ${stTime(c.created_at)}</span></div></div><button type="button" class="cback" aria-label="Call ${esc(c.peer.name)}"><i class="fa-solid fa-phone"></i></button></div>`;
+  }).join('') : empty('fa-solid fa-phone', 'No calls yet<small>Open a chat and tap the phone icon to call.</small>');
+}
+$('#callList').addEventListener('click', e => { const r = e.target.closest('[data-callback]'); if (!r) return; const id = +r.dataset.callback; const u = contacts.find(x => x.id === id) || chats.find(x => x.id === id); if (u) startCall(u); else toast('Open a chat with this person to call them'); });
 
 /* --- voice notes: tap mic to record, trash to cancel, send button to send --- */
 const showRec = on => { $('#recBar').hidden = !on; $('#composer').hidden = on; $('#recTime').textContent = '0:00'; };
