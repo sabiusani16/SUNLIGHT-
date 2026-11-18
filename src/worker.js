@@ -370,6 +370,12 @@ async function route(req, env, url) {
           if (r.ok) { const d = await r.json(), s = Array.isArray(d.iceServers) ? d.iceServers : d.iceServers ? [d.iceServers] : []; if (s.length) { ice = s; turn = s.some(x => [].concat(x.urls).some(u => /^turns?:/.test(u))); } }
         } catch {}
       }
+      if (!turn && env.METERED_APP && env.METERED_API_KEY) {   // alternative free TURN (metered.ca): credentials are fetched with YOUR key
+        try {
+          const r = await fetch(`https://${encodeURIComponent(env.METERED_APP)}.metered.live/api/v1/turn/credentials?apiKey=${encodeURIComponent(env.METERED_API_KEY)}`);
+          if (r.ok) { const s = await r.json(); if (Array.isArray(s) && s.length) { ice = s; turn = s.some(x => [].concat(x.urls).some(u => /^turns?:/.test(u))); } }
+        } catch {}
+      }
       return json({ iceServers: ice, turn });
     }
     await sweep();
