@@ -28,13 +28,24 @@ database_id = "14778838-61d9-4fd5-a6be-a7d778348def"
 # binding = "MEDIA"
 # bucket_name = "sunlight-media"
 
-# ---- Voice calls: TURN (optional but strongly recommended) ------------------
-# Calls work without any setup on most networks (STUN is built in). On some
-# mobile networks the audio can only get through a TURN relay. To enable it:
+# ---- Voice/video calls: TURN (REQUIRED for most phone-to-phone calls on mobile data) ----
+# Two phones on different mobile networks usually cannot reach each other
+# directly (carrier NAT). The call then stays on "Connecting..." until a TURN
+# relay is available. Pick ONE of these (the Worker uses the first that works):
+#
+# OPTION A - Cloudflare TURN (1,000 GB/month free, then $0.05/GB):
 #   1. Cloudflare dashboard > Realtime > TURN Server > Create a TURN key
-#      (copy the Key ID and the API token)
-#   2. Workers & Pages > sunlight > Settings > Variables and Secrets > add TWO secrets:
+#      (copy the Key ID and the API token; if the page asks for a card, use B)
+#   2. Workers & Pages > sunlight > Settings > Variables and Secrets > add 2 SECRETS:
 #        TURN_KEY_ID         = <the Key ID>
 #        TURN_KEY_API_TOKEN  = <the API token>
-#   3. Redeploy. The app then asks Cloudflare for short-lived credentials per call.
-# Never write these two values into this file or into GitHub.
+#
+# OPTION B - Metered.ca (free plan: 500 MB/month, no credit card):
+#   1. Sign up at https://www.metered.ca > create an app. Note the app name
+#      (the part before .metered.live) and copy an API key from the dashboard.
+#   2. Add 2 SECRETS in the same place:
+#        METERED_APP      = <app name, e.g. sunlight>
+#        METERED_API_KEY  = <the API key>
+#
+# After adding the secrets, redeploy. During a call the small line under the
+# call status must say "TURN on". Never write these values into this file or GitHub.
