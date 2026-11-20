@@ -1604,7 +1604,7 @@ function callCleanup(finalText, bad, delay = 1600) {          // stops the micro
 }
 let iceInfo = { turn: false };
 async function getIce() { if (!iceCfg) { try { const d = await api('calls/ice'); iceCfg = d.iceServers; iceInfo = { turn: !!d.turn }; } catch { iceCfg = [{ urls: 'stun:stun.l.google.com:19302' }]; } } return iceCfg; }
-const VCON = f => ({ facingMode: f || 'user', width: { ideal: 640 }, height: { ideal: 480 }, frameRate: { ideal: 20, max: 24 } });   // modest video keeps data use low
+const VCON = f => ({ facingMode: f || 'user', width: { ideal: 480 }, height: { ideal: 360 }, frameRate: { ideal: 15, max: 20 } });   // modest video keeps data use low
 async function micStream(video) {
   try { return await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }, video: video ? VCON() : false }); }
   catch (e) {
@@ -1639,10 +1639,22 @@ async function makePC() {
   c.diag = setInterval(() => diagTick(c), 2000);
   return pc;
 }
+async function tuneSenders(c) {                  // voice must win over video on a weak mobile network, otherwise the audio breaks up ("kurret kurret")
+  if (!c.pc) return;
+  for (const s of c.pc.getSenders()) {
+    if (!s.track) continue;
+    try {
+      const p = s.getParameters(); if (!p.encodings || !p.encodings.length) p.encodings = [{}]; const e = p.encodings[0];
+      if (s.track.kind === 'video') { e.maxBitrate = 300000; e.maxFramerate = 15; e.priority = 'low'; e.networkPriority = 'low'; p.degradationPreference = 'maintain-framerate'; }
+      else { e.maxBitrate = 32000; e.priority = 'high'; e.networkPriority = 'high'; }
+      await s.setParameters(p);
+    } catch {}
+  }
+}
 async function iceRestart(c) {
   if (call !== c || c.done || c.dir !== 'out' || !c.pc || c.restarting || (c.restarts = (c.restarts || 0) + 1) > 4) return;
   c.restarting = true;
-  try { const o = await c.pc.createOffer({ iceRestart: true }); await c.pc.setLocalDescription(o); await api('calls/signal', { body: { id: c.id, kind: 'offer', payload: JSON.stringify(c.pc.localDescription) } }); } catch {}
+  try { const o = await c.pc.createOffer({ iceRestart: true }); await c.pc.setLocalDescription(o); await tuneSenders(c); await api('calls/signal', { body: { id: c.id, kind: 'offer', payload: JSON.stringify(c.pc.localDescription) } }); } catch {}
   c.restarting = false;
   if (call === c && !c.done && c.pc.iceConnectionState !== 'connected' && c.pc.iceConnectionState !== 'completed') { clearTimeout(c.restartT); c.restartT = setTimeout(() => iceRestart(c), 6000); }
 }
@@ -1666,7 +1678,7 @@ async function onSignal(c, s) {
     if (s.kind === 'offer' && c.dir === 'in' && !c.pc) c.pendingOffer = s;                  // the offer can arrive before our connection object exists: keep it
     else if (s.kind === 'offer' && c.dir === 'in' && c.pc) {
       await c.pc.setRemoteDescription(JSON.parse(s.payload)); await flushIce(c);
-      const ans = await c.pc.createAnswer(); await c.pc.setLocalDescription(ans);
+      const ans = await c.pc.createAnswer(); await c.pc.setLocalDescription(ans); await tuneSenders(c);
       await api('calls/signal', { body: { id: c.id, kind: 'answer', payload: JSON.stringify(c.pc.localDescription) } });
     } else if (s.kind === 'answer' && c.dir === 'out' && c.pc && c.pc.signalingState === 'have-local-offer') { await c.pc.setRemoteDescription(JSON.parse(s.payload)); await flushIce(c); }
     else if (s.kind === 'cam') { c.peerCamOff = s.payload === 'off'; liveRefresh(c); }
@@ -1675,7 +1687,7 @@ async function onSignal(c, s) {
 }
 async function startOffer(c) {
   if (c.offered) return; c.offered = true; callUI('connecting', 'Connecting…');
-  try { await makePC(); const o = await c.pc.createOffer(); await c.pc.setLocalDescription(o); await api('calls/signal', { body: { id: c.id, kind: 'offer', payload: JSON.stringify(c.pc.localDescription) } }); }
+  try { await makePC(); const o = await c.pc.createOffer(); await c.pc.setLocalDescription(o); await tuneSenders(c); await api('calls/signal', { body: { id: c.id, kind: 'offer', payload: JSON.stringify(c.pc.localDescription) } }); }
   catch { hangup('failed', 'Connection failed', true); }
 }
 async function startCall(peer, video) {
