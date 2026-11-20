@@ -72,16 +72,18 @@ const TABLES = [
 const USER_COLS = { username: "TEXT", email: 'TEXT', name: "TEXT NOT NULL DEFAULT ''", pass_hash: "TEXT NOT NULL DEFAULT ''", salt: "TEXT NOT NULL DEFAULT ''", created_at: 'INTEGER NOT NULL DEFAULT 0', last_seen: 'INTEGER NOT NULL DEFAULT 0', avatar_key: 'TEXT' };
 const MSG_COLS = { type: "TEXT NOT NULL DEFAULT 'text'", media_key: 'TEXT', media_type: 'TEXT', media_size: 'INTEGER', duration: 'INTEGER', reply_to: 'INTEGER', delivered_at: 'INTEGER', deleted_at: 'INTEGER', status_id: 'INTEGER', status_snap: 'TEXT' };
 let ready = null;
+// Two requests can start the schema check at the same moment (e.g. right after a deploy); the loser must not fail with "duplicate column".
+const addCol = async (db, t, c, ty) => { try { await db.prepare(`ALTER TABLE ${t} ADD COLUMN ${c} ${ty}`).run(); } catch (e) { if (!/duplicate column/i.test(String(e && e.message || e))) throw e; } };
 function ensureSchema(db) {
   ready ??= (async () => {
     for (const q of TABLES) await db.prepare(q).run();
     const have = (await db.prepare('PRAGMA table_info(users)').all()).results.map(c => c.name);
-    for (const [col, type] of Object.entries(USER_COLS)) if (!have.includes(col)) await db.prepare(`ALTER TABLE users ADD COLUMN ${col} ${type}`).run();
+    for (const [col, type] of Object.entries(USER_COLS)) if (!have.includes(col)) await addCol(db, 'users', col, type);
     await db.prepare('CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email ON users(email) WHERE email IS NOT NULL').run();
     const haveM = (await db.prepare('PRAGMA table_info(messages)').all()).results.map(c => c.name);
-    for (const [col, type] of Object.entries(MSG_COLS)) if (!haveM.includes(col)) await db.prepare(`ALTER TABLE messages ADD COLUMN ${col} ${type}`).run();
+    for (const [col, type] of Object.entries(MSG_COLS)) if (!haveM.includes(col)) await addCol(db, 'messages', col, type);
     const haveC = (await db.prepare('PRAGMA table_info(calls)').all()).results.map(c => c.name);
-    if (!haveC.includes('video')) await db.prepare('ALTER TABLE calls ADD COLUMN video INTEGER NOT NULL DEFAULT 0').run();
+    if (!haveC.includes('video')) await addCol(db, 'calls', 'video', 'INTEGER NOT NULL DEFAULT 0');
     await db.prepare('CREATE INDEX IF NOT EXISTS idx_msg_media ON messages(media_key)').run();
     await db.prepare('CREATE INDEX IF NOT EXISTS idx_msg_deliv ON messages(receiver_id, delivered_at)').run();
   })().catch(e => { ready = null; throw e; });
