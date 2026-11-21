@@ -102,3 +102,11 @@ CREATE INDEX IF NOT EXISTS idx_cp_channel ON channel_posts(channel_id, id);
 CREATE TABLE IF NOT EXISTS channel_reactions (post_id INTEGER NOT NULL, user_id INTEGER NOT NULL, emoji TEXT NOT NULL, created_at INTEGER NOT NULL, PRIMARY KEY (post_id, user_id));
 CREATE TABLE IF NOT EXISTS channel_comments (id INTEGER PRIMARY KEY AUTOINCREMENT, post_id INTEGER NOT NULL, user_id INTEGER NOT NULL, body TEXT NOT NULL, created_at INTEGER NOT NULL, deleted_at INTEGER);
 CREATE INDEX IF NOT EXISTS idx_cc_post ON channel_comments(post_id, id);
+
+-- Phone + OTP auth (see migrations/0010_phone_otp_auth.sql; the Worker also adds these automatically)
+CREATE TABLE IF NOT EXISTS otp_requests (id INTEGER PRIMARY KEY AUTOINCREMENT, phone TEXT NOT NULL, purpose TEXT NOT NULL, user_id INTEGER, code_hash TEXT NOT NULL, salt TEXT NOT NULL, attempts INTEGER NOT NULL DEFAULT 0, expires_at INTEGER NOT NULL, created_at INTEGER NOT NULL, consumed_at INTEGER, ip_hash TEXT);
+CREATE INDEX IF NOT EXISTS idx_otp_phone ON otp_requests(phone, created_at);
+CREATE INDEX IF NOT EXISTS idx_otp_ip ON otp_requests(ip_hash, created_at);
+CREATE TABLE IF NOT EXISTS signup_tickets (hash TEXT PRIMARY KEY, phone TEXT NOT NULL, expires_at INTEGER NOT NULL, used INTEGER NOT NULL DEFAULT 0);
+CREATE TABLE IF NOT EXISTS auth_fails (k TEXT NOT NULL, at INTEGER NOT NULL);
+CREATE INDEX IF NOT EXISTS idx_auth_fails ON auth_fails(k, at);

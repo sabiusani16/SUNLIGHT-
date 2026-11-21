@@ -56,3 +56,13 @@ database_id = "14778838-61d9-4fd5-a6be-a7d778348def"
 # (Settings -> Variables and secrets -> type "Secret", Runtime):
 #   RESEND_API_KEY = your Resend API key
 #   MAIL_FROM      = SUNLIGHT <no-reply@your-verified-domain>
+
+# ---- SMS sign-in (phone number + OTP) ----
+# Real SMS needs ONE provider. Add its secrets (never put them in this file):
+#   Twilio : npx wrangler secret put TWILIO_ACCOUNT_SID ; TWILIO_AUTH_TOKEN ; and TWILIO_FROM (your Twilio number, E.164)
+#            OR TWILIO_MESSAGING_SERVICE_SID instead of TWILIO_FROM
+#   Termii : npx wrangler secret put TERMII_API_KEY ; TERMII_BASE_URL (the base URL shown in YOUR Termii dashboard) ; TERMII_SENDER_ID
+#            optional TERMII_CHANNEL (default "dnd", which delivers to Nigerian numbers on DND)
+# Recommended: npx wrangler secret put OTP_PEPPER   (any long random string; makes stored code hashes un-guessable)
+# Optional: LEGACY_LOGIN=0 (as a plain var) disables the old-password sign-in once all users have added a phone.
+# Without a provider the app answers "SMS sign-in is not set up" and sends nothing. /api/health shows "sms": true/false.
