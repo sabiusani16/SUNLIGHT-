@@ -84,13 +84,19 @@ const TABLES = [
   `CREATE TABLE IF NOT EXISTS channel_reactions (post_id INTEGER NOT NULL, user_id INTEGER NOT NULL, emoji TEXT NOT NULL, created_at INTEGER NOT NULL, PRIMARY KEY (post_id, user_id))`,
   `CREATE TABLE IF NOT EXISTS channel_comments (id INTEGER PRIMARY KEY AUTOINCREMENT, post_id INTEGER NOT NULL, user_id INTEGER NOT NULL, body TEXT NOT NULL, created_at INTEGER NOT NULL, deleted_at INTEGER)`,
   `CREATE INDEX IF NOT EXISTS idx_cc_post ON channel_comments(post_id, id)`,
+  `CREATE TABLE IF NOT EXISTS otp_requests (id INTEGER PRIMARY KEY AUTOINCREMENT, phone TEXT NOT NULL, purpose TEXT NOT NULL, user_id INTEGER, code_hash TEXT NOT NULL, salt TEXT NOT NULL, attempts INTEGER NOT NULL DEFAULT 0, expires_at INTEGER NOT NULL, created_at INTEGER NOT NULL, consumed_at INTEGER, ip_hash TEXT)`,
+  `CREATE INDEX IF NOT EXISTS idx_otp_phone ON otp_requests(phone, created_at)`,
+  `CREATE INDEX IF NOT EXISTS idx_otp_ip ON otp_requests(ip_hash, created_at)`,
+  `CREATE TABLE IF NOT EXISTS signup_tickets (hash TEXT PRIMARY KEY, phone TEXT NOT NULL, expires_at INTEGER NOT NULL, used INTEGER NOT NULL DEFAULT 0)`,
+  `CREATE TABLE IF NOT EXISTS auth_fails (k TEXT NOT NULL, at INTEGER NOT NULL)`,
+  `CREATE INDEX IF NOT EXISTS idx_auth_fails ON auth_fails(k, at)`,
   `CREATE TABLE IF NOT EXISTS user_prefs (user_id INTEGER PRIMARY KEY, notif TEXT, updated_at INTEGER NOT NULL DEFAULT 0)`,
   `CREATE TABLE IF NOT EXISTS email_changes (user_id INTEGER PRIMARY KEY, new_email TEXT NOT NULL, code_hash TEXT NOT NULL, salt TEXT NOT NULL, attempts INTEGER NOT NULL DEFAULT 0, expires_at INTEGER NOT NULL, created_at INTEGER NOT NULL)`,
   `CREATE TABLE IF NOT EXISTS support_requests (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, subject TEXT NOT NULL, message TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'open', created_at INTEGER NOT NULL)`,
   `CREATE INDEX IF NOT EXISTS idx_support_user ON support_requests(user_id, id)`,
   `CREATE TABLE IF NOT EXISTS status_views (status_id INTEGER NOT NULL, viewer_id INTEGER NOT NULL, viewed_at INTEGER NOT NULL, PRIMARY KEY (status_id, viewer_id))`
 ];
-const USER_COLS = { username: "TEXT", email: 'TEXT', name: "TEXT NOT NULL DEFAULT ''", pass_hash: "TEXT NOT NULL DEFAULT ''", salt: "TEXT NOT NULL DEFAULT ''", created_at: 'INTEGER NOT NULL DEFAULT 0', last_seen: 'INTEGER NOT NULL DEFAULT 0', avatar_key: 'TEXT' };
+const USER_COLS = { phone: 'TEXT', phone_verified_at: 'INTEGER', username: "TEXT", email: 'TEXT', name: "TEXT NOT NULL DEFAULT ''", pass_hash: "TEXT NOT NULL DEFAULT ''", salt: "TEXT NOT NULL DEFAULT ''", created_at: 'INTEGER NOT NULL DEFAULT 0', last_seen: 'INTEGER NOT NULL DEFAULT 0', avatar_key: 'TEXT' };
 const MSG_COLS = { type: "TEXT NOT NULL DEFAULT 'text'", media_key: 'TEXT', media_type: 'TEXT', media_size: 'INTEGER', duration: 'INTEGER', reply_to: 'INTEGER', delivered_at: 'INTEGER', deleted_at: 'INTEGER', status_id: 'INTEGER', status_snap: 'TEXT' };
 let ready = null;
 // Two requests can start the schema check at the same moment (e.g. right after a deploy); the loser must not fail with "duplicate column".
@@ -101,6 +107,10 @@ function ensureSchema(db) {
     const have = (await db.prepare('PRAGMA table_info(users)').all()).results.map(c => c.name);
     for (const [col, type] of Object.entries(USER_COLS)) if (!have.includes(col)) await addCol(db, 'users', col, type);
     await db.prepare('CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email ON users(email) WHERE email IS NOT NULL').run();
+    await db.prepare('CREATE UNIQUE INDEX IF NOT EXISTS idx_users_phone ON users(phone) WHERE phone IS NOT NULL').run();
+    const haveS = (await db.prepare('PRAGMA table_info(sessions)').all()).results.map(c => c.name);
+    if (!haveS.includes('last_used')) await addCol(db, 'sessions', 'last_used', 'INTEGER NOT NULL DEFAULT 0');
+    if (!haveS.includes('ua')) await addCol(db, 'sessions', 'ua', 'TEXT');
     const haveM = (await db.prepare('PRAGMA table_info(messages)').all()).results.map(c => c.name);
     for (const [col, type] of Object.entries(MSG_COLS)) if (!haveM.includes(col)) await addCol(db, 'messages', col, type);
     const haveC = (await db.prepare('PRAGMA table_info(calls)').all()).results.map(c => c.name);
@@ -131,7 +141,10 @@ export default {
     if (!env.DB) return json({ error: 'Database is not connected. Add the D1 binding named "DB" in wrangler.toml and redeploy.', code: 'DB_BINDING' }, 500);
     try {
       await ensureSchema(env.DB);
-      return await route(req, env, url);
+      const out = {};
+      let res = await route(req, env, url, out);
+      if (out.cookie) { res = new Response(res.body, res); res.headers.append('set-cookie', out.cookie); }
+      return res;
     } catch (e) {
       const msg = String(e && e.message || e), ref = rand(3);
       console.error(`[SUNLIGHT ${ref}]`, msg);
@@ -140,7 +153,7 @@ export default {
         await env.DB.prepare('INSERT INTO error_log(ref,route,message,created_at) VALUES(?,?,?,?)').bind(ref, req.method + ' ' + url.pathname, msg.slice(0, 500), Date.now()).run();
         await env.DB.prepare('DELETE FROM error_log WHERE id <= (SELECT MAX(id) FROM error_log) - 100').run();
       } catch {}
-      if (env.DEBUG_ERRORS === '1') return json({ error: `Server error (ref ${ref}): ${msg.slice(0, 160)}`, code: 'SERVER' }, 500);   // owner-only switch (Worker variable) for troubleshooting
+      if (env.DEBUG_ERRORS !== '0') return json({ error: `Server error (ref ${ref}): ${msg.slice(0, 160)}`, code: 'SERVER' }, 500);   // TEMPORARY: shows the cause while we hunt a bug. Set Worker variable DEBUG_ERRORS=0 to hide it again
       if (/no such table|no such column/i.test(msg)) return json({ error: 'Database tables are missing. Run: wrangler d1 execute DB --remote --file=schema.sql', code: 'DB_SCHEMA' }, 500);
       return json({ error: `Server error (ref ${ref}). Please try again.`, code: 'SERVER' }, 500);
     }
@@ -167,13 +180,100 @@ async function sendMail(env, to, subject, text) {            // needs RESEND_API
   } catch { return false; }
 }
 
-async function startSession(db, user, now) {
-  const token = rand(32);
-  await db.prepare('INSERT INTO sessions(token,user_id,created_at) VALUES(?,?,?)').bind(token, user.id, now).run();
-  return json({ token, user });
+
+// ---------- PHONE NUMBERS (E.164) ----------
+// [ISO, name, calling code, min national digits, max national digits, strips a leading trunk "0"]
+const COUNTRIES = [["NG","Nigeria","234",10,10,1],["GH","Ghana","233",9,9,1],["NE","Niger","227",8,8,0],["TD","Chad","235",8,8,0],["CM","Cameroon","237",9,9,0],["BJ","Benin","229",8,10,0],["TG","Togo","228",8,8,0],["BF","Burkina Faso","226",8,8,0],["ML","Mali","223",8,8,0],["SN","Senegal","221",9,9,0],["CI","Côte d’Ivoire","225",8,10,0],["LR","Liberia","231",7,9,1],["SL","Sierra Leone","232",8,8,1],["GM","Gambia","220",7,7,0],["GN","Guinea","224",9,9,0],["MR","Mauritania","222",8,8,0],["KE","Kenya","254",9,9,1],["UG","Uganda","256",9,9,1],["TZ","Tanzania","255",9,9,1],["RW","Rwanda","250",9,9,0],["ET","Ethiopia","251",9,9,1],["ZA","South Africa","27",9,9,1],["ZW","Zimbabwe","263",9,9,1],["ZM","Zambia","260",9,9,1],["AO","Angola","244",9,9,0],["MZ","Mozambique","258",9,9,0],["EG","Egypt","20",10,10,1],["MA","Morocco","212",9,9,1],["DZ","Algeria","213",9,9,1],["TN","Tunisia","216",8,8,0],["LY","Libya","218",9,9,1],["SD","Sudan","249",9,9,1],["SO","Somalia","252",7,9,0],["GB","United Kingdom","44",10,10,1],["IE","Ireland","353",9,9,1],["FR","France","33",9,9,1],["DE","Germany","49",10,11,1],["ES","Spain","34",9,9,0],["IT","Italy","39",9,10,0],["PT","Portugal","351",9,9,0],["NL","Netherlands","31",9,9,1],["BE","Belgium","32",9,9,1],["CH","Switzerland","41",9,9,1],["SE","Sweden","46",9,9,1],["NO","Norway","47",8,8,0],["DK","Denmark","45",8,8,0],["TR","Türkiye","90",10,10,1],["SA","Saudi Arabia","966",9,9,1],["AE","United Arab Emirates","971",9,9,1],["QA","Qatar","974",8,8,0],["KW","Kuwait","965",8,8,0],["JO","Jordan","962",9,9,1],["LB","Lebanon","961",7,8,1],["IQ","Iraq","964",10,10,1],["IR","Iran","98",10,10,1],["IN","India","91",10,10,1],["PK","Pakistan","92",10,10,1],["BD","Bangladesh","880",10,10,1],["CN","China","86",11,11,0],["JP","Japan","81",10,10,1],["KR","South Korea","82",9,10,1],["MY","Malaysia","60",9,10,1],["SG","Singapore","65",8,8,0],["ID","Indonesia","62",9,12,1],["PH","Philippines","63",10,10,1],["US","United States","1",10,10,0],["CA","Canada","1",10,10,0],["BR","Brazil","55",10,11,1],["MX","Mexico","52",10,10,0],["AR","Argentina","54",10,10,1],["AU","Australia","61",9,9,1],["NZ","New Zealand","64",8,10,1]];
+const OTP_TTL = 300000, OTP_RESEND_MS = 60000, OTP_MAX_ATTEMPTS = 5, OTP_PER_PHONE_HOUR = 5, OTP_PER_IP_HOUR = 15;
+const SESSION_COOKIE = '__Host-sl', COOKIE_MAX = 180 * 86400;                         // login stays for 180 days since last use
+const SESSION_IDLE_MS = COOKIE_MAX * 1000;
+function normalizePhone(countryIso, raw) {                                           // -> { e164, iso } or { error }
+  let s = String(raw == null ? '' : raw).trim();
+  if (!/^[+\d\s().-]{4,25}$/.test(s)) return { error: 'Enter a valid phone number' };
+  const plus = s.startsWith('+') || s.startsWith('00');
+  let digits = s.replace(/\D/g, ''); if (s.startsWith('00')) digits = digits.slice(2);
+  let c;
+  if (plus) { c = COUNTRIES.filter(x => digits.startsWith(x[2])).sort((a, b) => b[2].length - a[2].length)[0]; if (!c) return { error: 'This country code is not supported yet' }; digits = digits.slice(c[2].length); if (c[2] === '1') c = COUNTRIES.find(x => x[0] === (countryIso === 'CA' ? 'CA' : 'US')); }
+  else { c = COUNTRIES.find(x => x[0] === String(countryIso || '').toUpperCase()); if (!c) return { error: 'Choose your country' }; if (digits.startsWith(c[2]) && digits.length > c[4] + (c[5] ? 1 : 0)) digits = digits.slice(c[2].length); }
+  if (c[5] && digits.startsWith('0')) digits = digits.slice(1);
+  if (digits.length < c[3] || digits.length > c[4] || digits[0] === '0') return { error: `Enter a valid ${c[1]} phone number` };
+  if (c[0] === 'NG' && !/^[789][01]\d{8}$/.test(digits)) return { error: 'Enter a valid Nigerian mobile number (e.g. 0803 123 4567)' };
+  if (c[2].length + digits.length > 15) return { error: 'Enter a valid phone number' };
+  return { e164: '+' + c[2] + digits, iso: c[0] };
+}
+const maskPhone = e => e.length > 7 ? e.slice(0, e.length - 7) + ' ••• ' + e.slice(-3) : e;
+const smsProvider = env => env.TWILIO_ACCOUNT_SID && env.TWILIO_AUTH_TOKEN && (env.TWILIO_FROM || env.TWILIO_MESSAGING_SERVICE_SID) ? 'twilio' : env.TERMII_API_KEY && env.TERMII_BASE_URL && env.TERMII_SENDER_ID ? 'termii' : null;
+async function sendSms(env, e164, text) {                                            // real provider only; returns true only when the provider accepted the message
+  const prov = smsProvider(env);
+  try {
+    if (prov === 'twilio') {
+      const f = new URLSearchParams({ To: e164, Body: text }); if (env.TWILIO_MESSAGING_SERVICE_SID) f.set('MessagingServiceSid', env.TWILIO_MESSAGING_SERVICE_SID); else f.set('From', env.TWILIO_FROM);
+      const r = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${encodeURIComponent(env.TWILIO_ACCOUNT_SID)}/Messages.json`, { method: 'POST', headers: { authorization: 'Basic ' + btoa(env.TWILIO_ACCOUNT_SID + ':' + env.TWILIO_AUTH_TOKEN), 'content-type': 'application/x-www-form-urlencoded' }, body: f });
+      return r.ok;
+    }
+    if (prov === 'termii') {
+      const r = await fetch(String(env.TERMII_BASE_URL).replace(/\/+$/, '') + '/api/sms/send', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ api_key: env.TERMII_API_KEY, to: e164.slice(1), from: env.TERMII_SENDER_ID, sms: text, type: 'plain', channel: env.TERMII_CHANNEL || 'dnd' }) });
+      if (!r.ok) return false; const d = await r.json().catch(() => null); return !!d && (d.code === 'ok' || /sent/i.test(String(d.message || '')));
+    }
+  } catch {}
+  return false;
+}
+const otpHash = async (env, salt, phone, code) => {                                   // HMAC keyed with the OTP_PEPPER secret: a stolen database cannot be brute-forced offline
+  const k = await crypto.subtle.importKey('raw', new TextEncoder().encode(env.OTP_PEPPER || 'sunlight-otp-v1'), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+  return hex(await crypto.subtle.sign('HMAC', k, new TextEncoder().encode(`${salt}|${phone}|${code}`)));
+};
+const newCode = () => { const b = new Uint32Array(1); do crypto.getRandomValues(b); while (b[0] >= 4294000000); return String(b[0] % 1000000).padStart(6, '0'); };   // uniform, 6 digits
+const cookieOf = req => { const m = (req.headers.get('cookie') || '').match(/(?:^|;\s*)__Host-sl=([a-f0-9]{16,128})/); return m ? m[1] : ''; };
+const sessionCookie = (tok, maxAge) => `${SESSION_COOKIE}=${tok}; Path=/; Max-Age=${maxAge}; Secure; HttpOnly; SameSite=Lax`;
+
+const ipHashOf = async req => (await sha('ip|' + (req.headers.get('cf-connecting-ip') || 'unknown'))).slice(0, 24);
+const phoneBody = body => normalizePhone(body.country, body.phone);
+async function otpIssue(env, req, now, phone, purpose, userId) {                      // returns a Response (success or error)
+  const db = env.DB;
+  if (!smsProvider(env)) return json({ error: 'SMS sign-in is not set up on this server yet. The owner must add an SMS provider (see README).', code: 'SMS_NOT_CONFIGURED' }, 503);
+  const ip = await ipHashOf(req);
+  const last = await db.prepare('SELECT created_at FROM otp_requests WHERE phone=? AND purpose=? AND consumed_at IS NOT -1 ORDER BY id DESC LIMIT 1').bind(phone, purpose).first();
+  if (last && now - last.created_at < OTP_RESEND_MS) { const w = Math.ceil((OTP_RESEND_MS - (now - last.created_at)) / 1000); return json({ error: `Please wait ${w}s before requesting another code`, retry_after: w }, 429); }
+  const hp = await db.prepare('SELECT COUNT(*) n FROM otp_requests WHERE phone=? AND created_at>?').bind(phone, now - 3600000).first();
+  if (hp.n >= OTP_PER_PHONE_HOUR) return json({ error: 'Too many codes requested for this number. Try again in an hour.', retry_after: 3600 }, 429);
+  const hi = await db.prepare('SELECT COUNT(*) n FROM otp_requests WHERE ip_hash=? AND created_at>?').bind(ip, now - 3600000).first();
+  if (hi.n >= OTP_PER_IP_HOUR) return json({ error: 'Too many requests. Try again later.', retry_after: 3600 }, 429);
+  const code = newCode(), salt = rand(8);
+  const ins = await db.prepare('INSERT INTO otp_requests(phone,purpose,user_id,code_hash,salt,attempts,expires_at,created_at,ip_hash) VALUES(?,?,?,?,?,0,?,?,?)').bind(phone, purpose, userId || null, await otpHash(env, salt, phone, code), salt, now + OTP_TTL, now, ip).run();
+  await db.prepare('UPDATE otp_requests SET consumed_at=?1 WHERE phone=?2 AND purpose=?3 AND id<?4 AND consumed_at IS NULL').bind(now, phone, purpose, ins.meta.last_row_id).run();   // older codes die when a new one is issued
+  const sent = await sendSms(env, phone, `Your SUNLIGHT code is ${code}. It expires in 5 minutes. Do not share it with anyone.`);
+  if (!sent) { await db.prepare('UPDATE otp_requests SET consumed_at=-1 WHERE id=?').bind(ins.meta.last_row_id).run(); return json({ error: 'The SMS could not be sent. Check the number and try again.', code: 'SMS_SEND_FAILED' }, 502); }
+  if (Math.random() < 0.05) await db.batch([db.prepare('DELETE FROM otp_requests WHERE created_at<?').bind(now - 86400000), db.prepare('DELETE FROM auth_fails WHERE at<?').bind(now - 86400000), db.prepare('DELETE FROM signup_tickets WHERE expires_at<?').bind(now - 86400000), db.prepare('DELETE FROM sessions WHERE MAX(last_used,created_at)<?').bind(now - SESSION_IDLE_MS)]).catch(() => {});
+  return json({ ok: true, masked: maskPhone(phone), resend_in: OTP_RESEND_MS / 1000, expires_in: OTP_TTL / 1000 });
+}
+async function otpCheck(env, req, now, phone, purpose, userId, codeRaw) {            // -> { ok:true } or { res: Response }
+  const db = env.DB, ip = await ipHashOf(req), code = String(codeRaw || '').trim();
+  const fails = await db.prepare('SELECT COUNT(*) n FROM auth_fails WHERE k=? AND at>?').bind('otp:' + ip, now - 900000).first();
+  if (fails.n >= 20) return { res: json({ error: 'Too many wrong attempts. Try again in 15 minutes.' }, 429) };
+  if (!/^\d{6}$/.test(code)) return { res: json({ error: 'Enter the 6-digit code' }, 400) };
+  const r = await db.prepare('SELECT * FROM otp_requests WHERE phone=? AND purpose=? AND consumed_at IS NULL AND expires_at>? ORDER BY id DESC LIMIT 1').bind(phone, purpose, now).first();
+  if (!r || (userId && r.user_id !== userId)) return { res: json({ error: 'This code has expired or was already used. Request a new code.', code: 'OTP_EXPIRED' }, 400) };
+  if (r.attempts >= OTP_MAX_ATTEMPTS) { await db.prepare('UPDATE otp_requests SET consumed_at=? WHERE id=? AND consumed_at IS NULL').bind(now, r.id).run(); return { res: json({ error: 'Too many wrong codes. Request a new code.', code: 'OTP_LOCKED' }, 429) }; }
+  if (!safeEq(await otpHash(env, r.salt, phone, code), r.code_hash)) {
+    await db.batch([db.prepare('UPDATE otp_requests SET attempts=attempts+1 WHERE id=?').bind(r.id), db.prepare('INSERT INTO auth_fails(k,at) VALUES(?,?)').bind('otp:' + ip, now)]);
+    const left = OTP_MAX_ATTEMPTS - r.attempts - 1;
+    if (left <= 0) await db.prepare('UPDATE otp_requests SET consumed_at=? WHERE id=? AND consumed_at IS NULL').bind(now, r.id).run();
+    return { res: json({ error: left > 0 ? `Wrong code. ${left} attempt${left === 1 ? '' : 's'} left.` : 'Wrong code. Request a new code.', code: left > 0 ? 'OTP_WRONG' : 'OTP_LOCKED' }, 400) };
+  }
+  const c = await db.prepare('UPDATE otp_requests SET consumed_at=? WHERE id=? AND consumed_at IS NULL').bind(now, r.id).run();   // single use, atomic
+  if (!c.meta.changes) return { res: json({ error: 'This code was already used. Request a new code.', code: 'OTP_EXPIRED' }, 400) };
+  return { ok: true };
+}
+const failCount = (db, k, now) => db.prepare('SELECT COUNT(*) n FROM auth_fails WHERE k=? AND at>?').bind(k, now - 900000).first().then(r => r.n);
+
+async function startSession(db, user, now, out, req, extra = {}) {
+  const token = rand(32);                                                              // 256-bit random id; only its SHA-256 hash is stored
+  await db.prepare('INSERT INTO sessions(token,user_id,created_at,last_used,ua) VALUES(?,?,?,?,?)').bind(await sha(token), user.id, now, now, String(req.headers.get('user-agent') || '').slice(0, 120)).run();
+  out.cookie = sessionCookie(token, COOKIE_MAX);
+  return json({ user, ...extra });
 }
 
-async function route(req, env, url) {
+async function route(req, env, url, out) {
   const db = env.DB, p = url.pathname.slice(5), now = Date.now();
   const post = req.method === 'POST';
   const rawVideo = post && p === 'video';                    // videos are sent as raw bytes (not JSON) and live in R2
@@ -189,54 +289,92 @@ async function route(req, env, url) {
 
   if (p === 'health') {
     const r = await db.prepare('SELECT COUNT(*) n FROM users').first();
-    return json({ ok: true, version: APP_VERSION, database: 'connected', video: !!env.MEDIA, assets: !!env.ASSETS, users: r.n });
+    return json({ ok: true, version: APP_VERSION, database: 'connected', sms: !!smsProvider(env), video: !!env.MEDIA, assets: !!env.ASSETS, users: r.n });
   }
 
-  if (p === 'register' && post) {
-    const username = String(body.username || '').trim().toLowerCase();
-    const email = String(body.email || '').trim().toLowerCase();
-    const name = String(body.name || '').trim();
-    const pw = String(body.password || '');
+  // =============== PHONE + OTP AUTHENTICATION ===============
+  const originOk = () => { const o = req.headers.get('origin'); if (o && o !== url.origin) return false; return req.headers.get('sec-fetch-site') !== 'cross-site'; };
+  if (post && p.startsWith('auth/') && !originOk()) return json({ error: 'Blocked' }, 403);
+
+  if (p === 'auth/otp/request' && post) {
+    const ph = phoneBody(body); if (ph.error) return json({ error: ph.error }, 400);
+    return otpIssue(env, req, now, ph.e164, 'login', null);
+  }
+  if (p === 'auth/otp/verify' && post) {
+    const ph = phoneBody(body); if (ph.error) return json({ error: ph.error }, 400);
+    const c = await otpCheck(env, req, now, ph.e164, 'login', null, body.code); if (c.res) return c.res;
+    const u = await db.prepare('SELECT id,username,name,avatar_key FROM users WHERE phone=?').bind(ph.e164).first();
+    if (u) return startSession(db, { id: u.id, username: u.username, name: u.name, avatar: u.avatar_key || null }, now, out, req, { status: 'ok' });
+    const t = rand(24);
+    await db.prepare('INSERT INTO signup_tickets(hash,phone,expires_at,used) VALUES(?,?,?,0)').bind(await sha(t), ph.e164, now + 900000).run();
+    return json({ status: 'new', ticket: t });
+  }
+  const ticketOf = async t => typeof t === 'string' && /^[a-f0-9]{48}$/.test(t) ? db.prepare('SELECT * FROM signup_tickets WHERE hash=? AND used=0 AND expires_at>?').bind(await sha(t), now).first() : null;
+  if (p === 'auth/username-check' && !post) {
+    if (!(await ticketOf(url.searchParams.get('ticket')))) return json({ available: false, reason: 'Verification expired. Start again.' });
+    const u = String(url.searchParams.get('u') || '').trim().toLowerCase();
+    if (!/^[a-z0-9_]{3,20}$/.test(u)) return json({ available: false, reason: 'Username: 3–20 letters, numbers or _' });
+    if (RESERVED.has(u)) return json({ available: false, reason: 'This username is reserved' });
+    const t = await db.prepare('SELECT id FROM users WHERE username=?').bind(u).first();
+    return json({ available: !t, reason: t ? 'Username already taken' : '' });
+  }
+  if (p === 'auth/signup' && post) {
+    const username = String(body.username || '').trim().toLowerCase(), name = String(body.name || '').trim();
     if (!/^[a-z0-9_]{3,20}$/.test(username)) return json({ error: 'Username: 3–20 letters, numbers or _' }, 400);
-    if (email && !EMAIL.test(email)) return json({ error: 'Enter a valid email address' }, 400);
+    if (RESERVED.has(username)) return json({ error: 'This username is reserved' }, 400);
     if (!name || name.length > 40) return json({ error: 'Enter your name (max 40 characters)' }, 400);
-    if (pw.length < 6) return json({ error: 'Password must be at least 6 characters' }, 400);
-    const salt = rand(16);
+    const t = await ticketOf(body.ticket); if (!t) return json({ error: 'Your verification expired. Please verify your phone again.', code: 'TICKET_EXPIRED' }, 400);
+    const th = t.hash, claim = await db.prepare('UPDATE signup_tickets SET used=1 WHERE hash=? AND used=0').bind(th).run();
+    if (!claim.meta.changes) return json({ error: 'Your verification expired. Please verify your phone again.', code: 'TICKET_EXPIRED' }, 400);
     let r;
-    try {
-      r = await db.prepare('INSERT INTO users(username,email,name,pass_hash,salt,created_at,last_seen) VALUES(?,?,?,?,?,?,?)')
-        .bind(username, email || null, name, await hashPw(pw, salt), salt, now, now).run();
-    } catch (e) {
-      if (/UNIQUE|constraint/i.test(String(e && e.message))) return json({ error: 'Username or email already taken' }, 409);
+    try { r = await db.prepare("INSERT INTO users(username,name,pass_hash,salt,phone,phone_verified_at,created_at,last_seen) VALUES(?,?,'','',?,?,?,?)").bind(username, name, t.phone, now, now, now).run(); }
+    catch (e) {
+      if (/UNIQUE|constraint/i.test(String(e && e.message))) {
+        if (/phone/i.test(String(e.message))) return json({ error: 'This number is already registered. Sign in instead.' }, 409);
+        await db.prepare('UPDATE signup_tickets SET used=0 WHERE hash=?').bind(th).run();   // let the person pick another username
+        return json({ error: 'Username already taken' }, 409);
+      }
       throw e;
     }
-    return startSession(db, { id: r.meta.last_row_id, username, name, avatar: null }, now);
+    return startSession(db, { id: r.meta.last_row_id, username, name, avatar: null }, now, out, req, { status: 'ok' });
   }
-
-  if (p === 'login' && post) {
-    const ident = String(body.username || body.email || body.identifier || '').trim().toLowerCase();
-    const pw = String(body.password || '');
-    if (!ident || !pw) return json({ error: 'Enter your username (or email) and password' }, 400);
-    const u = await db.prepare('SELECT id,username,name,avatar_key,pass_hash,salt FROM users WHERE username=?1 OR email=?1').bind(ident).first();
-    // same work + same message whether the account exists or not
+  // Existing accounts created before phone sign-in: username + old password, ONLY to get in and link a verified phone. Never works for accounts that already have a phone.
+  if (p === 'auth/legacy' && post) {
+    if (env.LEGACY_LOGIN === '0') return json({ error: 'Please sign in with your phone number' }, 403);
+    const ident = String(body.username || '').trim().toLowerCase().slice(0, 120), pw = String(body.password || '').slice(0, 200), ip = await ipHashOf(req);
+    if (!ident || !pw) return json({ error: 'Enter your username and old password' }, 400);
+    if (await failCount(db, 'leg:' + ip, now) >= 10 || await failCount(db, 'legu:' + ident, now) >= 10) return json({ error: 'Too many attempts. Try again in 15 minutes.' }, 429);
+    const u = await db.prepare('SELECT id,username,name,avatar_key,pass_hash,salt,phone FROM users WHERE username=?1 OR email=?1').bind(ident).first();
     const ok = u && u.pass_hash && safeEq(await hashPw(pw, u.salt), u.pass_hash);
-    if (!ok) return json({ error: 'Incorrect username/email or password' }, 401);
-    return startSession(db, { id: u.id, username: u.username, name: u.name, avatar: u.avatar_key || null }, now);
+    if (!ok) { await db.batch([db.prepare('INSERT INTO auth_fails(k,at) VALUES(?,?)').bind('leg:' + ip, now), db.prepare('INSERT INTO auth_fails(k,at) VALUES(?,?)').bind('legu:' + ident, now)]); return json({ error: 'Incorrect username or password' }, 401); }
+    if (u.phone) return json({ error: 'This account now uses phone sign-in. Enter your phone number instead.', code: 'USE_PHONE' }, 403);
+    return startSession(db, { id: u.id, username: u.username, name: u.name, avatar: u.avatar_key || null }, now, out, req, { status: 'ok', needs_phone: true });
+  }
+  // Old browser-stored token (from before this update) is exchanged once for a secure cookie session and then destroyed.
+  if (p === 'auth/adopt' && post) {
+    const old = (req.headers.get('authorization') || '').replace('Bearer ', '');
+    const u = /^[a-f0-9]{16,128}$/.test(old) ? await db.prepare('SELECT u.id,u.username,u.name,u.avatar_key,u.phone FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token=? AND s.created_at>?').bind(old, now - SESSION_MS).first() : null;
+    if (!u) return json({ error: 'Please sign in' }, 401);
+    await db.prepare('DELETE FROM sessions WHERE token=?').bind(old).run();
+    return startSession(db, { id: u.id, username: u.username, name: u.name, avatar: u.avatar_key || null }, now, out, req, { status: 'ok', needs_phone: !u.phone });
   }
 
-  // ---- authenticated routes ----
-  const tok = (req.headers.get('authorization') || '').replace('Bearer ', '');
-  const me = tok ? await db.prepare('SELECT u.id,u.username,u.name,u.avatar_key avatar,u.last_seen FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token=? AND s.created_at>?').bind(tok, now - SESSION_MS).first() : null;
-  if (!me) return json({ error: 'Please log in' }, 401);
-  if (now - me.last_seen > 10000) await db.prepare('UPDATE users SET last_seen=? WHERE id=?').bind(now, me.id).run(); // throttled: saves D1 writes
-  delete me.last_seen;
-
-  if (p === 'me') return json({ user: me });
-
+  // ---- authenticated routes (secure cookie only) ----
+  const ctok = cookieOf(req), sid = ctok ? await sha(ctok) : '';
+  if (post && ctok && !originOk()) return json({ error: 'Blocked' }, 403);          // CSRF guard for cookie-authenticated writes
   if (p === 'logout' && post) {
-    await db.prepare('DELETE FROM sessions WHERE token=?').bind(tok).run();
+    if (sid) await db.prepare('DELETE FROM sessions WHERE token=?').bind(sid).run();
+    out.cookie = sessionCookie('', 0);
     return json({ ok: true });
   }
+  const me = sid ? await db.prepare('SELECT u.id,u.username,u.name,u.avatar_key avatar,u.last_seen,s.last_used,s.created_at sc FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token=? AND MAX(s.last_used,s.created_at)>?').bind(sid, now - SESSION_IDLE_MS).first() : null;
+  if (!me) { if (ctok) out.cookie = sessionCookie('', 0); return json({ error: 'Please log in' }, 401); }
+  if (now - me.last_used > 12 * 3600000) { await db.prepare('UPDATE sessions SET last_used=? WHERE token=?').bind(now, sid).run(); out.cookie = sessionCookie(ctok, COOKIE_MAX); }   // sliding: stays logged in while you keep using it
+  if (now - me.last_seen > 10000) await db.prepare('UPDATE users SET last_seen=? WHERE id=?').bind(now, me.id).run(); // throttled: saves D1 writes
+  delete me.last_seen; delete me.last_used; delete me.sc;
+  const tok = sid;
+
+  if (p === 'me') { const u = await db.prepare('SELECT phone FROM users WHERE id=?').bind(me.id).first(); return json({ user: me, has_phone: !!(u && u.phone) }); }
 
   // ---- search registered users by username or full name (authenticated only) ----
   if (p === 'users/search' && !post) {
@@ -896,12 +1034,11 @@ async function route(req, env, url) {
 
   // =============== ACCOUNT MANAGEMENT ===============
   if (p === 'account' && !post) {
-    const u = await db.prepare('SELECT id,name,username,email,created_at FROM users WHERE id=?').bind(me.id).first();
+    const u = await db.prepare('SELECT id,name,username,email,phone,created_at FROM users WHERE id=?').bind(me.id).first();
     const pend = await db.prepare('SELECT new_email,expires_at FROM email_changes WHERE user_id=? AND expires_at>?').bind(me.id, now).first();
-    const sc = await db.prepare('SELECT COUNT(*) n FROM sessions WHERE user_id=? AND created_at>?').bind(me.id, now - SESSION_MS).first();
-    return json({ account: { name: u.name, username: u.username, email: u.email || null, created_at: u.created_at || null, pending_email: pend ? pend.new_email : null, sessions: sc.n, email_service: !!(env.RESEND_API_KEY && env.MAIL_FROM) } });
+    const sc = await db.prepare('SELECT COUNT(*) n FROM sessions WHERE user_id=? AND MAX(last_used,created_at)>?').bind(me.id, now - SESSION_IDLE_MS).first();
+    return json({ account: { name: u.name, username: u.username, phone: u.phone || null, sms: !!smsProvider(env), email: u.email || null, created_at: u.created_at || null, pending_email: pend ? pend.new_email : null, sessions: sc.n, email_service: !!(env.RESEND_API_KEY && env.MAIL_FROM) } });
   }
-  const pwOk = async pw => { const u = await db.prepare('SELECT pass_hash,salt FROM users WHERE id=?').bind(me.id).first(); return !!(u && u.pass_hash && typeof pw === 'string' && safeEq(await hashPw(pw, u.salt), u.pass_hash)); };
   if (p === 'account/username-check' && !post) {
     const u = String(url.searchParams.get('u') || '').trim().toLowerCase();
     if (!/^[a-z0-9_]{3,20}$/.test(u)) return json({ available: false, reason: 'Username: 3–20 letters, numbers or _' });
@@ -914,7 +1051,6 @@ async function route(req, env, url) {
     const u = String(body.username || '').trim().toLowerCase();
     if (!/^[a-z0-9_]{3,20}$/.test(u)) return json({ error: 'Username: 3–20 letters, numbers or _' }, 400);
     if (RESERVED.has(u)) return json({ error: 'This username is reserved' }, 400);
-    if (!(await pwOk(String(body.password || '')))) return json({ error: 'Your password is incorrect' }, 403);
     try { const r = await db.prepare('UPDATE users SET username=?1 WHERE id=?2 AND NOT EXISTS(SELECT 1 FROM users WHERE username=?1 AND id!=?2)').bind(u, me.id).run(); if (!r.meta.changes) { const same = await db.prepare('SELECT username FROM users WHERE id=?').bind(me.id).first(); return same && same.username === u ? json({ ok: true, username: u }) : json({ error: 'Username already taken' }, 409); } }
     catch (e) { if (/UNIQUE|constraint/i.test(String(e && e.message))) return json({ error: 'Username already taken' }, 409); throw e; }
     return json({ ok: true, username: u });
@@ -922,7 +1058,6 @@ async function route(req, env, url) {
   if (p === 'account/email/request' && post) {
     const email = String(body.email || '').trim().toLowerCase();
     if (!EMAIL.test(email) || email.length > 120) return json({ error: 'Enter a valid email address' }, 400);
-    if (!(await pwOk(String(body.password || '')))) return json({ error: 'Your password is incorrect' }, 403);
     if (!(env.RESEND_API_KEY && env.MAIL_FROM)) return json({ error: 'Email verification is not set up on this server yet, so your email cannot be changed right now.', code: 'EMAIL_NOT_CONFIGURED' }, 503);
     const cur = await db.prepare('SELECT email FROM users WHERE id=?').bind(me.id).first();
     if (cur && cur.email === email) return json({ error: 'This is already your email' }, 400);
@@ -950,15 +1085,28 @@ async function route(req, env, url) {
     return json({ ok: true, email: c.new_email });
   }
   if (p === 'account/email/cancel' && post) { await db.prepare('DELETE FROM email_changes WHERE user_id=?').bind(me.id).run(); return json({ ok: true }); }
-  if (p === 'account/password' && post) {
-    const cur = String(body.current || ''), np = String(body.password || '');
-    if (!(await pwOk(cur))) return json({ error: 'Your current password is incorrect' }, 403);
-    if (np.length < 8 || np.length > 100) return json({ error: 'New password must be 8–100 characters' }, 400);
-    if (!/[A-Za-z]/.test(np) || !/\d/.test(np)) return json({ error: 'New password needs at least one letter and one number' }, 400);
-    if (np === cur) return json({ error: 'New password must be different from the current one' }, 400);
-    const salt = rand(16);
-    await db.batch([db.prepare('UPDATE users SET pass_hash=?,salt=? WHERE id=?').bind(await hashPw(np, salt), salt, me.id), db.prepare('DELETE FROM sessions WHERE user_id=? AND token!=?').bind(me.id, tok)]);   // other devices are signed out
-    return json({ ok: true });
+  // ---- link / change phone number (OTP to the NEW number) ----
+  if (p === 'account/phone/request' && post) {
+    const ph = phoneBody(body); if (ph.error) return json({ error: ph.error }, 400);
+    const cur = await db.prepare('SELECT phone FROM users WHERE id=?').bind(me.id).first();
+    if (cur && cur.phone === ph.e164) return json({ error: 'This is already your number' }, 400);
+    const taken = await db.prepare('SELECT id FROM users WHERE phone=? AND id!=?').bind(ph.e164, me.id).first();
+    if (taken) return json({ error: 'This number is already registered to another account' }, 409);
+    return otpIssue(env, req, now, ph.e164, 'link', me.id);
+  }
+  if (p === 'account/phone/verify' && post) {
+    const ph = phoneBody(body); if (ph.error) return json({ error: ph.error }, 400);
+    const cur = await db.prepare('SELECT phone FROM users WHERE id=?').bind(me.id).first();
+    const c = await otpCheck(env, req, now, ph.e164, 'link', me.id, body.code); if (c.res) return c.res;
+    try { await db.prepare('UPDATE users SET phone=?,phone_verified_at=? WHERE id=?').bind(ph.e164, now, me.id).run(); }
+    catch (e) { if (/UNIQUE|constraint/i.test(String(e && e.message))) return json({ error: 'This number is already registered to another account' }, 409); throw e; }
+    if (cur && cur.phone) await db.prepare('DELETE FROM sessions WHERE user_id=? AND token!=?').bind(me.id, tok).run();   // a changed number signs other devices out
+    return json({ ok: true, phone: ph.e164 });
+  }
+  if (p === 'account/delete/request' && post) {
+    const u = await db.prepare('SELECT phone FROM users WHERE id=?').bind(me.id).first();
+    if (!u || !u.phone) return json({ error: 'Link your phone number first' }, 400);
+    return otpIssue(env, req, now, u.phone, 'delete', me.id);
   }
   if (p === 'account/logout-others' && post) {
     await db.prepare('DELETE FROM sessions WHERE user_id=? AND token!=?').bind(me.id, tok).run();
@@ -966,7 +1114,9 @@ async function route(req, env, url) {
   }
   if (p === 'account/delete' && post) {
     if (String(body.confirm || '') !== 'DELETE') return json({ error: 'Type DELETE to confirm' }, 400);
-    if (!(await pwOk(String(body.password || '')))) return json({ error: 'Your password is incorrect' }, 403);
+    const du = await db.prepare('SELECT phone,pass_hash,salt FROM users WHERE id=?').bind(me.id).first();
+    if (du && du.phone) { const c = await otpCheck(env, req, now, du.phone, 'delete', me.id, body.code); if (c.res) return c.res; }
+    else if (!(du && du.pass_hash && safeEq(await hashPw(String(body.password || ''), du.salt), du.pass_hash))) return json({ error: 'Link your phone number to delete your account, or enter your old password' }, 403);
     const id = me.id;
     const { results: keys } = await db.prepare('SELECT key FROM media WHERE owner_id=?').bind(id).all();
     for (const k of keys) await dropAny(k.key);
@@ -978,7 +1128,7 @@ async function route(req, env, url) {
       'DELETE FROM status_likes WHERE user_id=?1 OR status_id IN (SELECT id FROM statuses WHERE user_id=?1)', 'DELETE FROM status_views WHERE viewer_id=?1 OR status_id IN (SELECT id FROM statuses WHERE user_id=?1)',
       'DELETE FROM notifications WHERE user_id=?1 OR actor_id=?1', 'DELETE FROM statuses WHERE user_id=?1',
       'DELETE FROM messages WHERE sender_id=?1 OR receiver_id=?1', 'DELETE FROM contacts WHERE owner_id=?1 OR contact_id=?1', 'DELETE FROM blocks WHERE blocker_id=?1 OR blocked_id=?1',
-      'DELETE FROM chat_prefs WHERE user_id=?1 OR peer_id=?1', 'DELETE FROM user_prefs WHERE user_id=?1', 'DELETE FROM email_changes WHERE user_id=?1', 'DELETE FROM sessions WHERE user_id=?1', 'DELETE FROM users WHERE id=?1'
+      'DELETE FROM chat_prefs WHERE user_id=?1 OR peer_id=?1', 'DELETE FROM user_prefs WHERE user_id=?1', 'DELETE FROM email_changes WHERE user_id=?1', 'DELETE FROM otp_requests WHERE user_id=?1', 'DELETE FROM sessions WHERE user_id=?1', 'DELETE FROM users WHERE id=?1'
     ].map(q => db.prepare(q).bind(id)));
     return json({ ok: true });
   }
