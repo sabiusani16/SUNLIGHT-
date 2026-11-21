@@ -617,6 +617,36 @@ mark{background:var(--gold-s);color:inherit;border-radius:3px;padding:0 1px}
 .auth-btn.loading .spin{display:inline-block}
 @keyframes rot{to{transform:rotate(360deg)}}
 .auth-card input:disabled,.auth-switch:disabled{opacity:.6}
+
+/* phone + OTP auth */
+.auth-card.boot .astep{display:none}
+.auth-card:not(.boot) .aboot{display:none}
+.a-title{font-size:18px!important;font-weight:800;color:var(--text)!important;margin-bottom:0!important}
+.a-fine{font-size:12px!important;color:var(--muted);line-height:1.4}
+.a-hint{min-height:16px;margin:-4px 0 0!important;font-size:12.5px!important;text-align:left}
+.a-hint.ok{color:var(--green)!important}.a-hint.err{color:#D64545!important}
+.astep{display:flex;flex-direction:column;gap:12px}
+.astep[hidden]{display:none}
+.phone-row{display:flex;gap:8px}
+.phone-row #ctryBtn{display:flex;align-items:center;gap:6px;background:var(--soft);border-radius:14px;padding:0 12px;font-weight:700;flex:none;border:1.5px solid transparent}
+.phone-row #ctryBtn:focus-visible{border-color:var(--gold)}
+#ctryFlag{font-size:20px}
+.phone-row #ctryBtn i{font-size:10px;color:var(--muted)}
+.phone-row input{flex:1;min-width:0;font-size:17px;letter-spacing:.03em}
+.otp-boxes{display:flex;gap:8px;justify-content:center}
+.auth-card .otp-boxes input{width:44px;height:52px;padding:0;text-align:center;font-size:22px;font-weight:700;border-radius:12px}
+.otp-boxes.bad input{border-color:#D64545;animation:shk .3s}
+@keyframes shk{25%{transform:translateX(-4px)}75%{transform:translateX(4px)}}
+.aboot{display:flex;align-items:center;justify-content:center;gap:10px}
+.spin-d{width:16px;height:16px;border-radius:50%;border:2.5px solid var(--line2);border-top-color:var(--gold);animation:rot .7s linear infinite;display:inline-block}
+.sheet.ctry{max-height:75%;display:flex;flex-direction:column}
+.sheet.ctry[hidden],.sheet-bg[hidden]{display:none}
+.sheet.ctry>input{margin:0 6px 8px;background:var(--soft);border-radius:12px;padding:12px 14px;border:1.5px solid transparent}
+.sheet.ctry>input:focus{border-color:var(--gold)}
+#ctryList{overflow:auto;flex:1}
+#ctryList button .cf{font-size:22px;width:30px;text-align:center}
+#ctryList button b{margin-left:auto;color:var(--muted);font-weight:600}
+#ctryList button.sel{background:var(--gold-s)}
 </style>
 </head>
 <body>
@@ -940,18 +970,58 @@ mark{background:var(--gold-s);color:inherit;border-radius:3px;padding:0 1px}
 
   <!-- AUTH -->
   <div class="screen auth open" id="auth">
-    <form class="auth-card" id="authForm">
+    <div class="auth-card boot" id="authCard">
       <span class="logo big"><i class="fa-solid fa-sun"></i></span>
       <h2>SUNLIGHT</h2>
-      <p id="authSub">Log in to continue</p>
-      <label hidden id="nameWrap"><input id="authName" type="text" placeholder="Your name" maxlength="40" autocomplete="name"></label>
-      <label hidden id="emailWrap"><input id="authEmail" type="email" placeholder="Email (optional)" maxlength="100" autocomplete="email"></label>
-      <label><input id="authUser" type="text" placeholder="Username or email" maxlength="100" autocomplete="username" autocapitalize="none" required></label>
-      <label><input id="authPass" type="password" placeholder="Password" autocomplete="current-password" required></label>
-      <p class="auth-err" id="authErr"></p>
-      <button class="auth-btn" id="authBtn"><span class="spin" aria-hidden="true"></span><span id="authBtnTxt">Log in</span></button>
-      <button type="button" class="auth-switch" id="authSwitch">New here? Create an account</button>
-    </form>
+      <p class="aboot" id="aBoot"><span class="spin-d" aria-hidden="true"></span> <span id="aBootTxt">Loading…</span></p>
+
+      <form class="astep" id="stPhone" novalidate>
+        <p class="a-title" id="phTitle">Welcome to SUNLIGHT</p>
+        <p id="phSub">Enter your phone number to continue</p>
+        <div class="phone-row">
+          <button type="button" id="ctryBtn" aria-label="Choose country"><span id="ctryFlag">🇳🇬</span><span id="ctryDial">+234</span><i class="fa-solid fa-chevron-down"></i></button>
+          <input id="phoneIn" type="tel" inputmode="tel" autocomplete="tel-national" placeholder="803 123 4567" maxlength="20" aria-label="Phone number">
+        </div>
+        <p class="auth-err" id="phErr" role="alert"></p>
+        <button class="auth-btn" id="phBtn"><span class="spin" aria-hidden="true"></span><span id="phBtnTxt">Continue</span></button>
+        <button type="button" class="auth-switch" id="phAlt" hidden></button>
+        <p class="a-fine" id="phFine">We will send you an SMS with a 6-digit code. Message and data rates may apply.</p>
+      </form>
+
+      <form class="astep" id="stOtp" hidden novalidate>
+        <p class="a-title">Verify your phone number</p>
+        <p>Enter the 6-digit code we sent to<br><b id="otpMask"></b></p>
+        <div class="otp-boxes" id="otpBoxes">
+          <input inputmode="numeric" pattern="[0-9]*" maxlength="1" autocomplete="one-time-code" aria-label="Digit 1"><input inputmode="numeric" pattern="[0-9]*" maxlength="1" aria-label="Digit 2"><input inputmode="numeric" pattern="[0-9]*" maxlength="1" aria-label="Digit 3"><input inputmode="numeric" pattern="[0-9]*" maxlength="1" aria-label="Digit 4"><input inputmode="numeric" pattern="[0-9]*" maxlength="1" aria-label="Digit 5"><input inputmode="numeric" pattern="[0-9]*" maxlength="1" aria-label="Digit 6">
+        </div>
+        <p class="auth-err" id="otErr" role="alert"></p>
+        <button class="auth-btn" id="otBtn"><span class="spin" aria-hidden="true"></span><span id="otBtnTxt">Verify</span></button>
+        <button type="button" class="auth-switch" id="otResend" disabled>Resend code</button>
+        <button type="button" class="auth-switch" id="otChange">Change phone number</button>
+      </form>
+
+      <form class="astep" id="stProf" hidden novalidate>
+        <p class="a-title">Create your profile</p>
+        <p>Your phone is verified. Choose how people will find you.</p>
+        <label><input id="pfName" type="text" placeholder="Your name" maxlength="40" autocomplete="name"></label>
+        <label><input id="pfUser" type="text" placeholder="Username" maxlength="20" autocomplete="username" autocapitalize="none" spellcheck="false"></label>
+        <p class="a-hint" id="pfHint"></p>
+        <p class="auth-err" id="pfErr" role="alert"></p>
+        <button class="auth-btn" id="pfBtn"><span class="spin" aria-hidden="true"></span><span id="pfBtnTxt">Create account</span></button>
+      </form>
+
+      <form class="astep" id="stLeg" hidden novalidate>
+        <p class="a-title">Sign in with your old password</p>
+        <p>Only for accounts created before phone sign-in. After this you will add your phone number.</p>
+        <label><input id="lgUser" type="text" placeholder="Username or email" maxlength="100" autocomplete="username" autocapitalize="none"></label>
+        <label><input id="lgPass" type="password" placeholder="Old password" autocomplete="current-password"></label>
+        <p class="auth-err" id="lgErr" role="alert"></p>
+        <button class="auth-btn" id="lgBtn"><span class="spin" aria-hidden="true"></span><span id="lgBtnTxt">Sign in</span></button>
+        <button type="button" class="auth-switch" id="lgBack">Use my phone number instead</button>
+      </form>
+    </div>
+    <div class="sheet-bg" id="ctryBg" hidden></div>
+    <div class="sheet ctry" id="ctry" hidden role="dialog" aria-label="Choose country"><div class="grab"></div><input id="ctrySearch" placeholder="Search country or code" autocomplete="off" aria-label="Search country"><div id="ctryList"></div></div>
   </div>
 
   <!-- STATUS COMPOSER -->
@@ -1019,7 +1089,7 @@ const $$ = (s, r = document) => [...r.querySelectorAll(s)];
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const COLORS = ['#075B42', '#0E7C5A', '#8A6D0B', '#2F6F8F', '#6B4E9B', '#B5533C'];
 
-let token = localStorage.getItem('sl_token'), me = null, chats = [], contacts = [], results = [], current = null;
+let me = null, chats = [], contacts = [], results = [], current = null;
 let filter = 'all', query = '', pollTimer = null, sigChats = '', sigContacts = '', sigMsgs = '';
 let searchSeq = 0, searchTimer = null, lastQ = '', retryQ = '';
 const favs = new Set(JSON.parse(localStorage.getItem('sl_favs') || '[]'));
@@ -1030,14 +1100,15 @@ async function api(path, opts = {}) {
   try {
     res = await fetch((window.SUNLIGHT_API || '') + '/api/' + path, {
       method: opts.body ? 'POST' : (opts.method || 'GET'),
-      headers: { 'content-type': 'application/json', ...(token ? { authorization: 'Bearer ' + token } : {}) },
+      headers: { 'content-type': 'application/json' },
+      credentials: 'same-origin',                       // the login lives in a secure HttpOnly cookie, not in JavaScript
       body: opts.body ? JSON.stringify(opts.body) : undefined
     });
-  } catch { throw new Error('Cannot reach the server. Check your internet connection.'); }
+  } catch { const e = new Error('Cannot reach the server. Check your internet connection.'); e.net = true; throw e; }
   const data = await res.json().catch(() => null);
   if (!data) throw new Error(`Unexpected server response (HTTP ${res.status}). Make sure the Worker is deployed.`);
-  if (res.status === 401 && token && path !== 'login' && path !== 'register') logout(true);
-  if (!res.ok) throw new Error(data.error || 'Something went wrong');
+  if (res.status === 401 && me && !path.startsWith('auth/')) logout(true, 'Your session ended. Please sign in again.');
+  if (!res.ok) { const e = new Error(data.error || 'Something went wrong'); e.status = res.status; e.data = data; throw e; }
   return data;
 }
 
@@ -1075,56 +1146,142 @@ const openScreen = id => $('#' + id).classList.add('open');
 const closeScreen = id => $('#' + id).classList.remove('open');
 const empty = (icon, text) => `<div class="empty"><i class="${icon}"></i>${text}</div>`;
 
-/* ---------- Auth ---------- */
-let mode = 'login';
-function setMode(m) {
-  mode = m;
-  $('#nameWrap').hidden = m === 'login';
-  $('#emailWrap').hidden = m === 'login';
-  $('#authUser').placeholder = m === 'login' ? 'Username or email' : 'Username';
-  $('#authSub').textContent = m === 'login' ? 'Log in to continue' : 'Create your SUNLIGHT account';
-  $('#authBtnTxt').textContent = m === 'login' ? 'Log in' : 'Create account';
-  $('#authSwitch').textContent = m === 'login' ? 'New here? Create an account' : 'Already have an account? Log in';
-  $('#authPass').autocomplete = m === 'login' ? 'current-password' : 'new-password';
-  $('#authErr').textContent = '';
+/* ---------- Auth: phone number + SMS code ---------- */
+const COUNTRIES = [["NG","Nigeria","234",10,10,1],["GH","Ghana","233",9,9,1],["NE","Niger","227",8,8,0],["TD","Chad","235",8,8,0],["CM","Cameroon","237",9,9,0],["BJ","Benin","229",8,10,0],["TG","Togo","228",8,8,0],["BF","Burkina Faso","226",8,8,0],["ML","Mali","223",8,8,0],["SN","Senegal","221",9,9,0],["CI","Côte d’Ivoire","225",8,10,0],["LR","Liberia","231",7,9,1],["SL","Sierra Leone","232",8,8,1],["GM","Gambia","220",7,7,0],["GN","Guinea","224",9,9,0],["MR","Mauritania","222",8,8,0],["KE","Kenya","254",9,9,1],["UG","Uganda","256",9,9,1],["TZ","Tanzania","255",9,9,1],["RW","Rwanda","250",9,9,0],["ET","Ethiopia","251",9,9,1],["ZA","South Africa","27",9,9,1],["ZW","Zimbabwe","263",9,9,1],["ZM","Zambia","260",9,9,1],["AO","Angola","244",9,9,0],["MZ","Mozambique","258",9,9,0],["EG","Egypt","20",10,10,1],["MA","Morocco","212",9,9,1],["DZ","Algeria","213",9,9,1],["TN","Tunisia","216",8,8,0],["LY","Libya","218",9,9,1],["SD","Sudan","249",9,9,1],["SO","Somalia","252",7,9,0],["GB","United Kingdom","44",10,10,1],["IE","Ireland","353",9,9,1],["FR","France","33",9,9,1],["DE","Germany","49",10,11,1],["ES","Spain","34",9,9,0],["IT","Italy","39",9,10,0],["PT","Portugal","351",9,9,0],["NL","Netherlands","31",9,9,1],["BE","Belgium","32",9,9,1],["CH","Switzerland","41",9,9,1],["SE","Sweden","46",9,9,1],["NO","Norway","47",8,8,0],["DK","Denmark","45",8,8,0],["TR","Türkiye","90",10,10,1],["SA","Saudi Arabia","966",9,9,1],["AE","United Arab Emirates","971",9,9,1],["QA","Qatar","974",8,8,0],["KW","Kuwait","965",8,8,0],["JO","Jordan","962",9,9,1],["LB","Lebanon","961",7,8,1],["IQ","Iraq","964",10,10,1],["IR","Iran","98",10,10,1],["IN","India","91",10,10,1],["PK","Pakistan","92",10,10,1],["BD","Bangladesh","880",10,10,1],["CN","China","86",11,11,0],["JP","Japan","81",10,10,1],["KR","South Korea","82",9,10,1],["MY","Malaysia","60",9,10,1],["SG","Singapore","65",8,8,0],["ID","Indonesia","62",9,12,1],["PH","Philippines","63",10,10,1],["US","United States","1",10,10,0],["CA","Canada","1",10,10,0],["BR","Brazil","55",10,11,1],["MX","Mexico","52",10,10,0],["AR","Argentina","54",10,10,1],["AU","Australia","61",9,9,1],["NZ","New Zealand","64",8,10,1]];
+const flagOf = iso => String.fromCodePoint(...[...iso].map(c => 127397 + c.charCodeAt(0)));
+let aCountry = COUNTRIES.find(c => c[0] === 'NG'), aPhone = '', aTicket = '', aPurpose = 'login', aTimer = 0, aLeft = 0, aBusy = false;   // aPurpose: login | link | change
+const aStep = id => { $('#authCard').classList.remove('boot'); ['stPhone', 'stOtp', 'stProf', 'stLeg'].forEach(x => $('#' + x).hidden = x !== id); const f = $('#' + id).querySelector('input'); if (f && id !== 'stOtp') setTimeout(() => f.focus({ preventScroll: true }), 60); };
+const aBtn = (btn, txt, on, label, idle) => { $(btn).disabled = on; $(btn).classList.toggle('loading', on); $(txt).textContent = on ? label : idle; aBusy = on; };
+function setCountry(c) { aCountry = c; $('#ctryFlag').textContent = flagOf(c[0]); $('#ctryDial').textContent = '+' + c[2]; }
+function drawCountries(q = '') {
+  const t = q.trim().toLowerCase().replace(/^\+/, '');
+  $('#ctryList').innerHTML = COUNTRIES.filter(c => !t || c[1].toLowerCase().includes(t) || c[2].startsWith(t) || c[0].toLowerCase() === t).map(c => `<button type="button" data-iso="${c[0]}" class="${c[0] === aCountry[0] ? 'sel' : ''}"><span class="cf">${flagOf(c[0])}</span>${esc(c[1])}<b>+${c[2]}</b></button>`).join('') || '<div class="empty">No country found</div>';
 }
-$('#authSwitch').addEventListener('click', () => setMode(mode === 'login' ? 'register' : 'login'));
-let busy = false;
-function setBusy(on) {
-  busy = on;
-  const b = $('#authBtn');
-  b.disabled = on; b.classList.toggle('loading', on); b.setAttribute('aria-busy', on);
-  $$('#authForm input').forEach(i => i.disabled = on);
-  $('#authSwitch').disabled = on;
-  $('#authBtnTxt').textContent = on ? (mode === 'login' ? 'Logging in…' : 'Creating account…') : (mode === 'login' ? 'Log in' : 'Create account');
+function ctryOpen(on) { $('#ctry').hidden = $('#ctryBg').hidden = !on; if (on) { $('#ctrySearch').value = ''; drawCountries(); setTimeout(() => $('#ctrySearch').focus(), 50); } }
+$('#ctryBtn').addEventListener('click', () => ctryOpen(true));
+$('#ctryBg').addEventListener('click', () => ctryOpen(false));
+$('#ctrySearch').addEventListener('input', e => drawCountries(e.target.value));
+$('#ctryList').addEventListener('click', e => { const b = e.target.closest('[data-iso]'); if (!b) return; setCountry(COUNTRIES.find(c => c[0] === b.dataset.iso)); ctryOpen(false); $('#phoneIn').focus(); });
+function phoneCheck() {                                     // quick feedback only; the server validates again and is the authority
+  const raw = $('#phoneIn').value.trim(); if (!raw) return 'Enter your phone number';
+  if (/^(\+|00)/.test(raw)) return /^[+\d\s().-]{7,25}$/.test(raw) ? '' : 'Enter a valid phone number';
+  let d = raw.replace(/\D/g, ''); if (aCountry[5] && d.startsWith('0')) d = d.slice(1);
+  if (d.length < aCountry[3] || d.length > aCountry[4]) return `Enter a valid ${aCountry[1]} phone number`;
+  return '';
 }
-$('#authForm').addEventListener('submit', async e => {
-  e.preventDefault();
-  if (busy) return;                                   // ignore repeated clicks while a request is running
-  const username = $('#authUser').value.trim(), password = $('#authPass').value;
-  const name = $('#authName').value.trim(), email = $('#authEmail').value.trim();
-  const err = $('#authErr'); err.textContent = '';
-  if (!username || !password) { err.textContent = 'Enter your username (or email) and password'; return; }
-  if (mode === 'register' && !name) { err.textContent = 'Enter your name'; return; }
-  setBusy(true);
-  try {
-    const d = await api(mode, { body: mode === 'login' ? { username, password } : { name, username, email, password } });
-    token = d.token; localStorage.setItem('sl_token', token);
-    $('#authPass').value = '';
-    await start(d.user);                              // closes the login screen and shows the Chats home
-  } catch (e2) { err.textContent = e2.message; }
-  setBusy(false);
+function phoneStep(purpose) {
+  aPurpose = purpose;
+  const link = purpose !== 'login';
+  $('#phTitle').textContent = purpose === 'change' ? 'Change your phone number' : link ? 'Add your phone number' : 'Welcome to SUNLIGHT';
+  $('#phSub').textContent = purpose === 'change' ? 'Enter your new number. We will send a code to it.' : link ? 'Verify your phone number to keep your account safe and sign in with it from now on.' : 'Enter your phone number to continue';
+  $('#phAlt').hidden = false; $('#phAlt').textContent = purpose === 'login' ? 'Have an older account? Sign in with username' : purpose === 'change' ? 'Cancel' : 'Not now';
+  $('#phoneIn').value = ''; $('#phErr').textContent = ''; aStep('stPhone');
+  openScreen('auth');
+}
+$('#phAlt').addEventListener('click', () => {
+  if (aPurpose === 'login') { $('#lgErr').textContent = ''; aStep('stLeg'); return; }
+  try { sessionStorage.setItem('sl_nolink', '1'); } catch {}
+  closeScreen('auth');
 });
+$('#lgBack').addEventListener('click', () => aStep('stPhone'));
+const aApi = (kind, body) => api((aPurpose === 'login' ? 'auth/otp/' : 'account/phone/') + kind, { body: { country: aCountry[0], phone: $('#phoneIn').value.trim(), ...body } });
+function countdown(sec) {
+  clearInterval(aTimer); aLeft = sec; const b = $('#otResend');
+  const tick = () => { if (aLeft > 0) { b.disabled = true; b.textContent = `Resend code in ${Math.floor(aLeft / 60)}:${String(aLeft % 60).padStart(2, '0')}`; aLeft--; } else { clearInterval(aTimer); b.disabled = false; b.textContent = 'Resend code'; } };
+  tick(); aTimer = setInterval(tick, 1000);
+}
+const otpVal = () => $$('#otpBoxes input').map(i => i.value).join('');
+const otpClear = () => { $$('#otpBoxes input').forEach(i => i.value = ''); $$('#otpBoxes input')[0].focus(); };
+async function sendCode(resend) {
+  const err = resend ? $('#otErr') : $('#phErr'); err.textContent = '';
+  if (!resend) { const m = phoneCheck(); if (m) { err.textContent = m; return; } }
+  aBtn('#phBtn', '#phBtnTxt', !resend, 'Sending code…', 'Continue');
+  try {
+    const d = await aApi('request', {});
+    aPhone = d.masked; $('#otpMask').textContent = d.masked; otpClear(); $('#otErr').textContent = '';
+    aStep('stOtp'); $$('#otpBoxes input')[0].focus(); countdown(d.resend_in || 60);
+  } catch (e) {
+    err.textContent = e.message;
+    if (resend && e.data && e.data.retry_after && e.data.retry_after < 3600) countdown(e.data.retry_after);
+  }
+  aBtn('#phBtn', '#phBtnTxt', false, '', 'Continue');
+}
+$('#stPhone').addEventListener('submit', e => { e.preventDefault(); if (!aBusy) sendCode(false); });
+$('#otResend').addEventListener('click', () => { if (!aBusy && aLeft <= 0) sendCode(true); });
+$('#otChange').addEventListener('click', () => { clearInterval(aTimer); aStep('stPhone'); });
+// six boxes: type, paste, backspace, auto-fill from the SMS (one-time-code)
+{
+  const bx = $$('#otpBoxes input');
+  const fill = str => { const d = str.replace(/\D/g, '').slice(0, 6); bx.forEach((i, k) => i.value = d[k] || ''); (bx[Math.min(d.length, 5)]).focus(); if (d.length === 6) verifyCode(); };
+  bx.forEach((i, k) => {
+    i.addEventListener('input', () => { const v = i.value.replace(/\D/g, ''); if (v.length > 1) return fill(v); i.value = v; $('#otpBoxes').classList.remove('bad'); if (v && k < 5) bx[k + 1].focus(); if (otpVal().length === 6) verifyCode(); });
+    i.addEventListener('keydown', e => { if (e.key === 'Backspace' && !i.value && k > 0) { bx[k - 1].value = ''; bx[k - 1].focus(); } else if (e.key === 'ArrowLeft' && k > 0) bx[k - 1].focus(); else if (e.key === 'ArrowRight' && k < 5) bx[k + 1].focus(); });
+    i.addEventListener('paste', e => { e.preventDefault(); fill((e.clipboardData || window.clipboardData).getData('text')); });
+    i.addEventListener('focus', () => i.select());
+  });
+}
+async function verifyCode() {
+  if (aBusy) return; const code = otpVal(), err = $('#otErr'); err.textContent = '';
+  if (code.length !== 6) { err.textContent = 'Enter the 6-digit code'; return; }
+  aBtn('#otBtn', '#otBtnTxt', true, 'Verifying…', 'Verify');
+  try {
+    const d = await aApi('verify', { code });
+    if (aPurpose === 'login') {
+      if (d.status === 'new') { aTicket = d.ticket; clearInterval(aTimer); $('#pfErr').textContent = ''; $('#pfHint').textContent = ''; aStep('stProf'); }
+      else { clearInterval(aTimer); await start(d.user); }
+    } else {
+      clearInterval(aTimer); closeScreen('auth');
+      if (acc) { acc.phone = d.phone; if ($('#accScreen').classList.contains('open')) drawAccount(); }
+      toast('Phone number verified');
+    }
+  } catch (e) { err.textContent = e.message; $('#otpBoxes').classList.add('bad'); if (e.data && ['OTP_EXPIRED', 'OTP_LOCKED'].includes(e.data.code)) otpClear(); else $$('#otpBoxes input').forEach(i => i.value = ''), $$('#otpBoxes input')[0].focus(); }
+  aBtn('#otBtn', '#otBtnTxt', false, '', 'Verify');
+}
+$('#stOtp').addEventListener('submit', e => { e.preventDefault(); verifyCode(); });
+// profile (new account)
+let pfTimer = 0;
+$('#pfUser').addEventListener('input', e => {
+  const v = e.target.value.trim().toLowerCase(), h = $('#pfHint'); clearTimeout(pfTimer);
+  if (!v) { h.textContent = ''; h.className = 'a-hint'; return; }
+  pfTimer = setTimeout(async () => { try { const d = await api('auth/username-check?ticket=' + encodeURIComponent(aTicket) + '&u=' + encodeURIComponent(v)); if ($('#pfUser').value.trim().toLowerCase() === v) { h.textContent = d.available ? '✓ @' + v + ' is available' : d.reason; h.className = 'a-hint ' + (d.available ? 'ok' : 'err'); } } catch {} }, 350);
+});
+$('#stProf').addEventListener('submit', async e => {
+  e.preventDefault(); if (aBusy) return; const err = $('#pfErr'); err.textContent = '';
+  const name = $('#pfName').value.trim(), username = $('#pfUser').value.trim().toLowerCase();
+  if (!name) { err.textContent = 'Enter your name'; return; }
+  if (!/^[a-z0-9_]{3,20}$/.test(username)) { err.textContent = 'Username: 3–20 letters, numbers or _'; return; }
+  aBtn('#pfBtn', '#pfBtnTxt', true, 'Creating account…', 'Create account');
+  try { const d = await api('auth/signup', { body: { ticket: aTicket, name, username } }); aTicket = ''; await start(d.user); }
+  catch (e2) { err.textContent = e2.message; if (e2.data && e2.data.code === 'TICKET_EXPIRED') setTimeout(() => phoneStep('login'), 1500); }
+  aBtn('#pfBtn', '#pfBtnTxt', false, '', 'Create account');
+});
+// older accounts (password from before phone sign-in): only to get in and add a phone number
+$('#stLeg').addEventListener('submit', async e => {
+  e.preventDefault(); if (aBusy) return; const err = $('#lgErr'); err.textContent = '';
+  const username = $('#lgUser').value.trim(), password = $('#lgPass').value;
+  if (!username || !password) { err.textContent = 'Enter your username and old password'; return; }
+  aBtn('#lgBtn', '#lgBtnTxt', true, 'Signing in…', 'Sign in');
+  try { const d = await api('auth/legacy', { body: { username, password } }); $('#lgPass').value = ''; await start(d.user); if (d.needs_phone) linkPrompt(true); }
+  catch (e2) { err.textContent = e2.message; }
+  aBtn('#lgBtn', '#lgBtnTxt', false, '', 'Sign in');
+});
+function linkPrompt(force) { try { if (!force && sessionStorage.getItem('sl_nolink')) return; } catch {} phoneStep('link'); }
+function askLogout() {
+  return confirmBox({ title: 'Log out?', text: 'You will need your phone number and a new SMS code to sign in again.', ok: 'Log out', danger: true }).then(async yes => {
+    if (!yes) return;
+    try { await api('logout', { body: {} }); } catch (e) { toast(e.net ? 'Could not log out: no connection. Try again.' : e.message); return; }   // never pretend: the server must revoke the session
+    logout(true);
+  });
+}
 
-function logout(silent) {
+function logout(silent, msg) {
   if (typeof call !== 'undefined' && call && !call.done) hangup();
-  if (token && !silent) api('logout', { method: 'POST', body: {} }).catch(() => {});
-  token = null; me = null; groups = []; gSeen = null; channels = []; chSeen = null; ch = null; chatSeen = stSeen = null; nprefs = { ...NDEF }; current = null; chats = []; contacts = []; results = [];
-  localStorage.removeItem('sl_token');
-  clearInterval(pollTimer); sigChats = sigContacts = sigMsgs = sigStatus = ''; resetSearch(); stMine = []; stUsers = []; if (typeof svClose === 'function' && sv) svClose();
-  ['chatScreen', 'newChat'].forEach(closeScreen);
+  me = null; groups = []; gSeen = null; channels = []; chSeen = null; ch = null; chatSeen = stSeen = null; nprefs = { ...NDEF }; current = null; chats = []; contacts = []; results = [];
+  try { localStorage.removeItem('sl_token'); sessionStorage.removeItem('sl_nolink'); } catch {}
+  clearInterval(pollTimer); clearInterval(aTimer); sigChats = sigContacts = sigMsgs = sigStatus = ''; resetSearch(); stMine = []; stUsers = []; if (typeof svClose === 'function' && sv) svClose();
+  ['chatScreen', 'newChat', 'accScreen'].forEach(closeScreen);
   leaveChat(); mediaDone.forEach(u => URL.revokeObjectURL(u)); media.clear(); mediaDone.clear(); thread = []; pending = [];
-  openScreen('auth'); setMode('login');
+  phoneStep('login'); if (msg) $('#phErr').textContent = msg;
 }
 
 async function start(user) {
@@ -1279,7 +1436,7 @@ document.addEventListener('click', e => {
   const t = e.target.closest('[data-toast]'); if (t) toast(t.dataset.toast);
   const c = e.target.closest('[data-close]'); if (c) { closeScreen(c.dataset.close); if (c.dataset.close === 'newChat') resetSearch(); if (c.dataset.close === 'chatScreen') leaveChat(); }
   const s = e.target.closest('[data-set]');
-  if (s) { const k = s.dataset.set; k === '__logout' ? logout() : k === '__blocked' ? (openScreen('blockedScreen'), loadBlocked()) : k === '__theme' ? toggleTheme() : k === '__photo' ? $('#avatarInput').click() : k === '__rmphoto' ? removeAvatar() : k === 'Account' ? openAccount() : k === 'Notifications' ? openNs() : k === 'Help' ? openHelp() : toast(k); }
+  if (s) { const k = s.dataset.set; k === '__logout' ? askLogout() : k === '__blocked' ? (openScreen('blockedScreen'), loadBlocked()) : k === '__theme' ? toggleTheme() : k === '__photo' ? $('#avatarInput').click() : k === '__rmphoto' ? removeAvatar() : k === 'Account' ? openAccount() : k === 'Notifications' ? openNs() : k === 'Help' ? openHelp() : toast(k); }
 });
 $('#fab').addEventListener('click', () => { resetSearch(); loadContacts().catch(showContactsError); openScreen('newChat'); });
 
@@ -1322,7 +1479,7 @@ fetch((window.SUNLIGHT_API || '') + '/api/health').then(r => r.json()).then(d =>
 const vmedia = new Map();
 function vidUrl(key) {                                      // videos live in R2: fetched with the login token, played from a blob URL
   if (mediaDone.has(key)) return Promise.resolve(mediaDone.get(key));
-  if (!vmedia.has(key)) vmedia.set(key, fetch((window.SUNLIGHT_API || '') + '/api/media/' + key, { headers: { authorization: 'Bearer ' + token } })
+  if (!vmedia.has(key)) vmedia.set(key, fetch((window.SUNLIGHT_API || '') + '/api/media/' + key, { credentials: 'same-origin' })
     .then(r => { if (!r.ok) throw new Error('Could not load the video'); return r.blob(); })
     .then(b => { const u = URL.createObjectURL(b); mediaDone.set(key, u); return u; })
     .catch(e => { vmedia.delete(key); throw e; }));
@@ -1331,7 +1488,7 @@ function vidUrl(key) {                                      // videos live in R2
 function uploadVideo(blob, onProgress) {                    // raw bytes to /api/video with a real progress bar
   return new Promise((ok, no) => {
     const x = new XMLHttpRequest(); x.open('POST', (window.SUNLIGHT_API || '') + '/api/video');
-    x.setRequestHeader('authorization', 'Bearer ' + token); x.responseType = 'json';
+    x.withCredentials = true; x.responseType = 'json';
     x.upload.onprogress = e => { if (e.lengthComputable && onProgress) onProgress(Math.round(e.loaded / e.total * 100)); };
     x.onload = () => x.status === 200 && x.response ? ok(x.response) : no(new Error((x.response && x.response.error) || 'Video upload failed (' + x.status + ')'));
     x.onerror = () => no(new Error('Network problem while uploading the video')); x.ontimeout = () => no(new Error('Upload timed out'));
@@ -1961,7 +2118,7 @@ $('#callMute').addEventListener('click', () => {
   $('#callMute').classList.toggle('on', on); $('#callMuteW').classList.toggle('on', on); $('#callMute').setAttribute('aria-pressed', on);
   $('#callMute i').className = 'fa-solid ' + (on ? 'fa-microphone-slash' : 'fa-microphone'); $('#callMuteTxt').textContent = on ? 'Unmute' : 'Mute';
 });
-window.addEventListener('beforeunload', () => { if (call && !call.done && token) { try { fetch((window.SUNLIGHT_API || '') + '/api/calls/end', { method: 'POST', keepalive: true, headers: { 'content-type': 'application/json', authorization: 'Bearer ' + token }, body: JSON.stringify({ id: call.id, reason: 'hangup' }) }); } catch {} } });
+window.addEventListener('beforeunload', () => { if (call && !call.done && me) { try { fetch((window.SUNLIGHT_API || '') + '/api/calls/end', { method: 'POST', keepalive: true, credentials: 'same-origin', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ id: call.id, reason: 'hangup' }) }); } catch {} } });
 
 /* call history in the Calls tab: one row per call */
 async function loadCalls() {
@@ -2727,7 +2884,7 @@ function openExportSheet() {
     const b = e.target.closest('[data-exp]'); if (!b) return; const fmtx = b.dataset.exp, p = current;
     b.style.opacity = '.6'; b.disabled = true;
     try {
-      const r = await fetch((window.SUNLIGHT_API || '') + `/api/chat/export?with=${p.id}&format=${fmtx}`, { headers: { authorization: 'Bearer ' + token } });
+      const r = await fetch((window.SUNLIGHT_API || '') + `/api/chat/export?with=${p.id}&format=${fmtx}`, { credentials: 'same-origin' });
       if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'Export failed');
       const name = r.headers.get('x-filename') || `sunlight-chat.${fmtx}`, blob = await r.blob(), u = URL.createObjectURL(blob);
       const a = document.createElement('a'); a.href = u; a.download = name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(u), 8000);
@@ -2926,37 +3083,41 @@ function drawAccount(keep) {
   <div class="scard"><h4>Account information</h4>
     <div class="irow"><span>Full name</span><b>${esc(a.name)}</b></div>
     <div class="irow"><span>Username</span><b>@${esc(a.username)}</b></div>
+    <div class="irow"><span>Phone</span><b>${a.phone ? esc(a.phone) : 'Not added'}</b></div>
     <div class="irow"><span>Email</span><b>${a.email ? esc(a.email) : 'Not added'}</b></div>
     <div class="irow"><span>Joined</span><b>${esc(fmtDate(a.created_at))}</b></div>
   </div>
   <div class="scard"><h4>Profile &amp; login</h4>
     ${arow('fUser', 'fa-at', 'Change username', 'Currently @' + esc(a.username))}
-    <form class="sform" id="fUser" autocomplete="off" ${open.includes('fUser') ? '' : 'hidden'}><input id="nuName" placeholder="New username" maxlength="20" autocapitalize="none" spellcheck="false" aria-label="New username"><div class="fmsg" id="nuHint"></div><input id="nuPw" type="password" placeholder="Your password" autocomplete="current-password" aria-label="Current password"><button class="sbtn" type="submit">Save username</button><div class="fmsg"></div></form>
+    <form class="sform" id="fUser" autocomplete="off" ${open.includes('fUser') ? '' : 'hidden'}><input id="nuName" placeholder="New username" maxlength="20" autocapitalize="none" spellcheck="false" aria-label="New username"><div class="fmsg" id="nuHint"></div><button class="sbtn" type="submit">Save username</button><div class="fmsg"></div></form>
     ${arow('fMail', 'fa-envelope', 'Change email', a.pending_email ? 'Waiting to verify ' + esc(a.pending_email) : a.email ? esc(a.email) : 'Add an email address')}
     <form class="sform" id="fMail" autocomplete="off" ${open.includes('fMail') || a.pending_email ? '' : 'hidden'}>
       ${a.email_service ? '' : '<div class="hnote">Email verification is not set up on this server yet, so the email cannot be changed right now. The server owner must add the email service keys.</div>'}
-      <input id="neMail" type="email" placeholder="New email address" maxlength="120" autocapitalize="none" aria-label="New email"><input id="nePw" type="password" placeholder="Your password" autocomplete="current-password" aria-label="Current password">
+      <input id="neMail" type="email" placeholder="New email address" maxlength="120" autocapitalize="none" aria-label="New email">
       <button class="sbtn" type="submit" ${a.email_service ? '' : 'disabled'}>Send verification code</button>
       <div ${a.pending_email ? '' : 'hidden'} id="neCodeBox" style="display:${a.pending_email ? 'flex' : 'none'};flex-direction:column;gap:9px"><div class="hint">Enter the 6-digit code sent to <b>${esc(a.pending_email || '')}</b>. Your email changes only after it is verified.</div><input id="neCode" inputmode="numeric" maxlength="6" placeholder="6-digit code" aria-label="Verification code"><button class="sbtn" type="button" id="neConfirm">Verify and change email</button><button class="sbtn ghost" type="button" id="neCancel">Cancel change</button></div>
       <div class="fmsg"></div></form>
-    ${arow('fPass', 'fa-lock', 'Change password', 'Use at least 8 characters with a letter and a number')}
-    <form class="sform" id="fPass" autocomplete="off" ${open.includes('fPass') ? '' : 'hidden'}><input id="npCur" type="password" placeholder="Current password" autocomplete="current-password" aria-label="Current password"><input id="npNew" type="password" placeholder="New password" autocomplete="new-password" aria-label="New password"><input id="npNew2" type="password" placeholder="Repeat new password" autocomplete="new-password" aria-label="Repeat new password"><button class="sbtn" type="submit">Update password</button><div class="fmsg"></div></form>
+    <button type="button" class="arow" id="accPhone"><span class="set-ico"><i class="fa-solid fa-mobile-screen-button"></i></span><span>${a.phone ? 'Change phone number' : 'Add phone number'}<small>${a.phone ? 'Verify the new number with an SMS code' : 'Verify your number with an SMS code'}</small></span></button>
   </div>
   <div class="scard"><h4>Security</h4>
     <div class="irow"><span>Signed-in devices</span><b>${a.sessions}</b></div>
-    <div class="hint">Passwords are stored only as salted hashes. Changing your password signs out your other devices.</div>
+    <div class="hint">You sign in with your phone number and an SMS code. Changing your phone number signs out your other devices.</div>
     <button type="button" class="arow" id="accOthers"><span class="set-ico"><i class="fa-solid fa-mobile-screen"></i></span><span>Sign out other devices<small>Keep only this device signed in</small></span></button>
     <button type="button" class="arow" id="accLogout"><span class="set-ico"><i class="fa-solid fa-right-from-bracket"></i></span><span>Log out<small>Sign out of this device</small></span></button>
   </div>
   <div class="scard"><h4>Danger zone</h4>
     ${arow('fDel', 'fa-user-xmark', 'Delete account', 'Permanently remove your account and data', 'danger')}
-    <form class="sform" id="fDel" autocomplete="off" ${open.includes('fDel') ? '' : 'hidden'}><div class="hnote">This permanently deletes your profile, messages, calls, statuses, contacts and uploads. It cannot be undone.</div><input id="ndPw" type="password" placeholder="Your password" autocomplete="current-password" aria-label="Password"><input id="ndConf" placeholder="Type DELETE to confirm" autocapitalize="characters" aria-label="Type DELETE"><button class="sbtn red" type="submit">Delete my account</button><div class="fmsg"></div></form>
+    <form class="sform" id="fDel" autocomplete="off" ${open.includes('fDel') ? '' : 'hidden'}><div class="hnote">This permanently deletes your profile, messages, calls, statuses, contacts and uploads. It cannot be undone.</div>
+      ${a.phone ? `<button class="sbtn ghost" type="button" id="ndSend">Send a code to ${esc(a.phone)}</button><input id="ndCode" inputmode="numeric" maxlength="6" placeholder="6-digit code" aria-label="SMS code" hidden>` : `<div class="hnote">Add your phone number first for the safest deletion, or confirm with your old password.</div><input id="ndPw" type="password" placeholder="Old password" autocomplete="current-password" aria-label="Old password">`}
+      <input id="ndConf" placeholder="Type DELETE to confirm" autocapitalize="characters" aria-label="Type DELETE"><button class="sbtn red" type="submit">Delete my account</button><div class="fmsg"></div></form>
   </div>`;
 }
 $('#accBody').addEventListener('click', async e => {
   const t = e.target.closest('[data-toggle]');
   if (t) { const f = $('#' + t.dataset.toggle); f.hidden = !f.hidden; if (!f.hidden) { const i = f.querySelector('input'); if (i) setTimeout(() => i.focus(), 50); } return; }
-  if (e.target.closest('#accLogout')) return logout();
+  if (e.target.closest('#accLogout')) return askLogout();
+  if (e.target.closest('#accPhone')) return phoneStep('change');
+  if (e.target.closest('#ndSend')) { const b = e.target.closest('button'), f = $('#fDel'); b.disabled = true; try { await api('account/delete/request', { body: {} }); $('#ndCode').hidden = false; $('#ndCode').focus(); msgBox(f, 'Code sent by SMS.', true); } catch (err) { msgBox(f, err.message); } b.disabled = false; return; }
   if (e.target.closest('#accOthers')) {
     try { await api('account/logout-others', { body: {} }); acc.sessions = 1; drawAccount(); toast('Other devices signed out'); } catch (err) { toast(err.message); } return;
   }
@@ -2981,17 +3142,13 @@ $('#accBody').addEventListener('submit', async e => {
   e.preventDefault(); const f = e.target, btn = f.querySelector('button[type=submit]'); btn.disabled = true; msgBox(f, '');
   try {
     if (f.id === 'fUser') {
-      const d = await api('account/username', { body: { username: $('#nuName').value, password: $('#nuPw').value } });
+      const d = await api('account/username', { body: { username: $('#nuName').value } });
       acc.username = me.username = d.username; renderProfile(); drawAccount(); toast('Username changed to @' + d.username);
     } else if (f.id === 'fMail') {
-      const d = await api('account/email/request', { body: { email: $('#neMail').value, password: $('#nePw').value } });
+      const d = await api('account/email/request', { body: { email: $('#neMail').value } });
       acc.pending_email = d.pending_email; drawAccount(['fMail']); msgBox($('#fMail'), 'Code sent. Check your inbox.', true);
-    } else if (f.id === 'fPass') {
-      if ($('#npNew').value !== $('#npNew2').value) throw new Error('The new passwords do not match');
-      await api('account/password', { body: { current: $('#npCur').value, password: $('#npNew').value } });
-      acc.sessions = 1; drawAccount(); toast('Password updated');
     } else if (f.id === 'fDel') {
-      await api('account/delete', { body: { password: $('#ndPw').value, confirm: $('#ndConf').value.trim() } });
+      await api('account/delete', { body: { password: $('#ndPw') ? $('#ndPw').value : undefined, code: $('#ndCode') ? $('#ndCode').value.trim() : undefined, confirm: $('#ndConf').value.trim() } });
       logout(true); toast('Your account was deleted');
     }
   } catch (err) { msgBox(f, err.message); btn.disabled = false; }
@@ -3109,11 +3266,11 @@ const HELP = [
     ['How do I start a chat?', 'On the Chats tab tap the round button at the bottom right, search for a person by name or username, then tap their name to open a conversation.'],
     ['How do I add a contact?', 'Search for the person in the new-chat screen and tap Add. People you add appear in your contacts list.'] ] },
   { id: 'account', icon: 'fa-key', title: 'Account and Login', faq: [
-    ['How do I change my username?', 'Settings → Account → Change username. Pick a new name (3–20 letters, numbers or _), and confirm with your password. We tell you if it is taken.'],
-    ['How do I change my password?', 'Settings → Account → Change password. Enter your current password and a new one (8+ characters with a letter and a number). Your other devices are signed out.'],
+    ['How do I change my username?', 'Settings → Account → Change username. Pick a new name (3–20 letters, numbers or _). We tell you if it is taken.'],
+    ['How do I change my phone number?', 'Settings → Account → Change phone number. Enter the new number and the 6-digit SMS code sent to it. Your other devices are signed out.'],
     ['Why can\'t I change my email?', 'Changing email needs a verification code sent by email. If the server has not been connected to an email service yet, the change is not available. Your email never changes before you verify the code.'],
-    ['I forgot my password. What can I do?', 'Password reset by email is not available yet. Use Help → Contact support and describe the problem.'],
-    ['How do I delete my account?', 'Settings → Account → Delete account. You must enter your password and type DELETE. Deletion is permanent and removes your data.'] ] },
+    ['I lost access to my phone number. What can I do?', 'You need the SMS code sent to your number to sign in. If you can no longer receive SMS on it, use Help → Contact support and describe the problem.'],
+    ['How do I delete my account?', 'Settings → Account → Delete account. You confirm with an SMS code sent to your phone and type DELETE. Deletion is permanent and removes your data.'] ] },
   { id: 'chat', icon: 'fa-comment', title: 'Private Messaging', faq: [
     ['What do the ticks mean?', 'One tick: sent. Two ticks: delivered to the other person. Two blue ticks: read.'],
     ['How do I send a voice note, photo or video?', 'In a chat use the microphone to record a voice note, the paperclip to pick a photo, or the camera to take one. Videos appear only when video storage is enabled on the server.'],
@@ -3134,7 +3291,7 @@ const HELP = [
     ['Can I create a group?', 'Groups and Communities are not available yet. They are shown as coming soon.'] ] },
   { id: 'privacy', icon: 'fa-shield-halved', title: 'Privacy and Security', faq: [
     ['Who can see my email?', 'Nobody else. Other users only see your name, username and photo.'],
-    ['How is my password protected?', 'It is stored only as a salted hash, never as plain text.'],
+    ['How does sign-in work?', 'You sign in with your phone number and a 6-digit SMS code. Your device then stays signed in through a secure cookie until you log out. Codes are stored only as hashes and expire after 5 minutes.'],
     ['Are messages end-to-end encrypted?', 'No. Messages are protected in transit (HTTPS) and stored on the server so they can be delivered. Do not share secrets you would not give to the service.'] ] },
   { id: 'trouble', icon: 'fa-screwdriver-wrench', title: 'Troubleshooting', faq: [
     ['Messages are not arriving.', 'Check your internet connection and that you are logged in. The app checks for new messages every few seconds while it is open.'],
@@ -3167,7 +3324,7 @@ function drawHelp() {
     helpHead('About SUNLIGHT', 'Version ' + APP_VER);
     b.innerHTML = `<div class="scard" style="align-items:center;text-align:center"><span class="set-ico" style="width:56px;height:56px;font-size:26px"><i class="fa-solid fa-sun"></i></span><strong style="font-size:20px;letter-spacing:.08em">${APP_NAME}</strong><div class="hint">Version ${APP_VER}</div><div class="hint">SUNLIGHT is a messaging app for private chats, voice notes, photos, statuses and voice and video calls.</div></div>
       <div class="scard"><h4>Terms of Service</h4><div class="hint">The Terms of Service have not been published yet. When they are, they will appear here.</div></div>
-      <div class="scard"><h4>Privacy Policy</h4><div class="hint">A Privacy Policy has not been published yet. For transparency, this is what the app stores today (this is a summary, not a legal policy): your name, username, optional email, a salted password hash, profile photo, your messages and uploads, contacts, statuses, call records and your notification settings. Other users see only your name, username and photo.</div></div>`;
+      <div class="scard"><h4>Privacy Policy</h4><div class="hint">A Privacy Policy has not been published yet. For transparency, this is what the app stores today (this is a summary, not a legal policy): your name, username, optional email, a salted phone number (shown only to you), profile photo, your messages and uploads, contacts, statuses, call records and your notification settings. Other users see only your name, username and photo.</div></div>`;
   }
   b.scrollTop = 0;
 }
@@ -3646,8 +3803,22 @@ async function openChannelFromLink() {                       // /?channel=ID&cod
 }
 
 renderCommunity();
-setMode('login');
-if (token) api('me').then(d => start(d.user)).catch(() => logout(true));
+// Restore the saved login (secure cookie) on every open: no SMS code is asked while the session is valid.
+async function boot() {
+  let legacy = null; try { legacy = localStorage.getItem('sl_token'); } catch {}
+  try {
+    if (legacy) {                                            // one-time upgrade: old browser-stored token -> secure cookie session
+      let r; try { r = await fetch((window.SUNLIGHT_API || '') + '/api/auth/adopt', { method: 'POST', credentials: 'same-origin', headers: { 'content-type': 'application/json', authorization: 'Bearer ' + legacy }, body: '{}' }); } catch { throw Object.assign(new Error('net'), { net: true }); }
+      if (r.status < 500) { try { localStorage.removeItem('sl_token'); } catch {} }
+      if (r.ok) { const d = await r.json(); await start(d.user); if (d.needs_phone) linkPrompt(); return; }
+    }
+    const d = await api('me'); await start(d.user); if (!d.has_phone) linkPrompt();
+  } catch (e) {
+    if (e.net || (e.status && e.status >= 500)) { $('#aBootTxt').textContent = 'Connecting…'; $('#authCard').classList.add('boot'); setTimeout(boot, 3000); return; }   // keep the session, just retry
+    phoneStep('login');
+  }
+}
+boot();
 </script>
 </body>
 </html>
