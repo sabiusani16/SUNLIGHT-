@@ -153,6 +153,10 @@ main::-webkit-scrollbar{display:none}
 /* conversation */
 .chat-screen{background:var(--chatbg)}
 .messages{flex:1;overflow-y:auto;padding:14px 12px;display:flex;flex-direction:column;gap:6px}
+.crec{align-self:center;display:flex;align-items:center;gap:9px;width:min(88%,290px);box-sizing:border-box;background:var(--surface);color:var(--text);border:1px solid var(--line);border-radius:14px;padding:7px 12px;margin:3px 0;font-size:13px;cursor:pointer;box-shadow:0 1px 2px rgba(0,0,0,.06)}
+.crec .ci{flex:none;width:30px;height:30px;border-radius:50%;display:grid;place-items:center;background:rgba(245,185,0,.14);color:var(--gold);font-size:13px}
+.crec.miss .ci{background:rgba(255,107,107,.15);color:#FF6B6B}.crec.miss .ct{color:#FF6B6B}
+.crec .ct{font-weight:600;line-height:1.25}.crec small{display:block;color:var(--muted);font-size:11.5px;font-weight:400}
 .day{align-self:center;background:var(--surface);color:var(--muted);font-size:12px;font-weight:500;padding:5px 12px;border-radius:10px;margin-bottom:6px;box-shadow:0 1px 2px rgba(0,0,0,.06)}
 .msg{max-width:80%;padding:8px 12px 6px;border-radius:14px;font-size:15px;line-height:1.4;word-wrap:break-word;box-shadow:0 1px 2px rgba(0,0,0,.07);animation:pop .22s ease both}
 @keyframes pop{from{opacity:0;transform:scale(.94) translateY(6px)}to{opacity:1;transform:none}}
@@ -1110,7 +1114,7 @@ $('#fab').addEventListener('click', () => { resetSearch(); loadContacts().catch(
 
 /* ---------- Conversation ---------- */
 const MAX_REC = 300, MAX_VOICE_BYTES = 900000;              // longest voice note (seconds) / biggest file (D1 storage)
-let thread = [], pending = [], replyTo = null, uid = 0, rec = null, sheetMsg = null, sheetAt = 0, previewBlob = null, previewUrl = '';
+let callSig = '', thread = [], callsThread = [], pending = [], replyTo = null, uid = 0, rec = null, sheetMsg = null, sheetAt = 0, previewBlob = null, previewUrl = '';
 const media = new Map();                                    // media key -> Promise<blob URL>  (authenticated download, cached)
 const mediaDone = new Map();                                // media key -> blob URL once loaded
 const player = new Audio(); let playing = null;             // key of the voice note currently loaded in the player
@@ -1213,14 +1217,21 @@ function bodyHTML(m) {
   } else h += esc(m.body).replace(/\n/g, '<br>');
   return h;
 }
+function callRecHTML(c) {
+  const out = c.direction === 'out', missed = c.state === 'missed' && !out;
+  const lab = c.state === 'missed' ? (out ? 'No answer' : 'Missed') : c.state === 'rejected' ? 'Declined' : c.state === 'failed' ? 'Failed' : c.duration ? fmtDur(c.duration) : 'Ended';
+  const who = out ? 'You called' : esc(current.name) + ' called you';
+  return `<div class="crec${missed ? ' miss' : ''}" data-crec="${c.video ? 1 : 0}" role="button" tabindex="0" aria-label="Call again"><span class="ci"><i class="fa-solid ${c.video ? 'fa-video' : 'fa-phone'}"></i></span><span class="ct">${c.video ? 'Video call' : 'Voice call'} · ${who}<small><i class="fa-solid ${out ? 'fa-arrow-up-right' : 'fa-arrow-down-left'}" style="font-size:10px"></i> ${lab} · ${clock(c.created_at)} · Tap to call back</small></span></div>`;
+}
 function renderMessages(force) {
   if (!current) return;
   const near = $msgs.scrollHeight - $msgs.scrollTop - $msgs.clientHeight < 140;
-  const all = [...thread, ...pending.filter(p => p.to === current.id)];
+  const all = [...thread, ...pending.filter(p => p.to === current.id), ...callsThread.map(c => ({ call: c, created_at: c.created_at }))].sort((a, b) => a.created_at - b.created_at);
   let html = '', lastDay = '', prev = null;
   for (const m of all) {
     const day = new Date(m.created_at).toDateString();
     if (day !== lastDay) { lastDay = day; prev = null; html += `<div class="day">${dayLabel(m.created_at)}</div>`; }
+    if (m.call) { html += callRecHTML(m.call); prev = null; continue; }
     const out = m.sender_id === me.id;
     const cls = ['msg', out ? 'out' : 'in', prev && prev.sender_id === m.sender_id && m.created_at - prev.created_at < 3e5 ? 'grp' : '',
       m.status === 'failed' ? 'failed' : '', (m.type === 'image' || m.type === 'video') && !m.body && !m.deleted_at ? 'media-only' : ''].filter(Boolean).join(' ');
@@ -1265,7 +1276,7 @@ function seekVoice(track, e) {
 function openChat(id) {
   const p = contacts.find(u => u.id === +id) || chats.find(c => c.id === +id) || results.find(u => u.id === +id); if (!p) return;
   leaveChat();
-  current = p; sigMsgs = ''; thread = [];
+  current = p; sigMsgs = ''; callSig = ''; thread = []; callsThread = [];
   $('#chatAvatar').outerHTML = avatar(p, 'sm').replace('class="avatar sm"', 'class="avatar sm" id="chatAvatar"');
   $('#chatName').textContent = p.name;
   $('#chatState').textContent = p.online ? 'online' : '';
@@ -1276,13 +1287,14 @@ function openChat(id) {
 async function loadMessages(force) {
   if (!current) return;
   const who = current;
-  const d = await api('messages?with=' + who.id);
+  const [d, cd] = await Promise.all([api('messages?with=' + who.id), api('calls/history?with=' + who.id).catch(() => null)]);
   if (current !== who) return;
+  const csig = cd ? cd.calls.map(c => c.id + c.state).join() : callSig;
   $('#chatState').textContent = d.online ? 'online' : d.last_seen ? seenText(d.last_seen) : 'offline';
   applyChatState(d);
   const sig = d.messages.map(m => `${m.id}${m.read_at ? 'r' : m.delivered_at ? 'd' : ''}${m.deleted_at ? 'x' : ''}`).join();
-  if (!force && sig === sigMsgs) return;
-  applyChatState(d); sigMsgs = sig; thread = d.messages; renderMessages(force);
+  if (!force && sig === sigMsgs && csig === callSig) return;
+  applyChatState(d); sigMsgs = sig; callSig = csig; thread = d.messages; if (cd) callsThread = cd.calls; renderMessages(force);
 }
 function leaveChat() {
   stopRec(false); player.pause(); playing = null; hideSheets(); clearReply();
@@ -1784,6 +1796,7 @@ async function loadCalls() {
     return `<div class="row crow" data-callback="${c.peer.id}" data-cv="${c.video ? 1 : 0}">${avatar(c.peer)}<div class="body"><div class="line"><strong class="${missed ? 'miss' : ''}">${esc(c.peer.name)}</strong></div><div class="cmeta"><i class="fa-solid ${out ? 'fa-arrow-up-right' : 'fa-arrow-down-left'} ${missed ? 'miss' : ''}" style="font-size:11px"></i><span class="${missed ? 'miss' : ''}">${c.video ? '<i class="fa-solid fa-video" style="font-size:11px"></i> Video · ' : ''}${out ? 'Outgoing' : 'Incoming'} · ${lab}</span><span>· ${stTime(c.created_at)}</span></div></div><button type="button" class="cback" aria-label="Call ${esc(c.peer.name)}"><i class="fa-solid ${c.video ? 'fa-video' : 'fa-phone'}"></i></button></div>`;
   }).join('') : empty('fa-solid fa-phone', 'No calls yet<small>Open a chat and tap the phone icon to call.</small>');
 }
+$msgs.addEventListener('click', e => { const r = e.target.closest('.crec'); if (!r || !current) return; if (current.blocked) return toast('Unblock this user to call them'); startCall(current, r.dataset.crec === '1'); });
 $('#callList').addEventListener('click', e => { const r = e.target.closest('[data-callback]'); if (!r) return; const id = +r.dataset.callback; const u = contacts.find(x => x.id === id) || chats.find(x => x.id === id); if (u) startCall(u, r.dataset.cv === '1'); else toast('Open a chat with this person to call them'); });
 
 /* --- voice notes: tap mic to record, trash to cancel, send button to send --- */
@@ -2462,7 +2475,7 @@ async function clearChat() {
   const p = current;
   const yes = await confirmBox({ title: 'Clear this chat?', text: `This removes the conversation history from <b>your view only</b>. ${esc(p.name)} keeps their own copy, and new messages will still arrive.`, ok: 'Clear chat', danger: true });
   if (!yes) return;
-  try { await api('chat/clear', { body: { with: p.id } }); if (current === p) { thread = []; pending = pending.filter(x => x.to !== p.id); sigMsgs = ''; renderMessages(true); } toast('Chat cleared'); loadChats().catch(() => {}); }
+  try { await api('chat/clear', { body: { with: p.id } }); if (current === p) { thread = []; callsThread = []; callSig = ''; pending = pending.filter(x => x.to !== p.id); sigMsgs = ''; renderMessages(true); } toast('Chat cleared'); loadChats().catch(() => {}); }
   catch (err) { toast(err.message); }
 }
 
