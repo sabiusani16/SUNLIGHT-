@@ -140,7 +140,7 @@ export default {
         await env.DB.prepare('INSERT INTO error_log(ref,route,message,created_at) VALUES(?,?,?,?)').bind(ref, req.method + ' ' + url.pathname, msg.slice(0, 500), Date.now()).run();
         await env.DB.prepare('DELETE FROM error_log WHERE id <= (SELECT MAX(id) FROM error_log) - 100').run();
       } catch {}
-      if (env.DEBUG_ERRORS === '1') return json({ error: `Server error (ref ${ref}): ${msg.slice(0, 160)}`, code: 'SERVER' }, 500);   // owner-only switch (Worker variable) for troubleshooting
+      if (env.DEBUG_ERRORS !== '0') return json({ error: `Server error (ref ${ref}): ${msg.slice(0, 160)}`, code: 'SERVER' }, 500);   // TEMPORARY: shows the cause while we hunt a bug. Set Worker variable DEBUG_ERRORS=0 to hide it again
       if (/no such table|no such column/i.test(msg)) return json({ error: 'Database tables are missing. Run: wrangler d1 execute DB --remote --file=schema.sql', code: 'DB_SCHEMA' }, 500);
       return json({ error: `Server error (ref ${ref}). Please try again.`, code: 'SERVER' }, 500);
     }
