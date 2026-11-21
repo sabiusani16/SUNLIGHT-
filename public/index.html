@@ -186,6 +186,42 @@ main::-webkit-scrollbar{display:none}
 .faq .ans{display:none;padding:0 14px 14px;color:var(--muted);font-size:14px;line-height:1.55}.faq.open .ans{display:block}
 .hnote{background:var(--gold-s);border-radius:12px;padding:10px 12px;font-size:13px;line-height:1.45}
 .sreq{border-top:1px solid var(--line);padding-top:8px;font-size:13.5px}.sreq b{display:block}.sreq small{color:var(--muted)}
+/* ---- groups ---- */
+#gNewScreen,#gInfoScreen{z-index:35}#gPickScreen{z-index:36}
+.gpick{width:96px;height:96px;border-radius:50%;background:var(--gold-s);color:var(--accent);font-size:28px;display:grid;place-items:center;overflow:hidden;position:relative;cursor:pointer}
+.gpick img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.chips{display:flex;flex-wrap:wrap;gap:8px}.chips span{background:var(--bg);border:1px solid var(--line);border-radius:16px;padding:5px 10px;font-size:13px;display:flex;align-items:center;gap:6px}.chips span button{color:var(--muted);font-size:12px}
+.gpfoot{padding:10px 14px calc(12px + env(safe-area-inset-bottom,0px));border-top:1px solid var(--line);background:var(--bg)}
+.prow{display:flex;align-items:center;gap:12px;padding:8px 4px;cursor:pointer;border-radius:12px}.prow:active{background:var(--soft)}.prow .body{flex:1;min-width:0}.prow .body small{display:block;color:var(--muted);font-size:12.5px}
+.prow .ck{flex:none;width:22px;height:22px;border-radius:50%;border:2px solid var(--muted);display:grid;place-items:center;font-size:11px;color:transparent}.prow.on .ck{background:var(--gold);border-color:var(--gold);color:#14210f}
+.badge-r{font-size:11px;font-weight:700;color:var(--accent);background:var(--gold-s);border-radius:9px;padding:2px 8px}
+.ginfo-top{display:flex;flex-direction:column;align-items:center;gap:6px;text-align:center}.ginfo-top .avatar{width:96px;height:96px;font-size:32px}.ginfo-top h3{font-size:20px;margin:4px 0 0}.ginfo-top p{color:var(--muted);font-size:14px;max-width:100%;word-break:break-word;white-space:pre-wrap}
+.msg .gname{display:block;font-size:12.5px;font-weight:700;margin-bottom:2px}
+.msg .rx{display:flex;flex-wrap:wrap;gap:4px;margin-top:4px}.msg .rx span{background:rgba(255,255,255,.1);border:1px solid var(--line);border-radius:12px;padding:1px 7px;font-size:13px;cursor:pointer}.msg .rx span.me{border-color:var(--gold);background:var(--gold-s)}
+.rxrow{display:flex;justify-content:space-around;padding:6px 4px 10px}.rxrow button{width:46px!important;padding:6px!important;justify-content:center;font-size:24px;border-radius:50%!important}
+body:not(.gmode) .gonly{display:none!important}body.gmode .ponly{display:none!important}
+.seg{display:flex;gap:6px;margin:0 16px 8px;background:var(--soft);border-radius:14px;padding:4px}.seg button{flex:1;padding:8px;border-radius:11px;font-weight:600;font-size:14px;color:var(--muted)}.seg button.on{background:var(--gold);color:#14210f}
+.comm-act{margin:4px 16px 10px}.comm-act button{width:100%}
+/* ---- channels ---- */
+#chNewScreen,#chScreen{z-index:34}#chInfoScreen{z-index:35}
+.chfeed{flex:1;overflow-y:auto;padding:12px;display:flex;flex-direction:column;gap:12px;background:var(--bg);-webkit-overflow-scrolling:touch}
+.post{background:var(--soft);border-radius:16px;padding:12px 14px;display:flex;flex-direction:column;gap:8px;max-width:100%}
+.post .ph{display:flex;align-items:center;gap:8px}.post .ph strong{font-size:14px}.post .ph small{color:var(--muted);font-size:12px}.post .ph .grow{flex:1;min-width:0}
+.post .pb{font-size:15px;line-height:1.5;word-break:break-word;white-space:pre-wrap}.post .img-wrap,.post .vid{border-radius:12px;overflow:hidden;max-width:100%}
+.post .img-wrap img{width:100%;display:block;max-height:420px;object-fit:cover}
+.post .pa{display:flex;flex-wrap:wrap;align-items:center;gap:6px}.post .pa button,.post .pa span.rxc{display:flex;align-items:center;gap:6px;border-radius:16px;padding:5px 11px;background:var(--bg);border:1px solid var(--line);font-size:13px;color:inherit}
+.post .pa button.on{border-color:var(--gold);background:var(--gold-s)}.post .pa .grow{flex:1}
+.post .pdel{color:var(--muted);font-style:italic;font-size:14px}
+.chbar{padding:10px 14px calc(12px + env(safe-area-inset-bottom,0px));border-top:1px solid var(--line);background:var(--bg);text-align:center}
+.chcomposer{border-top:1px solid var(--line);background:var(--bg);padding:8px 10px calc(10px + env(safe-area-inset-bottom,0px))}
+.chrow{display:flex;align-items:flex-end;gap:8px}.chrow textarea{flex:1;background:var(--soft);border-radius:20px;padding:10px 14px;font-size:15px;max-height:120px;resize:none}
+.chatt{display:flex;align-items:center;gap:8px;padding:4px 6px 8px;font-size:13px;color:var(--muted)}.chatt button{margin-left:auto;color:var(--muted)}
+.crow-mini{display:flex;align-items:center;gap:8px;color:var(--muted);font-size:12.5px}
+.disc-h{margin:10px 16px 6px;font-size:13px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--accent)}
+.row .subbtn{flex:none;border-radius:16px;padding:6px 14px;font-weight:700;font-size:13px;background:var(--gold);color:#14210f}.row .subbtn.on{background:var(--bg);color:var(--text);border:1.5px solid var(--line)}
+.comm-search{margin:0 16px 8px}
+.cmt{border-top:1px solid var(--line);padding:8px 0;font-size:14px}.cmt b{font-size:13px}.cmt small{color:var(--muted);margin-left:6px}.cmt button{float:right;color:var(--muted);font-size:12px}
+.cminput{display:flex;gap:8px;margin-top:10px}.cminput input{flex:1;background:var(--bg);border:1.5px solid var(--line);border-radius:18px;padding:10px 14px;font-size:15px}.cminput button{background:var(--gold);color:#14210f;border-radius:18px;padding:0 16px;font-weight:700}
 .day{align-self:center;background:var(--surface);color:var(--muted);font-size:12px;font-weight:500;padding:5px 12px;border-radius:10px;margin-bottom:6px;box-shadow:0 1px 2px rgba(0,0,0,.06)}
 .msg{max-width:80%;padding:8px 12px 6px;border-radius:14px;font-size:15px;line-height:1.4;word-wrap:break-word;box-shadow:0 1px 2px rgba(0,0,0,.07);animation:pop .22s ease both}
 @keyframes pop{from{opacity:0;transform:scale(.94) translateY(6px)}to{opacity:1;transform:none}}
@@ -497,6 +533,15 @@ mark{background:var(--gold-s);color:inherit;border-radius:3px;padding:0 1px}
 .chat-screen[data-bg="ocean"],.tp[data-bg="ocean"]{background:linear-gradient(160deg,#03121C,#0F4468)}
 .chat-screen[data-bg="rose"],.tp[data-bg="rose"]{background:linear-gradient(160deg,#1C0A12,#53193A)}
 .chat-screen[data-bg="slate"],.tp[data-bg="slate"]{background:#1C2227}
+.chat-screen.haswp{background:linear-gradient(rgba(0,0,0,var(--wdim,.35)),rgba(0,0,0,var(--wdim,.35))),var(--wp) center/cover no-repeat}
+.tp.haswp{background:linear-gradient(rgba(0,0,0,var(--wdim,.35)),rgba(0,0,0,var(--wdim,.35))),var(--wp) center/cover no-repeat}
+.wpbtn{display:flex;align-items:center;gap:10px;width:100%;padding:12px 14px;border-radius:12px;background:var(--gold-s);color:var(--text);font-weight:700;margin:2px 0 10px}.wpbtn i{color:var(--accent)}
+.wpdim{display:flex;align-items:center;gap:10px;margin:2px 0 12px;font-size:13px;color:var(--muted)}.wpdim input{flex:1;accent-color:var(--gold)}
+.wpcrop{position:fixed;inset:0;z-index:95;background:#050A08;color:#fff;display:flex;flex-direction:column;align-items:center}
+.wpcrop .top{width:100%;display:flex;align-items:center;justify-content:space-between;padding:calc(10px + env(safe-area-inset-top,0px)) 14px 10px;font-weight:700}
+.wpcrop .top button,.wpcrop .bot button{padding:10px 16px;border-radius:12px;font-weight:700;background:rgba(255,255,255,.12);color:#fff}.wpcrop .top .go,.wpcrop .bot .go{background:var(--gold);color:#14210f}
+.wpcrop .stage{flex:1;display:grid;place-items:center;width:100%;min-height:0}.wpcrop canvas{border-radius:14px;touch-action:none;cursor:grab;box-shadow:0 0 0 2px rgba(245,197,66,.55);background:#000}
+.wpcrop .bot{width:100%;padding:10px 18px calc(16px + env(safe-area-inset-bottom,0px));display:flex;flex-direction:column;gap:10px;align-items:center;font-size:13px;color:#cfd8d3}.wpcrop .bot input{width:100%;accent-color:var(--gold)}
 .chat-screen[data-bg="dots"],.tp[data-bg="dots"]{background:#06100C radial-gradient(rgba(245,197,66,.13) 1.3px,transparent 1.5px) 0 0/22px 22px}
 [data-bc="gold"]{--out-bg:#F5C542;--out-fg:#1B1405}[data-bc="blue"]{--out-bg:#1D5FB8;--out-fg:#fff}[data-bc="purple"]{--out-bg:#6B3FB5;--out-fg:#fff}[data-bc="rose"]{--out-bg:#B33A63;--out-fg:#fff}[data-bc="teal"]{--out-bg:#0F766E;--out-fg:#fff}
 .msg.out{background:var(--out-bg,var(--bubble-out));color:var(--out-fg,inherit)}
@@ -627,6 +672,8 @@ mark{background:var(--gold-s);color:inherit;border-radius:3px;padding:0 1px}
     <!-- COMMUNITIES -->
     <section class="view" id="view-communities">
       <h2 class="title">Communities</h2>
+      <div class="seg" id="commSeg"><button type="button" class="on" data-cs="groups">Groups</button><button type="button" data-cs="channels">Channels</button></div>
+      <div class="comm-act" id="commAct"></div>
       <div class="chat-list" id="communityList"></div>
     </section>
 
@@ -673,7 +720,7 @@ mark{background:var(--gold-s);color:inherit;border-radius:3px;padding:0 1px}
         <div class="quick">
           <button data-act="group"><span class="q-ico"><i class="fa-solid fa-user-group"></i></span>New group</button>
           <button data-act="contact"><span class="q-ico"><i class="fa-solid fa-user-plus"></i></span>New contact</button>
-          <button data-act="community"><span class="q-ico"><i class="fa-solid fa-users"></i></span>New community</button>
+          <button data-act="community"><span class="q-ico"><i class="fa-solid fa-bullhorn"></i></span>New channel</button>
         </div>
         <h3 class="sub">My contacts</h3>
         <div class="chat-list" id="contactList"></div>
@@ -722,25 +769,96 @@ mark{background:var(--gold-s);color:inherit;border-radius:3px;padding:0 1px}
     <div class="sbody" id="helpBody"></div>
   </div>
 
+  <!-- GROUP: CREATE -->
+  <div class="screen" id="gNewScreen">
+    <div class="screen-head"><button class="icon-btn light" data-close="gNewScreen" aria-label="Back"><i class="fa-solid fa-arrow-left"></i></button><div class="grow"><strong>New group</strong><small id="gnSub">Add a name and members</small></div></div>
+    <div class="sbody">
+      <div class="scard" style="align-items:center">
+        <button type="button" class="gpick" id="gnPick" aria-label="Choose group photo"><i class="fa-solid fa-camera"></i></button>
+        <div class="hint">Group photo (optional)</div>
+        <input type="file" id="gnFile" accept="image/jpeg,image/png,image/webp" hidden>
+      </div>
+      <form class="scard sform" id="gnForm" autocomplete="off">
+        <input id="gnName" maxlength="40" placeholder="Group name" aria-label="Group name">
+        <textarea id="gnDesc" maxlength="200" placeholder="Description (optional)" style="min-height:76px" aria-label="Description"></textarea>
+        <button type="button" class="arow" id="gnMembers"><span class="set-ico"><i class="fa-solid fa-user-plus"></i></span><span>Add members<small id="gnMemSub">Choose from your contacts</small></span><i class="fa-solid fa-chevron-right chev"></i></button>
+        <div id="gnChips" class="chips"></div>
+        <button class="sbtn" type="submit" id="gnCreate">Create group</button>
+        <div class="fmsg"></div>
+      </form>
+    </div>
+  </div>
+
+  <!-- GROUP: PICK CONTACTS -->
+  <div class="screen" id="gPickScreen">
+    <div class="screen-head"><button class="icon-btn light" data-close="gPickScreen" aria-label="Back"><i class="fa-solid fa-arrow-left"></i></button><div class="grow"><strong id="gpTitle">Select contacts</strong><small id="gpSub"></small></div></div>
+    <div class="hsearch" style="margin:10px 14px 0"><i class="fa-solid fa-magnifying-glass"></i><input id="gpQ" type="search" placeholder="Search contacts" autocomplete="off" aria-label="Search contacts"></div>
+    <div class="sbody" id="gpList"></div>
+    <div class="gpfoot"><button type="button" class="sbtn" id="gpDone" style="width:100%">Done</button></div>
+  </div>
+
+  <!-- GROUP: INFO -->
+  <div class="screen" id="gInfoScreen">
+    <div class="screen-head"><button class="icon-btn light" data-close="gInfoScreen" aria-label="Back"><i class="fa-solid fa-arrow-left"></i></button><div class="grow"><strong>Group info</strong><small id="giSub"></small></div></div>
+    <div class="sbody" id="giBody"></div>
+  </div>
+
+  <!-- CHANNEL: CREATE -->
+  <div class="screen" id="chNewScreen">
+    <div class="screen-head"><button class="icon-btn light" data-close="chNewScreen" aria-label="Back"><i class="fa-solid fa-arrow-left"></i></button><div class="grow"><strong>New channel</strong><small>Broadcast posts to subscribers</small></div></div>
+    <div class="sbody">
+      <div class="scard" style="align-items:center"><button type="button" class="gpick" id="cnPick" aria-label="Choose channel photo"><i class="fa-solid fa-camera"></i></button><div class="hint">Channel photo (optional)</div><input type="file" id="cnFile" accept="image/jpeg,image/png,image/webp" hidden></div>
+      <form class="scard sform" id="cnForm" autocomplete="off">
+        <input id="cnName" maxlength="40" placeholder="Channel name" aria-label="Channel name">
+        <textarea id="cnDesc" maxlength="300" placeholder="Description" style="min-height:90px" aria-label="Description"></textarea>
+        <div class="hint" style="font-weight:700;color:var(--text)">Who can find it?</div>
+        <div class="tone sel" data-vis="public" role="radio" aria-checked="true" tabindex="0"><span class="rd"></span><span>Public<small style="display:block;color:var(--muted)">Anyone can discover and subscribe</small></span></div>
+        <div class="tone" data-vis="private" role="radio" aria-checked="false" tabindex="0"><span class="rd"></span><span>Private<small style="display:block;color:var(--muted)">Only people with your invite link can join</small></span></div>
+        <label class="tgl"><span class="tx">Allow comments<small>Subscribers can comment on posts</small></span><input type="checkbox" id="cnCom" checked><span class="tsw"></span></label>
+        <button class="sbtn" type="submit" id="cnCreate">Publish channel</button><div class="fmsg"></div>
+      </form>
+    </div>
+  </div>
+
+  <!-- CHANNEL: FEED -->
+  <div class="screen" id="chScreen">
+    <div class="screen-head"><button class="icon-btn light" data-close="chScreen" aria-label="Back"><i class="fa-solid fa-arrow-left"></i></button><div class="avatar sm" id="chAvatar"></div><div class="grow" id="chHead"><strong id="chName"></strong><small id="chSubs"></small></div><button class="icon-btn light" id="chInfoBtn" aria-label="Channel info"><i class="fa-solid fa-circle-info"></i></button></div>
+    <div class="chfeed" id="chFeed"></div>
+    <div class="chbar" id="chBar" hidden></div>
+    <div class="chcomposer" id="chComposer" hidden>
+      <div class="chatt" id="chAtt" hidden></div>
+      <div class="chrow"><button type="button" class="icon-btn light" id="chAttach" aria-label="Attach"><i class="fa-solid fa-paperclip"></i></button><textarea id="chInput" rows="1" maxlength="4000" placeholder="Write a post"></textarea><button type="button" class="icon-btn" id="chSend" aria-label="Publish post"><i class="fa-solid fa-paper-plane"></i></button></div>
+      <input type="file" id="chPhoto" accept="image/jpeg,image/png,image/webp" hidden><input type="file" id="chVideo" accept="video/mp4,video/webm,video/quicktime" hidden>
+    </div>
+  </div>
+
+  <!-- CHANNEL: INFO -->
+  <div class="screen" id="chInfoScreen">
+    <div class="screen-head"><button class="icon-btn light" data-close="chInfoScreen" aria-label="Back"><i class="fa-solid fa-arrow-left"></i></button><div class="grow"><strong>Channel info</strong><small id="ciSub"></small></div></div>
+    <div class="sbody" id="ciBody"></div>
+  </div>
+
   <!-- CONVERSATION -->
   <div class="screen chat-screen" id="chatScreen">
     <div class="screen-head">
       <button class="icon-btn light" data-close="chatScreen" aria-label="Back"><i class="fa-solid fa-arrow-left"></i></button>
       <div class="avatar sm" id="chatAvatar"></div>
       <div class="grow"><strong id="chatName"></strong><small id="chatState"></small></div>
-      <button class="icon-btn light" id="favBtn" aria-label="Favorite"><i class="fa-regular fa-star"></i></button>
-      <button class="icon-btn light" id="vcallBtn" aria-label="Video call"><i class="fa-solid fa-video"></i></button>
-      <button class="icon-btn light" id="callBtn" aria-label="Voice call"><i class="fa-solid fa-phone"></i></button>
+      <button class="icon-btn light ponly" id="favBtn" aria-label="Favorite"><i class="fa-regular fa-star"></i></button>
+      <button class="icon-btn light ponly" id="vcallBtn" aria-label="Video call"><i class="fa-solid fa-video"></i></button>
+      <button class="icon-btn light ponly" id="callBtn" aria-label="Voice call"><i class="fa-solid fa-phone"></i></button>
       <button class="icon-btn light" id="chatMenuBtn" aria-label="Chat options" aria-haspopup="true" aria-expanded="false"><i class="fa-solid fa-ellipsis-vertical"></i></button>
     </div>
     <div id="cmBg" hidden></div>
     <div class="cmenu" id="chatMenu" role="menu" aria-hidden="true">
+      <button type="button" role="menuitem" class="gonly" data-co="ginfo"><i class="fa-solid fa-circle-info"></i>GROUP INFO</button>
       <button type="button" role="menuitem" data-co="theme"><i class="fa-solid fa-palette"></i>CHAT THEME</button>
-      <button type="button" role="menuitem" data-co="report"><i class="fa-solid fa-flag"></i>REPORT</button>
-      <button type="button" role="menuitem" data-co="block" class="warn"><i class="fa-solid fa-ban"></i><span id="coBlockTxt">BLOCK</span></button>
-      <button type="button" role="menuitem" data-co="clear"><i class="fa-solid fa-broom"></i>CLEAR CHAT</button>
-      <button type="button" role="menuitem" data-co="export"><i class="fa-solid fa-file-export"></i>EXPORT CHAT</button>
-      <button type="button" role="menuitem" data-co="shortcut"><i class="fa-solid fa-square-plus"></i>ADD SHORTCUT</button>
+      <button type="button" role="menuitem" class="ponly" data-co="report"><i class="fa-solid fa-flag"></i>REPORT</button>
+      <button type="button" role="menuitem" data-co="block" class="warn ponly"><i class="fa-solid fa-ban"></i><span id="coBlockTxt">BLOCK</span></button>
+      <button type="button" role="menuitem" class="ponly" data-co="clear"><i class="fa-solid fa-broom"></i>CLEAR CHAT</button>
+      <button type="button" role="menuitem" class="ponly" data-co="export"><i class="fa-solid fa-file-export"></i>EXPORT CHAT</button>
+      <button type="button" role="menuitem" class="gonly warn" data-co="gleave"><i class="fa-solid fa-right-from-bracket"></i>LEAVE GROUP</button>
+      <button type="button" role="menuitem" class="ponly" data-co="shortcut"><i class="fa-solid fa-square-plus"></i>ADD SHORTCUT</button>
     </div>
     <div class="messages" id="messages"></div>
     <button type="button" class="to-bottom" id="toBottom" hidden aria-label="Scroll to latest"><i class="fa-solid fa-chevron-down"></i></button>
@@ -771,6 +889,7 @@ mark{background:var(--gold-s);color:inherit;border-radius:3px;padding:0 1px}
     </div>
     <div class="sheet" id="msgSheet" hidden>
       <div class="grab"></div>
+      <div class="rxrow gonly" id="rxRow"><button type="button" data-react="👍">👍</button><button type="button" data-react="❤️">❤️</button><button type="button" data-react="😂">😂</button><button type="button" data-react="😮">😮</button><button type="button" data-react="😢">😢</button><button type="button" data-react="🙏">🙏</button></div>
       <button type="button" id="shReply"><span class="s-ico"><i class="fa-solid fa-reply"></i></span>Reply</button>
       <button type="button" id="shCopy"><span class="s-ico"><i class="fa-regular fa-copy"></i></span>Copy text</button>
       <button type="button" id="shReport" class="danger"><span class="s-ico"><i class="fa-solid fa-flag"></i></span>Report message</button>
@@ -1000,7 +1119,7 @@ $('#authForm').addEventListener('submit', async e => {
 function logout(silent) {
   if (typeof call !== 'undefined' && call && !call.done) hangup();
   if (token && !silent) api('logout', { method: 'POST', body: {} }).catch(() => {});
-  token = null; me = null; chatSeen = stSeen = null; nprefs = { ...NDEF }; current = null; chats = []; contacts = []; results = [];
+  token = null; me = null; groups = []; gSeen = null; channels = []; chSeen = null; ch = null; chatSeen = stSeen = null; nprefs = { ...NDEF }; current = null; chats = []; contacts = []; results = [];
   localStorage.removeItem('sl_token');
   clearInterval(pollTimer); sigChats = sigContacts = sigMsgs = sigStatus = ''; resetSearch(); stMine = []; stUsers = []; if (typeof svClose === 'function' && sv) svClose();
   ['chatScreen', 'newChat'].forEach(closeScreen);
@@ -1009,12 +1128,12 @@ function logout(silent) {
 }
 
 async function start(user) {
-  me = user; chatSeen = stSeen = null; likeSeen = 0; loadPrefsCache(); loadPrefs();
+  me = user; gSeen = null; groups = []; chSeen = null; channels = []; chatSeen = stSeen = null; likeSeen = 0; loadPrefsCache(); loadPrefs();
   closeScreen('auth');
   renderProfile();
-  await Promise.all([loadChats(), loadContacts(), loadStatuses()]).catch(() => {});
+  await Promise.all([loadChats(), loadContacts(), loadStatuses(), loadGroups(), loadChannels()]).catch(() => {});
   showView('chats');
-  openChatFromLink(); callTick(1200); notifFirst = true; pollNotifs().catch(() => {});
+  openChatFromLink(); openChannelFromLink(); callTick(1200); notifFirst = true; pollNotifs().catch(() => {});
   clearInterval(pollTimer);
   pollTimer = setInterval(poll, 4000);
 }
@@ -1042,8 +1161,9 @@ let pollN = 0;
 function poll() {
   if (!me || (document.hidden && !bgNotify())) return;
   if (++pollN % 5 === 0) loadStatuses().catch(() => {});   // statuses change slowly: every ~20s                       // no polling while the tab is hidden (saves D1 requests)
-  loadChats().catch(() => {}); loadContacts().catch(() => {}); pollNotifs().catch(() => {});
+  loadChats().catch(() => {}); loadGroups().catch(() => {}); loadChannels().catch(() => {}); loadContacts().catch(() => {}); pollNotifs().catch(() => {});
   if ($('#chatScreen').classList.contains('open') && !pending.some(p => p.status === 'sending')) loadMessages().catch(() => {});
+  if (typeof ch !== 'undefined' && ch && $('#chScreen').classList.contains('open') && !chBusy) loadChannelPosts().catch(() => {});
 }
 document.addEventListener('visibilitychange', () => { if (!document.hidden) poll(); });
 
@@ -1054,6 +1174,7 @@ const previewHTML = c => c.deleted ? '<i class="fa-solid fa-ban"></i>Deleted mes
   : c.type === 'video' ? `<i class="fa-solid fa-video"></i>${esc(c.msg) || 'Video'}` : esc(c.msg);
 function renderChats() {
   const q = query.trim().toLowerCase();
+  if (filter === 'group') { const gl = groups.filter(g => !q || g.name.toLowerCase().includes(q)); $('#chatList').innerHTML = gl.length ? gl.map(groupRowHTML).join('') : empty('fa-solid fa-user-group', q ? 'No groups match “' + esc(query) + '”' : 'No groups yet<small>Create one in the Communities tab.</small>'); return; }
   const list = chats.filter(c =>
     (filter === 'all' || (filter === 'unread' && c.unread) || (filter === 'fav' && favs.has(c.id))) &&
     (!q || c.name.toLowerCase().includes(q) || c.msg.toLowerCase().includes(q)));
@@ -1068,7 +1189,7 @@ function renderChats() {
       </div>
     </div>`).join('')
     : q ? empty('fa-regular fa-comment-dots', `No chats match “${esc(query)}”`)
-    : filter === 'group' ? empty('fa-solid fa-user-group', 'Groups are coming soon')
+    : filter === 'group' ? empty('fa-solid fa-user-group', 'No groups yet<small>Create one in the Communities tab.</small>')
     : filter === 'fav' ? empty('fa-regular fa-star', 'Open a chat and tap the star to add a favorite')
     : filter === 'unread' ? empty('fa-solid fa-check-double', 'You’re all caught up')
     : empty('fa-regular fa-comment-dots', 'No chats yet.<br>Tap the green button to start one.');
@@ -1104,7 +1225,6 @@ function renderLists() {
   $('#contactList').innerHTML = rows || empty('fa-solid fa-user-plus', 'No contacts yet.<small>Search above by name or username to add someone.</small>');
   $('#contactCount').textContent = `${contacts.length} contact${contacts.length === 1 ? '' : 's'}`;
 }
-$('#communityList').innerHTML = empty('fa-solid fa-users', 'Communities are coming soon');
 $('#callList').innerHTML = empty('fa-solid fa-phone', 'No calls yet<small>Open a chat and tap the phone icon to call.</small>');
 
 /* ---------- Navigation ---------- */
@@ -1115,6 +1235,7 @@ function showView(name) {
   $('#main').scrollTop = 0;
   if (name !== 'chats') closeSearch();
   if (name === 'calls' && typeof loadCalls === 'function') loadCalls();
+  if (name === 'communities' && typeof loadDiscover === 'function') { loadChannels().catch(() => {}); if (commTab === 'channels') loadDiscover(); }
 }
 $('#bottomNav').addEventListener('click', e => { const b = e.target.closest('.nav-item'); if (b) showView(b.dataset.view); });
 $('#tabs').addEventListener('click', e => {
@@ -1148,6 +1269,8 @@ function action(act) {
   menu.classList.remove('open');
   if (act === 'settings') { closeScreen('newChat'); showView('settings'); }
   else if (act === 'contact') { openScreen('newChat'); $('#nsInput').focus(); }
+  else if (act === 'group') { closeScreen('newChat'); openNewGroup(); }
+  else if (act === 'community') { closeScreen('newChat'); openNewChannel(); }
   else toast({ group: 'Groups are coming soon', star: 'No starred messages yet', devices: 'No linked devices', contact: 'Contacts appear when friends join', community: 'Communities are coming soon' }[act] || act);
 }
 $$('[data-act]').forEach(el => el.addEventListener('click', () => action(el.dataset.act)));
@@ -1233,7 +1356,7 @@ async function upload(blob, kind) {                         // photos / voice no
 /* --- rendering --- */
 function quoteHTML(id) {
   const q = thread.find(x => x.id === id);
-  return `<div class="quote" data-jump="${id}"><strong>${q ? (q.sender_id === me.id ? 'You' : esc(current.name)) : 'Message'}</strong><span>${q ? esc(previewText(q)) : 'Original message'}</span></div>`;
+  return `<div class="quote" data-jump="${id}"><strong>${q ? (q.sender_id === me.id ? 'You' : esc(q.sender ? q.sender.name : current.name)) : 'Message'}</strong><span>${q ? esc(previewText(q)) : 'Original message'}</span></div>`;
 }
 function statusRefHTML(m) {                                 // the status this message is a private reply to
   const s = m.status || {}, mine = m.sender_id === me.id, first = esc(((current && current.name) || '').split(' ')[0]);
@@ -1280,10 +1403,10 @@ function renderMessages(force) {
     const day = new Date(m.created_at).toDateString();
     if (day !== lastDay) { lastDay = day; prev = null; html += `<div class="day">${dayLabel(m.created_at)}</div>`; }
     if (m.call) { html += callRecHTML(m.call); prev = null; continue; }
-    const out = m.sender_id === me.id;
+    const out = m.sender_id === me.id, gm = current.group;
     const cls = ['msg', out ? 'out' : 'in', prev && prev.sender_id === m.sender_id && m.created_at - prev.created_at < 3e5 ? 'grp' : '',
       m.status === 'failed' ? 'failed' : '', (m.type === 'image' || m.type === 'video') && !m.body && !m.deleted_at ? 'media-only' : ''].filter(Boolean).join(' ');
-    html += `<div class="${cls}" data-mid="${m.id || ''}" data-tmp="${m.tmp || ''}">${bodyHTML(m)}<small>${clock(m.created_at)}${out && !m.deleted_at ? tickIcon(tickState(m)) : ''}</small>${m.status === 'failed' ? '<div class="retry"><i class="fa-solid fa-rotate-right"></i> Tap to retry</div>' : ''}</div>`;
+    html += `<div class="${cls}" data-mid="${m.id || ''}" data-tmp="${m.tmp || ''}">${gm && !out && !cls.includes(' grp') && m.sender ? `<span class="gname" style="color:${COLORS[m.sender_id % COLORS.length] === '#075B42' ? 'var(--gold)' : COLORS[m.sender_id % COLORS.length]}">${esc(m.sender.name)}</span>` : ''}${bodyHTML(m)}<small>${clock(m.created_at)}${out && !m.deleted_at && !gm ? tickIcon(tickState(m)) : ''}</small>${rxHTML(m)}${m.status === 'failed' ? '<div class="retry"><i class="fa-solid fa-rotate-right"></i> Tap to retry</div>' : ''}</div>`;
     prev = m;
   }
   $msgs.innerHTML = html || '<div class="day">Say hello 👋</div>';
@@ -1334,6 +1457,7 @@ function openChat(id) {
 }
 async function loadMessages(force) {
   if (!current) return;
+  if (current.group) return loadGroupMessages(force);
   const who = current;
   const [d, cd] = await Promise.all([api('messages?with=' + who.id), api('calls/history?with=' + who.id).catch(() => null)]);
   if (current !== who) return;
@@ -1345,10 +1469,11 @@ async function loadMessages(force) {
   applyChatState(d); sigMsgs = sig; callSig = csig; thread = d.messages; if (cd) callsThread = cd.calls; renderMessages(force);
 }
 function leaveChat() {
+  document.body.classList.remove('gmode');
   stopRec(false); player.pause(); playing = null; hideSheets(); clearReply();
   $('#lightbox').hidden = true; closePreview(); closeChatMenu(); closeGSheet(); restoreShortcutPage(); closeCamera();
   if (current) { current.themeSig = undefined; current.blocked = false; }
-  $('#chatScreen').removeAttribute('data-bg'); $('#chatScreen').removeAttribute('data-bc'); $('#composer').hidden = false; $('#blockedBar').hidden = true;
+  $('#chatScreen').removeAttribute('data-bg'); $('#chatScreen').removeAttribute('data-bc'); applyChatTheme(null); $('#composer').hidden = false; $('#blockedBar').hidden = true;
 }
 
 /* --- sending (optimistic: message shows at once with a clock, then ticks; failures can be retried) --- */
@@ -1365,10 +1490,10 @@ async function deliver(m) {
       payload.media_key = m.uploaded.key; payload.duration = m.duration;
       media.set(m.uploaded.key, media.get(m.media_key)); mediaDone.set(m.uploaded.key, mediaDone.get(m.media_key));
     }
-    await api('messages', { body: payload });
+    if (m.to < 0) { payload.id = -m.to; delete payload.to; await api('groups/send', { body: payload }); } else await api('messages', { body: payload });
     pending = pending.filter(x => x !== m);
     if (current && current.id === m.to) await loadMessages(true);
-    loadChats().catch(() => {});
+    if (m.to < 0) loadGroups().catch(() => {}); else loadChats().catch(() => {});
   } catch (err) { m.status = 'failed'; renderMessages(); toast(err.message); }
 }
 function localMedia(blob) {
@@ -1390,7 +1515,7 @@ $('#sendBtn').addEventListener('pointerdown', e => e.preventDefault());   // kee
 $('#sendBtn').addEventListener('click', () => { sendText(); $input.focus(); });
 
 /* --- reply --- */
-function setReply(m) { replyTo = m; $('#rbName').textContent = m.sender_id === me.id ? 'You' : current.name; $('#rbText').textContent = previewText(m); $('#replyBar').hidden = false; $input.focus(); }
+function setReply(m) { replyTo = m; $('#rbName').textContent = m.sender_id === me.id ? 'You' : (m.sender ? m.sender.name : current.name); $('#rbText').textContent = previewText(m); $('#replyBar').hidden = false; $input.focus(); }
 function clearReply() { replyTo = null; $('#replyBar').hidden = true; }
 $('#rbClose').addEventListener('click', clearReply);
 
@@ -1406,10 +1531,12 @@ function openMsgSheet(m) {
   sheetMsg = m;
   $('#shReply').hidden = !!m.deleted_at;
   $('#shCopy').hidden = !(m.body && !m.deleted_at);
-  $('#shDel').hidden = !(m.sender_id === me.id && !m.deleted_at);
-  $('#shReport').hidden = !(m.sender_id !== me.id && !m.deleted_at);
+  $('#shDel').hidden = !((m.sender_id === me.id || (current.group && isAdm(current.role))) && !m.deleted_at);
+  $('#shReport').hidden = current.group || !(m.sender_id !== me.id && !m.deleted_at);
+  $('#rxRow').hidden = !(current.group && !m.deleted_at);
   showSheet('msgSheet');
 }
+$('#rxRow').addEventListener('click', e => { const b = e.target.closest('[data-react]'); if (!b) return; const m = sheetMsg; hideSheets(); if (m) reactTo(m, b.dataset.react); });
 $('#shReply').addEventListener('click', () => { const m = sheetMsg; hideSheets(); if (m) setReply(m); });
 $('#shCopy').addEventListener('click', async () => {
   const m = sheetMsg; hideSheets(); if (!m) return;
@@ -1419,7 +1546,7 @@ $('#shDel').addEventListener('click', async () => {
   const t = $('#shDelTxt');
   if (t.textContent === 'Delete for everyone') { t.textContent = 'Tap again to confirm delete'; return; }   // two taps, so nothing is deleted by accident
   const m = sheetMsg; hideSheets(); if (!m) return;
-  try { await api('messages/delete', { body: { id: m.id } }); toast('Message deleted'); await loadMessages(true); loadChats().catch(() => {}); }
+  try { await api(current.group ? 'groups/messages/delete' : 'messages/delete', { body: { id: m.id } }); toast('Message deleted'); await loadMessages(true); loadChats().catch(() => {}); }
   catch (err) { toast(err.message); }
 });
 
@@ -1445,6 +1572,7 @@ $msgs.addEventListener('click', e => {
     if (img.classList.contains('loaded')) return openLightbox(img.dataset.img);
     return;
   }
+  const rx = t.closest('[data-rx]'); if (rx) { const m = msgFromEl(rx.closest('.msg')); if (m) reactTo(m, rx.dataset.rx); return; }
   const q = t.closest('.quote'); if (q) return jumpTo(+q.dataset.jump);
   const failed = t.closest('.msg.failed'); if (failed) { const m = pending.find(x => x.tmp === failed.dataset.tmp); if (m) deliver(m); }
 });
@@ -2417,6 +2545,10 @@ const THEME_COLOR = [['default', 'Green', 'var(--bubble-out)'], ['gold', 'Gold',
 function applyChatTheme(t) {                                // theme belongs to ONE conversation: set on the chat screen only
   const el = $('#chatScreen'); t = t || {};
   t.bg ? el.dataset.bg = t.bg : delete el.dataset.bg; t.color ? el.dataset.bc = t.color : delete el.dataset.bc;
+  el._wp = t.wp || null;
+  if (!t.wp) { el.classList.remove('haswp'); el.style.removeProperty('--wp'); return; }
+  el.style.setProperty('--wdim', ((t.dim == null ? 35 : t.dim) / 100).toFixed(2));
+  mediaUrl(t.wp).then(u => { if (el._wp === t.wp) { el.style.setProperty('--wp', `url("${u}")`); el.classList.add('haswp'); } }).catch(() => {});
 }
 function applyChatState(d) {                                // theme + blocked state come with every messages response
   if (!current) return;
@@ -2433,33 +2565,90 @@ $('#cmBg').addEventListener('click', closeChatMenu);
 document.addEventListener('keydown', e => { if (e.key === 'Escape') closeChatMenu(); });
 $('#chatMenu').addEventListener('click', e => {
   const b = e.target.closest('[data-co]'); if (!b || !current) return; closeChatMenu();
-  ({ theme: openThemeSheet, report: () => openReportSheet(null), block: toggleBlock, clear: clearChat, export: openExportSheet, shortcut: addShortcut })[b.dataset.co]();
+  ({ ginfo: openGroupInfo, gleave: leaveGroup, theme: openThemeSheet, report: () => openReportSheet(null), block: toggleBlock, clear: clearChat, export: openExportSheet, shortcut: addShortcut })[b.dataset.co]();
 });
 
-/* 1. chat theme (preview first, then apply; saved per conversation) */
+/* 1. chat theme + personal wallpaper (preview first, then apply; saved per user, per conversation) */
+const WP_TYPES = /^image\/(jpeg|png|webp)$/;
+function openWpCrop(file) {                                  // pan + zoom crop to the chat screen's shape; resolves a JPEG blob, or null if cancelled
+  return new Promise(async resolve => {
+    let src; try { src = await loadBitmap(file); } catch { toast('Could not read this picture'); return resolve(null); }
+    const cs = $('#chatScreen'), ratio = Math.max(.35, Math.min(1.2, (cs.clientWidth || 360) / (cs.clientHeight || 700)));
+    const ov = document.createElement('div'); ov.className = 'wpcrop'; ov.setAttribute('role', 'dialog'); ov.setAttribute('aria-label', 'Crop wallpaper');
+    ov.innerHTML = `<div class="top"><button type="button" data-x>Cancel</button><span>Move and zoom</span><button type="button" class="go" data-ok>Use photo</button></div><div class="stage"><canvas id="wpC"></canvas></div><div class="bot"><span>Drag to position · pinch or use the slider to zoom</span><input id="wpZoom" type="range" min="1" max="4" step="0.01" value="1" aria-label="Zoom"></div>`;
+    document.body.appendChild(ov);
+    const stage = ov.querySelector('.stage'), cv = ov.querySelector('#wpC');
+    const sh = Math.max(160, Math.min(stage.clientHeight - 8, innerHeight - 190)), sw = Math.min(innerWidth - 24, Math.round(sh * ratio)), h2 = Math.round(sw / ratio);
+    cv.width = sw; cv.height = h2; cv.style.width = sw + 'px'; cv.style.height = h2 + 'px';
+    const base = Math.max(sw / src.width, h2 / src.height); let z = 1, tx = 0, ty = 0;      // tx,ty: offset of image centre from stage centre
+    const clamp = () => { const w = src.width * base * z, h = src.height * base * z, mx = Math.max(0, (w - sw) / 2), my = Math.max(0, (h - h2) / 2); tx = Math.max(-mx, Math.min(mx, tx)); ty = Math.max(-my, Math.min(my, ty)); };
+    const draw = (c, k) => { const g = c.getContext('2d'); const w = src.width * base * z * k, h = src.height * base * z * k; g.fillStyle = '#000'; g.fillRect(0, 0, c.width, c.height); g.drawImage(src, c.width / 2 + tx * k - w / 2, c.height / 2 + ty * k - h / 2, w, h); };
+    const paint = () => { clamp(); draw(cv, 1); };
+    paint();
+    const ptr = new Map(); let d0 = 0, z0 = 1;
+    cv.addEventListener('pointerdown', e => { cv.setPointerCapture(e.pointerId); ptr.set(e.pointerId, [e.clientX, e.clientY]); if (ptr.size === 2) { const [a, b] = [...ptr.values()]; d0 = Math.hypot(a[0] - b[0], a[1] - b[1]); z0 = z; } });
+    cv.addEventListener('pointermove', e => {
+      if (!ptr.has(e.pointerId)) return; const prev = ptr.get(e.pointerId); ptr.set(e.pointerId, [e.clientX, e.clientY]);
+      if (ptr.size === 1) { tx += e.clientX - prev[0]; ty += e.clientY - prev[1]; }
+      else if (ptr.size === 2 && d0) { const [a, b] = [...ptr.values()]; z = Math.max(1, Math.min(4, z0 * Math.hypot(a[0] - b[0], a[1] - b[1]) / d0)); ov.querySelector('#wpZoom').value = z; }
+      paint();
+    });
+    const up = e => { ptr.delete(e.pointerId); d0 = 0; }; cv.addEventListener('pointerup', up); cv.addEventListener('pointercancel', up);
+    cv.addEventListener('wheel', e => { e.preventDefault(); z = Math.max(1, Math.min(4, z - e.deltaY / 500)); ov.querySelector('#wpZoom').value = z; paint(); }, { passive: false });
+    ov.querySelector('#wpZoom').addEventListener('input', e => { z = +e.target.value; paint(); });
+    const close = v => { ov.remove(); resolve(v); };
+    ov.querySelector('[data-x]').onclick = () => close(null);
+    ov.querySelector('[data-ok]').onclick = async () => {
+      const OW = 720, OH = Math.min(1700, Math.round(OW / ratio)), out = document.createElement('canvas'); out.width = OW; out.height = OH; draw(out, OW / sw);
+      for (const q of [.82, .7, .55, .4]) { const b = await new Promise(r => out.toBlob(r, 'image/jpeg', q)); if (b && b.size <= 700000) return close(b); }
+      toast('Picture is too large'); close(null);
+    };
+  });
+}
 function openThemeSheet() {
-  const start = current.theme || {}; let sel = { bg: start.bg || 'default', color: start.color || 'default' };
+  const start = current.theme || {};
+  let sel = { bg: start.bg || 'default', color: start.color || 'default', wp: start.wp || null, dim: start.dim == null ? 35 : start.dim, blob: null, url: null };
+  const target = current.group ? { group: current.gid } : { with: current.id };
   const draw = () => {
-    openGSheet(`<h4>Chat theme</h4><p class="sub2">Only for your chat with ${esc(current.name)}. Other chats are not changed.</p>
-      <div class="tp" id="tPrev" ${sel.bg !== 'default' ? `data-bg="${sel.bg}"` : ''} ${sel.color !== 'default' ? `data-bc="${sel.color}"` : ''}><div class="pv in">Salam! Ina kwana?</div><div class="pv out">Lafiya lau, na gode 🌞</div></div>
-      <div class="lbl">Wallpaper</div><div class="sw-row">${THEME_BG.map(([k, n, bg]) => `<button type="button" class="sw${sel.bg === k ? ' sel' : ''}" data-tbg="${k}" style="background:${bg}" aria-label="${n}" title="${n}"></button>`).join('')}</div>
+    openGSheet(`<h4>Chat theme</h4><p class="sub2">Only for ${current.group ? 'this group' : 'your chat with ' + esc(current.name)}, and only on your phone. ${current.group ? 'Other members' : esc(current.name)} keep their own wallpaper.</p>
+      <div class="tp${sel.wp ? ' haswp' : ''}" id="tPrev" ${!sel.wp && sel.bg !== 'default' ? `data-bg="${sel.bg}"` : ''} ${sel.color !== 'default' ? `data-bc="${sel.color}"` : ''} style="--wdim:${(sel.dim / 100).toFixed(2)}${sel.url ? `;--wp:url('${sel.url}')` : ''}"><div class="pv in">Salam! Ina kwana?</div><div class="pv out">Lafiya lau, na gode 🌞</div></div>
+      <button type="button" class="wpbtn" data-gallery><i class="fa-solid fa-image"></i>Choose from Gallery</button><input type="file" id="wpFile" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp" hidden>
+      ${sel.wp ? `<div class="wpdim"><i class="fa-solid fa-circle-half-stroke"></i><span>Dark overlay</span><input type="range" id="wpDim" min="0" max="80" step="5" value="${sel.dim}" aria-label="Dark overlay"><b id="wpDimV">${sel.dim}%</b></div>` : ''}
+      <div class="lbl">Wallpaper</div><div class="sw-row">${THEME_BG.map(([k, n, bg]) => `<button type="button" class="sw${!sel.wp && sel.bg === k ? ' sel' : ''}" data-tbg="${k}" style="background:${bg}" aria-label="${n}" title="${n}"></button>`).join('')}</div>
       <div class="lbl">Chat colour</div><div class="sw-row">${THEME_COLOR.map(([k, n, bg]) => `<button type="button" class="sw${sel.color === k ? ' sel' : ''}" data-tcl="${k}" style="background:${bg}" aria-label="${n}" title="${n}"></button>`).join('')}</div>
       <div class="row-btns"><button type="button" data-treset>Restore default</button><button type="button" class="go" data-tapply>Apply</button></div>
       <div class="row-btns" style="margin-top:8px"><button type="button" data-tcancel>Cancel</button></div>`);
+    if (sel.wp && !sel.url) mediaUrl(sel.wp).then(u => { sel.url = u; const t = $('#tPrev'); if (t) t.style.setProperty('--wp', `url('${u}')`); }).catch(() => {});
   };
   draw();
+  const done = () => { if (sel.url && sel.blob) URL.revokeObjectURL(sel.url); closeGSheet(); };
   $('#gsheet').onclick = async e => {
     const bg = e.target.closest('[data-tbg]'), cl = e.target.closest('[data-tcl]');
-    if (bg) { sel.bg = bg.dataset.tbg; draw(); } else if (cl) { sel.color = cl.dataset.tcl; draw(); }
-    else if (e.target.closest('[data-tcancel]')) closeGSheet();
+    if (e.target.closest('[data-gallery]')) return $('#wpFile').click();
+    if (bg) { sel.bg = bg.dataset.tbg; sel.wp = null; sel.blob = null; sel.url = null; draw(); } else if (cl) { sel.color = cl.dataset.tcl; draw(); }
+    else if (e.target.closest('[data-tcancel]')) done();
     else if (e.target.closest('[data-treset]') || e.target.closest('[data-tapply]')) {
-      const reset = !!e.target.closest('[data-treset]'), t = reset ? null : { bg: sel.bg === 'default' ? null : sel.bg, color: sel.color === 'default' ? null : sel.color };
+      const reset = !!e.target.closest('[data-treset]'), ap = e.target.closest('[data-tapply]');
+      if (ap) ap.disabled = true;
       try {
-        const d = await api('chat/theme', { body: { with: current.id, theme: t } });
-        current.theme = d.theme; current.themeSig = JSON.stringify(d.theme || null); applyChatTheme(d.theme); closeGSheet(); toast(reset || !d.theme ? 'Default theme restored' : 'Theme applied');
-      } catch (err) { toast(err.message); }
+        let wp = reset ? null : sel.wp;
+        if (!reset && sel.blob) { const up = await upload(sel.blob, 'image'); wp = up.key; const u = URL.createObjectURL(sel.blob); media.set(wp, Promise.resolve(u)); mediaDone.set(wp, u); }
+        const t = reset ? null : { bg: sel.bg === 'default' ? null : sel.bg, color: sel.color === 'default' ? null : sel.color, ...(wp ? { wp, dim: sel.dim } : {}) };
+        const d = await api('chat/theme', { body: { ...target, theme: t } });
+        current.theme = d.theme; current.themeSig = JSON.stringify(d.theme || null); applyChatTheme(d.theme); sel.blob = null; done(); toast(reset || !d.theme ? 'Default wallpaper restored' : 'Theme applied');
+      } catch (err) { toast(err.message); if (ap) ap.disabled = false; }
     }
   };
+  $('#gsheet').onchange = async e => {
+    if (e.target.id !== 'wpFile') return;
+    const f = e.target.files[0]; e.target.value = ''; if (!f) return;
+    if (!WP_TYPES.test(f.type) && !/\.(jpe?g|png|webp)$/i.test(f.name)) return toast('Choose a JPG, PNG or WebP picture');
+    if (f.size > 25 * 1024 * 1024) return toast('This picture is too large (max 25 MB)');
+    const blob = await openWpCrop(f); if (!blob) return;                 // cancelled: nothing changes
+    if (sel.url && sel.blob) URL.revokeObjectURL(sel.url);
+    sel.blob = blob; sel.url = URL.createObjectURL(blob); sel.wp = 'pending'; draw();
+  };
+  $('#gsheet').oninput = e => { if (e.target.id !== 'wpDim') return; sel.dim = +e.target.value; $('#wpDimV').textContent = sel.dim + '%'; const t = $('#tPrev'); if (t) t.style.setProperty('--wdim', (sel.dim / 100).toFixed(2)); };
 }
 
 /* 2. report (user, or one message) */
@@ -2702,9 +2891,10 @@ const findPerson = id => contacts.find(c => c.id === id) || chats.find(c => c.id
 document.addEventListener('click', e => {                   // photo -> full-screen viewer (like WhatsApp); name / row text -> profile or chat
   if (e.target.closest('[data-copy]')) return;
   const nm = e.target.closest('#chatName');                 // chat header: the NAME opens the profile page
-  if (nm && current) { e.stopPropagation(); return openProfile(current.id); }
+  if (nm && current) { e.stopPropagation(); return current.group ? openGroupInfo() : openProfile(current.id); }
+  if (e.target.closest('#chatAvatar') && current && current.group) { e.stopPropagation(); return openGroupInfo(); }
   const hd = e.target.closest('#chatAvatar');               // chat header: the PHOTO opens the viewer
-  if (hd && current) { e.stopPropagation(); return findPerson(current.id) && findPerson(current.id).avatar ? openPhoto(current, hd) : toast('No profile photo yet'); }
+  if (hd && current) { e.stopPropagation(); if (current.group) return; return findPerson(current.id) && findPerson(current.id).avatar ? openPhoto(current, hd) : toast('No profile photo yet'); }
   const pa = e.target.closest('#profSheet .avatar');        // big photo on the profile sheet
   if (pa && profUser) { e.stopPropagation(); return profUser.avatar ? openPhoto(profUser, pa) : toast('No profile photo yet'); }
   const av = e.target.closest('#newChat .row .avatar, #chatList .row .avatar, #view-chats .row .avatar'); if (!av) return;
@@ -2809,7 +2999,7 @@ $('#accBody').addEventListener('submit', async e => {
 $('#accScreen').addEventListener('transitionend', () => {});
 
 /* ---------- NOTIFICATIONS: preferences ---------- */
-const NDEF = { messages: true, groups: true, calls: true, sound: true, tone: 'default', vibrate: true, status_likes: true, status_replies: true, status_activity: true, browser: false };
+const NDEF = { messages: true, groups: true, channels: true, calls: true, sound: true, tone: 'default', vibrate: true, status_likes: true, status_replies: true, status_activity: true, browser: false };
 const TONE_LABEL = { default: 'Default', chime: 'Chime', bell: 'Bell', pop: 'Pop', gold: 'Gold', soft: 'Soft' };
 const TONE_NOTES = { default: [[880, 0, .12], [1175, .13, .16]], chime: [[1047, 0, .12], [1319, .12, .12], [1568, .24, .22]], bell: [[1319, 0, .5], [1976, 0, .35]], pop: [[520, 0, .05], [780, .05, .09]], gold: [[784, 0, .1], [988, .1, .1], [1175, .2, .1], [1568, .3, .2]], soft: [[523, 0, .25], [659, .18, .3]] };
 let nprefs = { ...NDEF }, actx = null;
@@ -2844,7 +3034,7 @@ function showBrowserNotif(title, body, tag, onClick) {
     } else { const n = new Notification(title, opts); n.onclick = () => { window.focus(); onClick && onClick(); n.close(); }; }
   } catch {}
 }
-const KIND_PREF = { message: 'messages', call: 'calls', like: 'status_likes', reply: 'status_replies', activity: 'status_activity', group: 'groups' };
+const KIND_PREF = { channel: 'channels', message: 'messages', call: 'calls', like: 'status_likes', reply: 'status_replies', activity: 'status_activity', group: 'groups' };
 function notify(kind, o) {                                   // only ever called from REAL events (new message, incoming call, like, reply, new status)
   if (!me || !nprefs[KIND_PREF[kind]]) return false;
   const hidden = document.hidden;
@@ -3005,6 +3195,457 @@ $('#helpBody').addEventListener('submit', async e => {
   catch (err) { msgBox(f, err.message); btn.disabled = false; }
 });
 
+/* =====================================================================
+   GROUPS
+   ===================================================================== */
+let groups = [], gSeen = null;
+const gAvatar = (g, extra = '') => avatar({ id: g.id, name: g.name, avatar: g.avatar }, extra);
+const gPreviewText = l => !l ? 'No messages yet' : (l.sender_id === me.id ? 'You' : (l.sender || '').split(' ')[0]) + ': ' + (l.deleted ? 'Deleted message' : l.type === 'image' ? '📷 ' + (l.body || 'Photo') : l.type === 'voice' ? '🎤 Voice message' : l.type === 'video' ? '🎥 ' + (l.body || 'Video') : l.body);
+function groupRowHTML(g, i) {
+  return `<div class="row" data-gid="${g.id}" style="animation-delay:${Math.min(i || 0, 8) * 30}ms">${gAvatar(g)}<div class="body"><div class="line"><strong>${esc(g.name)}</strong><span class="time ${g.unread ? 'new' : ''}">${g.last ? esc(fmt(g.last.at)) : ''}</span></div><div class="preview"><span class="grow"><span class="txt">${esc(gPreviewText(g.last))}</span></span>${g.unread ? `<span class="badge">${g.unread}</span>` : ''}</div></div></div>`;
+}
+let commTab = 'groups';
+function renderCommunity() {
+  $$('#commSeg button').forEach(b => b.classList.toggle('on', b.dataset.cs === commTab));
+  $('#commAct').innerHTML = commTab === 'groups' ? '<button type="button" class="sbtn" id="newGroupBtn"><i class="fa-solid fa-user-group"></i> New group</button>' : '<button type="button" class="sbtn" id="newChannelBtn"><i class="fa-solid fa-bullhorn"></i> New channel</button>';
+  if (commTab === 'groups') $('#communityList').innerHTML = groups.length ? groups.map(groupRowHTML).join('') : empty('fa-solid fa-user-group', 'No groups yet<small>Create one and add people from your contacts.</small>');
+  else { renderChannels(); loadDiscover(); }
+}
+function renderGroupsInChats() { if (filter === 'group') renderChats(); }
+async function loadGroups() {
+  const d = await api('groups');
+  const first = gSeen === null; gSeen = gSeen || new Map();
+  for (const g of d.groups) {
+    const prev = gSeen.get(g.id), lid = g.last ? g.last.id : 0; gSeen.set(g.id, lid);
+    if (first || prev === lid || !g.last || g.last.sender_id === me.id || g.last.deleted) continue;
+    if (current && current.group && current.gid === g.id && $('#chatScreen').classList.contains('open') && !document.hidden) continue;
+    notify('group', { title: g.name, body: gPreviewText(g.last), tag: 'group' + g.id, onClick: () => openGroup(g.id) });
+  }
+  const sig = JSON.stringify(d.groups); const changed = sig !== loadGroups.sig; loadGroups.sig = sig; groups = d.groups;
+  if (changed) { renderCommunity(); renderGroupsInChats(); }
+}
+function setGroupHeader(g) {
+  $('#chatAvatar').outerHTML = gAvatar(g, 'sm').replace('class="avatar sm"', 'class="avatar sm" id="chatAvatar"');
+  $('#chatName').textContent = g.name; $('#chatState').textContent = g.members + (g.members === 1 ? ' member' : ' members');
+}
+function openGroup(id) {
+  const g = groups.find(x => x.id === +id); if (!g) return;
+  leaveChat(); document.body.classList.add('gmode');
+  current = { id: -g.id, gid: g.id, group: true, name: g.name, avatar: g.avatar, role: g.role, members: g.members };
+  sigMsgs = ''; callSig = ''; thread = []; callsThread = [];
+  setGroupHeader(g); $msgs.innerHTML = ''; $input.value = ''; autosize(); syncComposer();
+  openScreen('chatScreen'); showView('communities');
+  loadGroupMessages(true).catch(err => toast(err.message));
+}
+async function loadGroupMessages(force) {
+  const who = current; if (!who || !who.group) return;
+  let d; try { d = await api('groups/messages?id=' + who.gid); }
+  catch (err) { if (/not found/i.test(err.message) && current === who) { closeScreen('chatScreen'); leaveChat(); toast('You are no longer in this group'); loadGroups().catch(() => {}); } throw err; }
+  if (current !== who) return;
+  const g = d.group, head = g.name + '|' + g.members + '|' + (g.avatar || '') + '|' + g.role;
+  if (head !== who.headSig) { who.headSig = head; Object.assign(who, { name: g.name, avatar: g.avatar, role: g.role, members: g.members, description: g.description }); setGroupHeader(g); }
+  applyChatState({ theme: d.theme || null, blocked: false, wallpaper: d.wallpaper || null });
+  const sig = d.group.name + d.messages.map(m => m.id + (m.deleted_at ? 'x' : '') + (m.reactions || []).map(r => r.emoji + r.count + (r.mine ? 'm' : '')).join('')).join();
+  if (!force && sig === sigMsgs) return;
+  sigMsgs = sig; thread = d.messages; renderMessages(force);
+}
+const rxHTML = m => m.reactions && m.reactions.length && !m.deleted_at ? `<div class="rx">${m.reactions.map(r => `<span data-rx="${r.emoji}" class="${r.mine ? 'me' : ''}">${r.emoji}${r.count > 1 ? ' ' + r.count : ''}</span>`).join('')}</div>` : '';
+async function reactTo(m, emoji) {
+  try { await api('groups/react', { body: { message_id: m.id, emoji } }); await loadGroupMessages(true); } catch (err) { toast(err.message); }
+}
+
+/* --- create --- */
+let gn = { sel: new Map(), blob: null, busy: false };
+function openNewGroup() {
+  gn = { sel: new Map(), blob: null, busy: false }; $('#gnName').value = ''; $('#gnDesc').value = ''; $('#gnForm .fmsg').textContent = '';
+  $('#gnPick').innerHTML = '<i class="fa-solid fa-camera"></i>'; drawGn(); loadContacts().catch(() => {}); openScreen('gNewScreen');
+}
+function drawGn() {
+  $('#gnMemSub').textContent = gn.sel.size ? gn.sel.size + ' selected' : 'Choose from your contacts';
+  $('#gnChips').innerHTML = [...gn.sel.values()].map(u => `<span>${esc(u.name)}<button type="button" data-unsel="${u.id}" aria-label="Remove ${esc(u.name)}"><i class="fa-solid fa-xmark"></i></button></span>`).join('');
+  $('#gnSub').textContent = (gn.sel.size + 1) + ' members including you';
+}
+$('#gnPick').addEventListener('click', () => $('#gnFile').click());
+$('#gnFile').addEventListener('change', async e => {
+  const f = e.target.files[0]; e.target.value = ''; if (!f) return;
+  if (!/^image\/(jpeg|png|webp)$/.test(f.type)) return toast('Choose a JPG, PNG or WebP photo');
+  try { gn.blob = await squareAvatar(f, 384); $('#gnPick').innerHTML = `<img alt="" src="${URL.createObjectURL(gn.blob)}">`; } catch { toast('Could not read this photo'); }
+});
+$('#gnChips').addEventListener('click', e => { const b = e.target.closest('[data-unsel]'); if (b) { gn.sel.delete(+b.dataset.unsel); drawGn(); } });
+$('#gnMembers').addEventListener('click', () => pickContacts({ title: 'Add members', exclude: new Set(), selected: gn.sel, done: sel => { gn.sel = sel; drawGn(); } }));
+$('#gnForm').addEventListener('submit', async e => {
+  e.preventDefault(); if (gn.busy) return; const f = e.target, name = $('#gnName').value.trim();
+  if (!name) { msgBox(f, 'Enter a group name'); return; }
+  gn.busy = true; $('#gnCreate').disabled = true; msgBox(f, '');
+  try {
+    let avatar_key; if (gn.blob) { const up = await upload(gn.blob, 'image'); avatar_key = up.key; if (up.key) { const u = URL.createObjectURL(gn.blob); media.set(up.key, Promise.resolve(u)); mediaDone.set(up.key, u); } }
+    const d = await api('groups', { body: { name, description: $('#gnDesc').value.trim(), avatar_key, members: [...gn.sel.keys()] } });
+    closeScreen('gNewScreen'); await loadGroups(); showView('communities'); commTab = 'groups'; renderCommunity(); openGroup(d.group.id);
+    toast(d.skipped ? 'Group created. Some people could not be added.' : 'Group created');
+  } catch (err) { msgBox(f, err.message); }
+  gn.busy = false; $('#gnCreate').disabled = false;
+});
+
+/* --- contact picker (used by create and by "Add members") --- */
+let gp = null;
+function pickContacts(o) { gp = { ...o, sel: new Map(o.selected || []), q: '' }; $('#gpTitle').textContent = o.title; $('#gpQ').value = ''; drawGp(); openScreen('gPickScreen'); }
+function drawGp() {
+  const q = gp.q.trim().toLowerCase();
+  const list = contacts.filter(u => !gp.exclude.has(u.id) && (!q || u.name.toLowerCase().includes(q) || u.username.toLowerCase().includes(q)));
+  $('#gpSub').textContent = gp.sel.size ? gp.sel.size + ' selected' : '';
+  $('#gpDone').textContent = gp.sel.size ? 'Done (' + gp.sel.size + ')' : 'Done';
+  $('#gpList').innerHTML = list.length ? list.map(u => `<div class="prow${gp.sel.has(u.id) ? ' on' : ''}" data-pid="${u.id}" role="checkbox" aria-checked="${gp.sel.has(u.id)}" tabindex="0">${avatar(u, 'sm')}<div class="body"><strong>${esc(u.name)}</strong><small>@${esc(u.username)}</small></div><span class="ck"><i class="fa-solid fa-check"></i></span></div>`).join('')
+    : empty('fa-solid fa-user-group', contacts.length ? 'No contacts match' : 'You have no contacts yet<small>Search for people in New chat and add them first.</small>');
+}
+$('#gpQ').addEventListener('input', e => { gp.q = e.target.value; drawGp(); });
+$('#gpList').addEventListener('click', e => { const r = e.target.closest('[data-pid]'); if (!r) return; const id = +r.dataset.pid, u = contacts.find(x => x.id === id); gp.sel.has(id) ? gp.sel.delete(id) : gp.sel.set(id, u); drawGp(); });
+$('#gpDone').addEventListener('click', async () => { const g = gp; closeScreen('gPickScreen'); await g.done(g.sel); });
+
+/* --- group info & management --- */
+let gi = null;
+async function openGroupInfo() {
+  if (!current || !current.group) return;
+  openScreen('gInfoScreen'); $('#giBody').innerHTML = skeleton();
+  try { gi = await api('groups/info?id=' + current.gid); drawGi(); } catch (err) { $('#giBody').innerHTML = empty('fa-solid fa-triangle-exclamation', esc(err.message)); }
+}
+const isAdm = r => r === 'owner' || r === 'admin';
+function drawGi(editing) {
+  const g = gi.group, adm = isAdm(g.role);
+  $('#giSub').textContent = g.members + (g.members === 1 ? ' member' : ' members');
+  $('#giBody').innerHTML = `
+  <div class="scard ginfo-top">${gAvatar(g)}<h3>${esc(g.name)}</h3><p>${g.description ? esc(g.description) : '<span style="opacity:.6">No description</span>'}</p><div class="hint">Created ${esc(fmtDate(g.created_at))}</div></div>
+  ${adm ? `<div class="scard"><button type="button" class="arow" id="giEdit"><span class="set-ico"><i class="fa-solid fa-pen"></i></span><span>Edit group<small>Name, description and photo</small></span></button>
+    <form class="sform" id="giForm" ${editing ? '' : 'hidden'} autocomplete="off"><input id="giName" maxlength="40" value="${esc(g.name)}" aria-label="Group name"><textarea id="giDesc" maxlength="200" aria-label="Description" style="min-height:76px">${esc(g.description)}</textarea><button type="submit" class="sbtn">Save</button><button type="button" class="sbtn ghost" id="giPhoto">Change photo</button>${g.avatar ? '<button type="button" class="sbtn ghost" id="giRmPhoto">Remove photo</button>' : ''}<div class="fmsg"></div><input type="file" id="giFile" accept="image/jpeg,image/png,image/webp" hidden></form></div>` : ''}
+  <div class="scard"><h4>${g.members} members</h4>
+    ${adm ? '<button type="button" class="arow" id="giAdd"><span class="set-ico"><i class="fa-solid fa-user-plus"></i></span><span>Add members<small>From your contacts</small></span></button>' : ''}
+    ${gi.members.map(u => `<div class="prow" data-mid2="${u.id}">${avatar(u, 'sm')}<div class="body"><strong>${u.id === me.id ? 'You' : esc(u.name)}</strong><small>@${esc(u.username)}</small></div>${u.role !== 'member' ? `<span class="badge-r">${u.role === 'owner' ? 'Owner' : 'Admin'}</span>` : ''}</div>`).join('')}
+  </div>
+  <div class="scard"><button type="button" class="arow danger" id="giLeave"><span class="set-ico"><i class="fa-solid fa-right-from-bracket"></i></span><span>Leave group<small>You will stop receiving its messages</small></span></button>
+  ${g.role === 'owner' ? '<button type="button" class="arow danger" id="giDelete"><span class="set-ico"><i class="fa-solid fa-trash"></i></span><span>Delete group<small>Removes the group and its messages for everyone</small></span></button>' : ''}</div>`;
+}
+async function refreshGi() { gi = await api('groups/info?id=' + current.gid); drawGi(); loadGroups().catch(() => {}); loadGroupMessages(true).catch(() => {}); }
+$('#giBody').addEventListener('click', async e => {
+  const g = gi && gi.group; if (!g) return;
+  if (e.target.closest('#giEdit')) { const f = $('#giForm'); f.hidden = !f.hidden; return; }
+  if (e.target.closest('#giPhoto')) return $('#giFile').click();
+  if (e.target.closest('#giRmPhoto')) { try { await api('groups/update', { body: { id: g.id, remove_avatar: true } }); await refreshGi(); toast('Group photo removed'); } catch (err) { toast(err.message); } return; }
+  if (e.target.closest('#giAdd')) {
+    const exclude = new Set(gi.members.map(u => u.id));
+    return pickContacts({ title: 'Add members', exclude, selected: new Map(), done: async sel => {
+      if (!sel.size) return;
+      try { const d = await api('groups/members/add', { body: { id: g.id, user_ids: [...sel.keys()] } }); await refreshGi(); toast(d.added + (d.added === 1 ? ' member added' : ' members added')); } catch (err) { toast(err.message); }
+    } });
+  }
+  if (e.target.closest('#giLeave')) return leaveGroup();
+  if (e.target.closest('#giDelete')) {
+    if (!(await confirmBox({ title: 'Delete group?', text: `“${esc(g.name)}” and all its messages will be deleted for everyone. This cannot be undone.`, ok: 'Delete', danger: true }))) return;
+    try { await api('groups/delete', { body: { id: g.id } }); closeScreen('gInfoScreen'); closeScreen('chatScreen'); leaveChat(); await loadGroups(); toast('Group deleted'); } catch (err) { toast(err.message); }
+    return;
+  }
+  const row = e.target.closest('[data-mid2]'); if (row) {
+    const u = gi.members.find(x => x.id === +row.dataset.mid2); if (!u || u.id === me.id) return;
+    const mine = g.role, can = isAdm(mine) && u.role !== 'owner' && (u.role === 'member' || mine === 'owner');
+    openGSheet(`<h4>${esc(u.name)}</h4><p class="sub2">@${esc(u.username)}${u.role !== 'member' ? ' · ' + (u.role === 'owner' ? 'Owner' : 'Admin') : ''}</p>
+      <div class="sheetlist"><button type="button" data-ga="msg" style="display:flex;align-items:center;gap:14px;width:100%;padding:12px 6px;font-weight:600"><i class="fa-solid fa-message"></i>Message</button>
+      ${isAdm(mine) && u.role === 'member' ? '<button type="button" data-ga="promote" style="display:flex;align-items:center;gap:14px;width:100%;padding:12px 6px;font-weight:600"><i class="fa-solid fa-user-shield"></i>Make group admin</button>' : ''}
+      ${mine === 'owner' && u.role === 'admin' ? '<button type="button" data-ga="demote" style="display:flex;align-items:center;gap:14px;width:100%;padding:12px 6px;font-weight:600"><i class="fa-solid fa-user-minus"></i>Remove as admin</button>' : ''}
+      ${can ? '<button type="button" data-ga="remove" style="display:flex;align-items:center;gap:14px;width:100%;padding:12px 6px;font-weight:600;color:#FF6B6B"><i class="fa-solid fa-user-xmark"></i>Remove from group</button>' : ''}</div>`);
+    $('#gsheet').onclick = async ev => {
+      const a = ev.target.closest('[data-ga]'); if (!a) return; const act = a.dataset.ga; closeGSheet();
+      try {
+        if (act === 'msg') { closeScreen('gInfoScreen'); closeScreen('chatScreen'); leaveChat(); if (!contacts.find(x => x.id === u.id)) contacts.push(u); openChat(u.id); }
+        else if (act === 'remove') { if (!(await confirmBox({ title: 'Remove member?', text: `Remove <b>${esc(u.name)}</b> from the group?`, ok: 'Remove', danger: true }))) return; await api('groups/members/remove', { body: { id: g.id, user_id: u.id } }); await refreshGi(); toast('Member removed'); }
+        else { await api('groups/members/role', { body: { id: g.id, user_id: u.id, role: act === 'promote' ? 'admin' : 'member' } }); await refreshGi(); toast(act === 'promote' ? u.name + ' is now an admin' : u.name + ' is no longer an admin'); }
+      } catch (err) { toast(err.message); }
+    };
+  }
+});
+$('#giBody').addEventListener('submit', async e => {
+  e.preventDefault(); if (e.target.id !== 'giForm') return; const f = e.target, btn = f.querySelector('button[type=submit]'); btn.disabled = true; msgBox(f, '');
+  try { await api('groups/update', { body: { id: gi.group.id, name: $('#giName').value, description: $('#giDesc').value } }); await refreshGi(); toast('Group updated'); }
+  catch (err) { msgBox(f, err.message); btn.disabled = false; }
+});
+$('#giBody').addEventListener('change', async e => {
+  if (e.target.id !== 'giFile') return; const f = e.target.files[0]; e.target.value = ''; if (!f) return;
+  if (!/^image\/(jpeg|png|webp)$/.test(f.type)) return toast('Choose a JPG, PNG or WebP photo');
+  try { toast('Uploading photo…'); const blob = await squareAvatar(f, 384), up = await upload(blob, 'image'); const u = URL.createObjectURL(blob); media.set(up.key, Promise.resolve(u)); mediaDone.set(up.key, u);
+    await api('groups/update', { body: { id: gi.group.id, avatar_key: up.key } }); await refreshGi(); toast('Group photo updated'); } catch (err) { toast(err.message); }
+});
+async function leaveGroup() {
+  const g = gi ? gi.group : current; if (!g) return;
+  if (!(await confirmBox({ title: 'Leave group?', text: `You will no longer receive messages from <b>${esc(g.name)}</b>.`, ok: 'Leave', danger: true }))) return;
+  try { await api('groups/leave', { body: { id: g.id || current.gid } }); closeScreen('gInfoScreen'); closeScreen('chatScreen'); leaveChat(); await loadGroups(); toast('You left the group'); } catch (err) { toast(err.message); }
+}
+
+/* --- lists / navigation hooks --- */
+$('#commSeg').addEventListener('click', e => { const b = e.target.closest('[data-cs]'); if (b) { commTab = b.dataset.cs; renderCommunity(); } });
+document.addEventListener('click', e => {
+  const r = e.target.closest('[data-gid]'); if (r) return openGroup(r.dataset.gid);
+  if (e.target.closest('#newGroupBtn')) return openNewGroup();
+  if (e.target.closest('#newChannelBtn') && typeof openNewChannel === 'function') return openNewChannel();
+});
+
+/* =====================================================================
+   CHANNELS
+   ===================================================================== */
+let channels = [], discover = [], chSeen = null, discQ = '', discTimer = 0;
+const chAv = (c, extra = '') => avatar({ id: c.id + 1000, name: c.name, avatar: c.avatar }, extra);
+const subsText = n => n + (n === 1 ? ' subscriber' : ' subscribers');
+const chPreview = l => !l ? 'No posts yet' : l.type === 'image' ? '📷 ' + (l.body || 'Photo') : l.type === 'video' ? '🎥 ' + (l.body || 'Video') : l.body;
+function channelRowHTML(c, i) {
+  return `<div class="row" data-cid="${c.id}" style="animation-delay:${Math.min(i || 0, 8) * 30}ms">${chAv(c)}<div class="body"><div class="line"><strong>${esc(c.name)}</strong><span class="time ${c.unread ? 'new' : ''}">${c.last ? esc(fmt(c.last.at)) : ''}</span></div><div class="preview"><span class="grow"><span class="txt">${esc(chPreview(c.last))}</span></span>${c.unread ? `<span class="badge">${c.unread}</span>` : ''}</div></div></div>`;
+}
+function discoverRowHTML(c, i) {
+  return `<div class="row" data-cid="${c.id}" style="animation-delay:${Math.min(i, 8) * 30}ms">${chAv(c)}<div class="body"><div class="line"><strong>${esc(c.name)}</strong></div><div class="preview"><span class="grow"><span class="txt">${esc(subsText(c.subscribers))}${c.description ? ' · ' + esc(c.description) : ''}</span></span></div></div>${c.subscribed ? '<span class="subbtn on">Subscribed</span>' : `<button type="button" class="subbtn" data-sub="${c.id}">Subscribe</button>`}</div>`;
+}
+function renderChannels() {
+  const mineIds = new Set(channels.map(c => c.id));
+  const disc = discover.filter(c => !mineIds.has(c.id) || discQ);
+  $('#communityList').innerHTML = `<div class="hsearch comm-search"><i class="fa-solid fa-magnifying-glass"></i><input id="discQ" type="search" placeholder="Search public channels" autocomplete="off" aria-label="Search channels" value="${esc(discQ)}"></div>
+    ${channels.length && !discQ ? `<div class="disc-h">Your channels</div>${channels.map(channelRowHTML).join('')}` : ''}
+    <div class="disc-h">${discQ ? 'Results' : 'Discover'}</div><div id="discList">${disc.length ? disc.map(discoverRowHTML).join('') : empty('fa-solid fa-bullhorn', discQ ? 'No public channels match “' + esc(discQ) + '”' : 'No public channels to discover yet<small>Be the first: create one.</small>')}</div>`;
+  if (discQ) { const i = $('#discQ'); i.focus(); i.setSelectionRange(i.value.length, i.value.length); }
+}
+async function loadDiscover() { try { const d = await api('channels/discover?q=' + encodeURIComponent(discQ)); discover = d.channels; if (commTab === 'channels') renderChannels(); } catch {} }
+async function loadChannels() {
+  const d = await api('channels');
+  const first = chSeen === null; chSeen = chSeen || new Map();
+  for (const c of d.channels) {
+    const prev = chSeen.get(c.id), lid = c.last ? c.last.id : 0; chSeen.set(c.id, lid);
+    if (first || prev === lid || !c.last || c.role === 'owner' && false) continue;
+    if (c.unread <= 0) continue;
+    if (ch && ch.id === c.id && $('#chScreen').classList.contains('open') && !document.hidden) continue;
+    notify('channel', { title: c.name, body: chPreview(c.last), tag: 'channel' + c.id, onClick: () => openChannel(c.id) });
+  }
+  const sig = JSON.stringify(d.channels); const changed = sig !== loadChannels.sig; loadChannels.sig = sig; channels = d.channels;
+  if (changed && commTab === 'channels' && !$('#discQ:focus')) renderChannels();
+}
+$('#communityList').addEventListener('input', e => { if (e.target.id !== 'discQ') return; discQ = e.target.value.trim(); clearTimeout(discTimer); discTimer = setTimeout(loadDiscover, 300); });
+$('#communityList').addEventListener('click', async e => {
+  const b = e.target.closest('[data-sub]'); if (!b) return; e.stopPropagation(); b.disabled = true;
+  try { await api('channels/subscribe', { body: { id: +b.dataset.sub } }); toast('Subscribed'); await Promise.all([loadChannels(), loadDiscover()]); } catch (err) { toast(err.message); b.disabled = false; }
+}, true);
+
+/* --- create --- */
+let cn = { blob: null, vis: 'public', busy: false };
+function openNewChannel() {
+  cn = { blob: null, vis: 'public', busy: false }; $('#cnName').value = ''; $('#cnDesc').value = ''; $('#cnCom').checked = true; $('#cnForm .fmsg').textContent = '';
+  $('#cnPick').innerHTML = '<i class="fa-solid fa-camera"></i>'; drawCnVis(); openScreen('chNewScreen');
+}
+function drawCnVis() { $$('#cnForm [data-vis]').forEach(r => { const on = r.dataset.vis === cn.vis; r.classList.toggle('sel', on); r.setAttribute('aria-checked', on); }); }
+$('#cnForm').addEventListener('click', e => { const r = e.target.closest('[data-vis]'); if (r) { cn.vis = r.dataset.vis; drawCnVis(); } });
+$('#cnPick').addEventListener('click', () => $('#cnFile').click());
+$('#cnFile').addEventListener('change', async e => {
+  const f = e.target.files[0]; e.target.value = ''; if (!f) return;
+  if (!/^image\/(jpeg|png|webp)$/.test(f.type)) return toast('Choose a JPG, PNG or WebP photo');
+  try { cn.blob = await squareAvatar(f, 384); $('#cnPick').innerHTML = `<img alt="" src="${URL.createObjectURL(cn.blob)}">`; } catch { toast('Could not read this photo'); }
+});
+$('#cnForm').addEventListener('submit', async e => {
+  e.preventDefault(); if (cn.busy) return; const f = e.target, name = $('#cnName').value.trim();
+  if (!name) return msgBox(f, 'Enter a channel name');
+  cn.busy = true; $('#cnCreate').disabled = true; msgBox(f, '');
+  try {
+    let avatar_key; if (cn.blob) { const up = await upload(cn.blob, 'image'); avatar_key = up.key; const u = URL.createObjectURL(cn.blob); media.set(up.key, Promise.resolve(u)); mediaDone.set(up.key, u); }
+    const d = await api('channels', { body: { name, description: $('#cnDesc').value.trim(), visibility: cn.vis, comments_on: $('#cnCom').checked, avatar_key } });
+    closeScreen('chNewScreen'); await loadChannels(); commTab = 'channels'; showView('communities'); renderCommunity(); openChannel(d.channel.id); toast('Channel published');
+  } catch (err) { msgBox(f, err.message); }
+  cn.busy = false; $('#cnCreate').disabled = false;
+});
+
+/* --- feed --- */
+let ch = null, chAtt = null, chBusy = false;
+const isChAdm = r => r === 'owner' || r === 'admin';
+async function openChannel(id, code) {
+  ch = { id: +id, code: code || null, info: null, posts: [], sig: '' };
+  $('#chFeed').innerHTML = skeleton(); $('#chBar').hidden = $('#chComposer').hidden = true; chAtt = null; $('#chInput').value = ''; drawChAtt();
+  $('#chName').textContent = 'Channel'; $('#chSubs').textContent = ''; openScreen('chScreen'); showView('communities');
+  try { await loadChannelPosts(true); } catch (err) {
+    if (code) { try { const d = await api(`channels/info?id=${id}&code=${encodeURIComponent(code)}`); ch.info = d.channel; drawChHead(); $('#chFeed').innerHTML = empty('fa-solid fa-lock', 'Private channel<small>Subscribe to read its posts.</small>'); drawChBar(); return; } catch {} }
+    closeScreen('chScreen'); ch = null; toast(err.message);
+  }
+}
+function drawChHead() {
+  const c = ch.info; $('#chAvatar').outerHTML = chAv(c, 'sm').replace('class="avatar sm"', 'class="avatar sm" id="chAvatar"');
+  $('#chName').textContent = c.name; $('#chSubs').textContent = subsText(c.subscribers) + (c.visibility === 'private' ? ' · private' : '');
+}
+function drawChBar() {
+  const c = ch.info, bar = $('#chBar'), comp = $('#chComposer');
+  comp.hidden = !isChAdm(c.role);
+  if (isChAdm(c.role) || c.role === 'subscriber') { bar.hidden = isChAdm(c.role) || true; if (c.role === 'subscriber') { bar.hidden = false; bar.innerHTML = '<span class="hint">You are subscribed. Only admins can post.</span>'; } }
+  else { bar.hidden = false; bar.innerHTML = `<button type="button" class="sbtn" id="chJoin" style="width:100%">Subscribe</button>`; }
+}
+function postHTML(m) {
+  const c = ch.info, adm = isChAdm(c.role);
+  if (m.deleted_at) return `<article class="post" data-pid="${m.id}"><span class="pdel"><i class="fa-solid fa-ban"></i> This post was deleted</span></article>`;
+  let body = '';
+  if (m.type === 'image') body += `<div class="img-wrap${mediaDone.has(m.media_key) ? ' loaded' : ''}" data-img="${esc(m.media_key)}"><img alt="Photo" ${mediaDone.has(m.media_key) ? `src="${mediaDone.get(m.media_key)}"` : `data-key="${esc(m.media_key)}"`}></div>`;
+  else if (m.type === 'video') body += `<div class="vid" data-vid="${esc(m.media_key)}"><span class="pl"><i class="fa-solid fa-play"></i></span><span class="vd">${fmtDur(m.duration || 0)}</span></div>`;
+  if (m.body) body += `<div class="pb">${esc(m.body)}</div>`;
+  const mine = m.reactions.some(r => r.mine), canMenu = (m.author_id === me.id && adm) || c.role === 'owner';
+  const chips = m.reactions.filter(r => r.emoji !== '❤️').map(r => `<button type="button" data-prx="${r.emoji}" class="${r.mine ? 'on' : ''}">${r.emoji} ${r.count}</button>`).join('');
+  const hearts = (m.reactions.find(r => r.emoji === '❤️') || {}).count || 0, heartMine = m.reactions.some(r => r.emoji === '❤️' && r.mine);
+  return `<article class="post" data-pid="${m.id}"><div class="ph"><div class="grow"><strong>${esc(c.name)}</strong><small>${new Date(m.created_at).toDateString() === new Date().toDateString() ? '' : esc(fmt(m.created_at)) + ' · '}${esc(clock(m.created_at))}${m.edited_at ? ' · edited' : ''}</small></div>${canMenu ? `<button type="button" class="icon-btn small" data-pmenu="${m.id}" aria-label="Post options"><i class="fa-solid fa-ellipsis-vertical"></i></button>` : ''}</div>${body}
+    <div class="pa">${c.role ? `<button type="button" data-plike class="${heartMine ? 'on' : ''}" aria-label="Like"><i class="fa-${heartMine ? 'solid' : 'regular'} fa-heart" style="${heartMine ? 'color:#FF6B6B' : ''}"></i> <span>${hearts}</span></button>${chips}<button type="button" data-padd aria-label="More reactions">＋</button>` : `<span class="rxc"><i class="fa-regular fa-heart"></i> ${m.likes}</span>`}
+    ${c.comments_on ? `<button type="button" data-pcom class="" style="margin-left:auto"><i class="fa-regular fa-comment"></i> ${m.comments}</button>` : ''}</div></article>`;
+}
+function renderChFeed(force) {
+  const f = $('#chFeed'), near = f.scrollHeight - f.scrollTop - f.clientHeight < 160;
+  f.innerHTML = ch.posts.length ? ch.posts.map(postHTML).join('') : empty('fa-solid fa-bullhorn', 'No posts yet' + (isChAdm(ch.info.role) ? '<small>Write the first post below.</small>' : ''));
+  $$('#chFeed img[data-key]').forEach(img => { const w = img.closest('.img-wrap'); mediaUrl(img.dataset.key).then(u => { img.src = u; w.classList.add('loaded'); }).catch(() => w.classList.add('err')); });
+  if (force || near) f.scrollTop = f.scrollHeight;
+}
+async function loadChannelPosts(force) {
+  const who = ch; if (!who) return;
+  const d = await api('channels/posts?id=' + who.id); if (ch !== who) return;
+  who.info = d.channel; drawChHead(); drawChBar();
+  const sig = d.channel.name + d.channel.subscribers + d.posts.map(m => m.id + (m.deleted_at ? 'x' : '') + (m.edited_at || '') + m.likes + ':' + m.comments + m.reactions.map(r => r.emoji + r.count + (r.mine ? 'm' : '')).join('')).join();
+  if (!force && sig === who.sig) return; who.sig = sig; who.posts = d.posts; renderChFeed(force);
+}
+$('#chFeed').addEventListener('click', async e => {
+  const t = e.target; if (!ch) return;
+  const post = id => ch.posts.find(p => p.id === +id), art = t.closest('.post'), m = art ? post(art.dataset.pid) : null;
+  const img = t.closest('.img-wrap'); if (img) { if (img.classList.contains('loaded')) openLightbox(img.dataset.img); return; }
+  const vid = t.closest('[data-vid]'); if (vid) return openVideo(vid.dataset.vid);
+  if (!m) return;
+  const react = async emoji => { try { await api('channels/react', { body: { post_id: m.id, emoji } }); await loadChannelPosts(true); } catch (err) { toast(err.message); } };
+  if (t.closest('[data-plike]')) return react('❤️');
+  const rx = t.closest('[data-prx]'); if (rx) return react(rx.dataset.prx);
+  if (t.closest('[data-padd]')) { openGSheet(`<h4>React</h4><div class="rxrow">${['👍', '❤️', '😂', '😮', '😢', '🙏'].map(x => `<button type="button" data-e="${x}" style="font-size:26px;width:48px;height:48px;border-radius:50%">${x}</button>`).join('')}</div>`); $('#gsheet').onclick = ev => { const b = ev.target.closest('[data-e]'); if (b) { closeGSheet(); react(b.dataset.e); } }; return; }
+  if (t.closest('[data-pcom]')) return openComments(m);
+  if (t.closest('[data-pmenu]')) {
+    const own = m.author_id === me.id && isChAdm(ch.info.role);
+    openGSheet(`<h4>Post</h4><div>${own ? '<button type="button" data-pa="edit" style="display:flex;gap:14px;width:100%;padding:12px 6px;font-weight:600"><i class="fa-solid fa-pen"></i>Edit post</button>' : ''}<button type="button" data-pa="del" style="display:flex;gap:14px;width:100%;padding:12px 6px;font-weight:600;color:#FF6B6B"><i class="fa-solid fa-trash"></i>Delete post</button></div>`);
+    $('#gsheet').onclick = async ev => {
+      const a = ev.target.closest('[data-pa]'); if (!a) return; closeGSheet();
+      try {
+        if (a.dataset.pa === 'del') { if (!(await confirmBox({ title: 'Delete post?', text: 'This post will be removed for all subscribers.', ok: 'Delete', danger: true }))) return; await api('channels/posts/delete', { body: { post_id: m.id } }); await loadChannelPosts(true); toast('Post deleted'); }
+        else {
+          openGSheet(`<h4>Edit post</h4><div class="sform"><textarea id="epText" maxlength="4000" style="min-height:120px">${esc(m.body)}</textarea><div class="row-btns"><button type="button" data-ecancel>Cancel</button><button type="button" class="go" data-esave>Save</button></div></div>`);
+          $('#gsheet').onclick = async e2 => { if (e2.target.closest('[data-ecancel]')) return closeGSheet(); if (!e2.target.closest('[data-esave]')) return; try { await api('channels/posts/edit', { body: { post_id: m.id, body: $('#epText').value } }); closeGSheet(); await loadChannelPosts(true); toast('Post updated'); } catch (er) { toast(er.message); } };
+        }
+      } catch (err) { toast(err.message); }
+    };
+  }
+});
+$('#chBar').addEventListener('click', async e => {
+  if (!e.target.closest('#chJoin')) return; const b = e.target.closest('#chJoin'); b.disabled = true;
+  try { await api('channels/subscribe', { body: { id: ch.id, code: ch.code } }); await loadChannelPosts(true); loadChannels().catch(() => {}); toast('Subscribed'); } catch (err) { toast(err.message); b.disabled = false; }
+});
+
+/* --- comments --- */
+async function openComments(m) {
+  const draw = async () => {
+    let d; try { d = await api('channels/comments?post_id=' + m.id); } catch (err) { return toast(err.message); }
+    const canSay = ch.info.role && d.comments_on;
+    openGSheet(`<h4>Comments</h4><div style="max-height:46vh;overflow:auto">${d.comments.length ? d.comments.map(c => `<div class="cmt"><b>${esc(c.name)}</b><small>${esc(clock(c.created_at))}</small>${c.user_id === me.id || isChAdm(ch.info.role) ? `<button type="button" data-cdel="${c.id}" aria-label="Delete comment"><i class="fa-solid fa-trash"></i></button>` : ''}<div>${esc(c.body)}</div></div>`).join('') : '<p class="sub2">No comments yet.</p>'}</div>
+      ${canSay ? '<div class="cminput"><input id="cmText" maxlength="500" placeholder="Write a comment" aria-label="Comment"><button type="button" data-csend>Send</button></div>' : `<p class="sub2" style="margin-top:10px">${d.comments_on ? 'Subscribe to comment.' : 'Comments are off.'}</p>`}`);
+    $('#gsheet').onclick = async e => {
+      const del = e.target.closest('[data-cdel]');
+      try {
+        if (del) { await api('channels/comments/delete', { body: { id: +del.dataset.cdel } }); await draw(); loadChannelPosts(true).catch(() => {}); }
+        else if (e.target.closest('[data-csend]')) { const v = $('#cmText').value.trim(); if (!v) return; await api('channels/comments', { body: { post_id: m.id, body: v } }); await draw(); loadChannelPosts(true).catch(() => {}); }
+      } catch (err) { toast(err.message); }
+    };
+  };
+  await draw();
+}
+
+/* --- publish (admins) --- */
+function drawChAtt() { const a = $('#chAtt'); a.hidden = !chAtt; if (chAtt) a.innerHTML = `<i class="fa-solid ${chAtt.type === 'video' ? 'fa-video' : 'fa-image'}"></i><span>${chAtt.type === 'video' ? 'Video' : 'Photo'} attached</span><button type="button" id="chAttX" aria-label="Remove attachment"><i class="fa-solid fa-xmark"></i></button>`; }
+$('#chAtt').addEventListener('click', e => { if (e.target.closest('#chAttX')) { chAtt = null; drawChAtt(); } });
+$('#chAttach').addEventListener('click', () => {
+  openGSheet(`<h4>Attach</h4><div><button type="button" data-at="photo" style="display:flex;gap:14px;width:100%;padding:12px 6px;font-weight:600"><i class="fa-solid fa-image"></i>Photo</button>${videoOk ? '<button type="button" data-at="video" style="display:flex;gap:14px;width:100%;padding:12px 6px;font-weight:600"><i class="fa-solid fa-video"></i>Video</button>' : ''}</div>`);
+  $('#gsheet').onclick = e => { const b = e.target.closest('[data-at]'); if (!b) return; closeGSheet(); (b.dataset.at === 'photo' ? $('#chPhoto') : $('#chVideo')).click(); };
+});
+$('#chPhoto').addEventListener('change', async e => { const f = e.target.files[0]; e.target.value = ''; if (!f) return; if (!/^image\/(jpeg|png|webp)$/.test(f.type)) return toast('Choose a JPG, PNG or WebP photo'); try { chAtt = { type: 'image', blob: await compressImage(f) }; drawChAtt(); } catch { toast('Could not read this photo'); } });
+$('#chVideo').addEventListener('change', async e => { const f = e.target.files[0]; e.target.value = ''; if (!f) return; try { const dur = await checkVideo(f); chAtt = { type: 'video', blob: f, duration: dur }; drawChAtt(); } catch (err) { toast(err.message); } });
+$('#chInput').addEventListener('input', e => { e.target.style.height = 'auto'; e.target.style.height = Math.min(e.target.scrollHeight, 120) + 'px'; });
+$('#chSend').addEventListener('click', async () => {
+  if (chBusy || !ch) return; const text = $('#chInput').value.trim(); if (!text && !chAtt) return;
+  chBusy = true; $('#chSend').disabled = true;
+  try {
+    const payload = { id: ch.id, body: text, type: chAtt ? chAtt.type : 'text' };
+    if (chAtt) { toast(chAtt.type === 'video' ? 'Uploading video…' : 'Uploading photo…'); const up = chAtt.type === 'video' ? await uploadVideo(chAtt.blob, () => {}) : await upload(chAtt.blob, 'image'); payload.media_key = up.key; payload.duration = chAtt.duration; }
+    await api('channels/posts', { body: payload });
+    $('#chInput').value = ''; $('#chInput').style.height = 'auto'; chAtt = null; drawChAtt(); await loadChannelPosts(true); loadChannels().catch(() => {});
+  } catch (err) { toast(err.message); }
+  chBusy = false; $('#chSend').disabled = false;
+});
+
+/* --- channel info & management --- */
+let ci = null;
+async function openChannelInfo() {
+  if (!ch) return; openScreen('chInfoScreen'); $('#ciBody').innerHTML = skeleton();
+  try { const d = await api(`channels/info?id=${ch.id}` + (ch.code ? '&code=' + encodeURIComponent(ch.code) : '')); ci = { c: d.channel, subs: null }; if (isChAdm(d.channel.role)) { try { ci.subs = (await api('channels/subscribers?id=' + ch.id)).subscribers; } catch {} } drawCi(); }
+  catch (err) { $('#ciBody').innerHTML = empty('fa-solid fa-triangle-exclamation', esc(err.message)); }
+}
+$('#chInfoBtn').addEventListener('click', openChannelInfo);
+$('#chHead').addEventListener('click', openChannelInfo);
+function drawCi(editing) {
+  const c = ci.c, adm = isChAdm(c.role), own = c.role === 'owner';
+  $('#ciSub').textContent = subsText(c.subscribers);
+  const link = c.invite_code ? `${location.origin}/?channel=${c.id}&code=${c.invite_code}` : '';
+  $('#ciBody').innerHTML = `
+  <div class="scard ginfo-top">${chAv(c)}<h3>${esc(c.name)}</h3><p>${c.description ? esc(c.description) : '<span style="opacity:.6">No description</span>'}</p><div class="hint">${c.visibility === 'private' ? '🔒 Private channel' : '🌐 Public channel'} · ${esc(subsText(c.subscribers))} · by ${esc(c.owner)}</div>
+    ${c.role && c.role !== 'owner' ? '<button type="button" class="sbtn ghost" id="ciUnsub" style="width:100%">Unsubscribe</button>' : !c.role ? '<button type="button" class="sbtn" id="ciSub2" style="width:100%">Subscribe</button>' : ''}</div>
+  ${adm ? `<div class="scard"><button type="button" class="arow" id="ciEdit"><span class="set-ico"><i class="fa-solid fa-pen"></i></span><span>Edit channel<small>Name, description, photo, comments</small></span></button>
+    <form class="sform" id="ciForm" ${editing ? '' : 'hidden'} autocomplete="off"><input id="ciName" maxlength="40" value="${esc(c.name)}" aria-label="Channel name"><textarea id="ciDesc" maxlength="300" style="min-height:90px" aria-label="Description">${esc(c.description)}</textarea>
+      <label class="tgl"><span class="tx">Allow comments</span><input type="checkbox" id="ciCom" ${c.comments_on ? 'checked' : ''}><span class="tsw"></span></label>
+      ${own ? `<label class="tgl"><span class="tx">Private channel<small>Hidden from discovery; invite link required</small></span><input type="checkbox" id="ciPriv" ${c.visibility === 'private' ? 'checked' : ''}><span class="tsw"></span></label>` : ''}
+      <button type="submit" class="sbtn">Save</button><button type="button" class="sbtn ghost" id="ciPhoto">Change photo</button>${c.avatar ? '<button type="button" class="sbtn ghost" id="ciRmPhoto">Remove photo</button>' : ''}<div class="fmsg"></div><input type="file" id="ciFile" accept="image/jpeg,image/png,image/webp" hidden></form></div>` : ''}
+  ${link ? `<div class="scard"><h4>Invite link</h4><div class="hint" style="word-break:break-all">${esc(link)}</div><button type="button" class="sbtn ghost" id="ciCopy">Copy invite link</button>${own ? '<button type="button" class="sbtn ghost" id="ciReset">Reset link</button>' : ''}</div>` : ''}
+  ${adm && ci.subs ? `<div class="scard"><h4>${ci.subs.length} ${ci.subs.length === 1 ? 'person' : 'people'}</h4>${ci.subs.map(u => `<div class="prow" data-sid="${u.id}">${avatar(u, 'sm')}<div class="body"><strong>${u.id === me.id ? 'You' : esc(u.name)}</strong><small>@${esc(u.username)}</small></div>${u.role !== 'subscriber' ? `<span class="badge-r">${u.role === 'owner' ? 'Owner' : 'Admin'}</span>` : ''}</div>`).join('')}</div>` : ''}
+  ${own ? '<div class="scard"><button type="button" class="arow danger" id="ciDelete"><span class="set-ico"><i class="fa-solid fa-trash"></i></span><span>Delete channel<small>Removes the channel and all posts for everyone</small></span></button></div>' : ''}`;
+}
+async function refreshCi() { await openChannelInfo(); loadChannels().catch(() => {}); loadChannelPosts(true).catch(() => {}); }
+$('#ciBody').addEventListener('click', async e => {
+  if (!ci) return; const c = ci.c, t = e.target;
+  try {
+    if (t.closest('#ciEdit')) { const f = $('#ciForm'); f.hidden = !f.hidden; return; }
+    if (t.closest('#ciPhoto')) return $('#ciFile').click();
+    if (t.closest('#ciRmPhoto')) { await api('channels/update', { body: { id: c.id, remove_avatar: true } }); await refreshCi(); return toast('Photo removed'); }
+    if (t.closest('#ciCopy')) { const link = `${location.origin}/?channel=${c.id}&code=${c.invite_code}`; await copyText(link); return toast('Invite link copied'); }
+    if (t.closest('#ciReset')) { if (!(await confirmBox({ title: 'Reset invite link?', text: 'The old link will stop working.', ok: 'Reset' }))) return; await api('channels/update', { body: { id: c.id, reset_invite: true } }); await refreshCi(); return toast('Invite link reset'); }
+    if (t.closest('#ciSub2')) { await api('channels/subscribe', { body: { id: c.id, code: ch && ch.code } }); if (ch) ch.code = null; await refreshCi(); await loadChannelPosts(true).catch(() => {}); return toast('Subscribed'); }
+    if (t.closest('#ciUnsub')) { if (!(await confirmBox({ title: 'Unsubscribe?', text: `You will stop receiving posts from <b>${esc(c.name)}</b>.`, ok: 'Unsubscribe', danger: true }))) return; await api('channels/unsubscribe', { body: { id: c.id } }); closeScreen('chInfoScreen'); closeScreen('chScreen'); ch = null; await loadChannels(); toast('Unsubscribed'); return; }
+    if (t.closest('#ciDelete')) { if (!(await confirmBox({ title: 'Delete channel?', text: `“${esc(c.name)}” and all its posts will be deleted for everyone. This cannot be undone.`, ok: 'Delete', danger: true }))) return; await api('channels/delete', { body: { id: c.id } }); closeScreen('chInfoScreen'); closeScreen('chScreen'); ch = null; await loadChannels(); toast('Channel deleted'); return; }
+    const row = t.closest('[data-sid]'); if (row) {
+      const u = ci.subs.find(x => x.id === +row.dataset.sid); if (!u || u.id === me.id || u.role === 'owner') return;
+      const own = c.role === 'owner', canRemove = u.role === 'subscriber' || own;
+      openGSheet(`<h4>${esc(u.name)}</h4><p class="sub2">@${esc(u.username)}${u.role === 'admin' ? ' · Admin' : ''}</p><div>
+        ${own && u.role === 'subscriber' ? '<button type="button" data-sa="promote" style="display:flex;gap:14px;width:100%;padding:12px 6px;font-weight:600"><i class="fa-solid fa-user-shield"></i>Make admin</button>' : ''}
+        ${own && u.role === 'admin' ? '<button type="button" data-sa="demote" style="display:flex;gap:14px;width:100%;padding:12px 6px;font-weight:600"><i class="fa-solid fa-user-minus"></i>Remove as admin</button>' : ''}
+        ${canRemove ? '<button type="button" data-sa="remove" style="display:flex;gap:14px;width:100%;padding:12px 6px;font-weight:600;color:#FF6B6B"><i class="fa-solid fa-user-xmark"></i>Remove from channel</button>' : ''}</div>`);
+      $('#gsheet').onclick = async ev => {
+        const a = ev.target.closest('[data-sa]'); if (!a) return; closeGSheet();
+        try {
+          if (a.dataset.sa === 'remove') { if (!(await confirmBox({ title: 'Remove?', text: `Remove <b>${esc(u.name)}</b> from the channel?`, ok: 'Remove', danger: true }))) return; await api('channels/subscribers/remove', { body: { id: c.id, user_id: u.id } }); toast('Removed'); }
+          else { await api('channels/admins', { body: { id: c.id, user_id: u.id, role: a.dataset.sa === 'promote' ? 'admin' : 'subscriber' } }); toast(a.dataset.sa === 'promote' ? u.name + ' is now an admin' : 'Admin removed'); }
+          await refreshCi();
+        } catch (er) { toast(er.message); }
+      };
+    }
+  } catch (err) { toast(err.message); }
+});
+$('#ciBody').addEventListener('submit', async e => {
+  e.preventDefault(); if (e.target.id !== 'ciForm') return; const f = e.target, btn = f.querySelector('button[type=submit]'); btn.disabled = true; msgBox(f, '');
+  const body = { id: ci.c.id, name: $('#ciName').value, description: $('#ciDesc').value, comments_on: $('#ciCom').checked }; if ($('#ciPriv')) body.visibility = $('#ciPriv').checked ? 'private' : 'public';
+  try { await api('channels/update', { body }); await refreshCi(); toast('Channel updated'); } catch (err) { msgBox(f, err.message); btn.disabled = false; }
+});
+$('#ciBody').addEventListener('change', async e => {
+  if (e.target.id !== 'ciFile') return; const f = e.target.files[0]; e.target.value = ''; if (!f) return;
+  if (!/^image\/(jpeg|png|webp)$/.test(f.type)) return toast('Choose a JPG, PNG or WebP photo');
+  try { toast('Uploading photo…'); const blob = await squareAvatar(f, 384), up = await upload(blob, 'image'); const u = URL.createObjectURL(blob); media.set(up.key, Promise.resolve(u)); mediaDone.set(up.key, u);
+    await api('channels/update', { body: { id: ci.c.id, avatar_key: up.key } }); await refreshCi(); toast('Channel photo updated'); } catch (err) { toast(err.message); }
+});
+document.addEventListener('click', e => { const r = e.target.closest('[data-cid]'); if (r && !e.target.closest('[data-sub]')) openChannel(r.dataset.cid); });
+async function openChannelFromLink() {                       // /?channel=ID&code=CODE  (invite link)
+  const q = new URLSearchParams(location.search), id = q.get('channel'); if (!id) return;
+  history.replaceState(null, '', location.pathname);
+  commTab = 'channels'; renderCommunity(); openChannel(id, q.get('code'));
+}
+
+renderCommunity();
 setMode('login');
 if (token) api('me').then(d => start(d.user)).catch(() => logout(true));
 </script>
