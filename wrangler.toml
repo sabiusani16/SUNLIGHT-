@@ -49,3 +49,10 @@ database_id = "14778838-61d9-4fd5-a6be-a7d778348def"
 #
 # After adding the secrets, redeploy. During a call the small line under the
 # call status must say "TURN on". Never write these values into this file or GitHub.
+
+# ---- Optional: email verification for "Change email" (Settings -> Account) ----
+# Without these two secrets the email cannot be changed (the app says so; nothing is faked).
+# Create a Resend account (resend.com), verify a sending domain, then add as Worker secrets
+# (Settings -> Variables and secrets -> type "Secret", Runtime):
+#   RESEND_API_KEY = your Resend API key
+#   MAIL_FROM      = SUNLIGHT <no-reply@your-verified-domain>
