@@ -157,6 +157,35 @@ main::-webkit-scrollbar{display:none}
 .crec .ci{flex:none;width:30px;height:30px;border-radius:50%;display:grid;place-items:center;background:rgba(245,185,0,.14);color:var(--gold);font-size:13px}
 .crec.miss .ci{background:rgba(255,107,107,.15);color:#FF6B6B}.crec.miss .ct{color:#FF6B6B}
 .crec .ct{font-weight:600;line-height:1.25}.crec small{display:block;color:var(--muted);font-size:11.5px;font-weight:400}
+/* ---- settings screens (account / notifications / help) ---- */
+.sbody{flex:1;overflow-y:auto;padding:14px 14px calc(24px + env(safe-area-inset-bottom,0px));display:flex;flex-direction:column;gap:14px;-webkit-overflow-scrolling:touch}
+.scard{background:var(--soft);border-radius:16px;padding:14px 16px;display:flex;flex-direction:column;gap:10px}
+.scard h4{font-size:13px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--accent)}
+.scard .hint{color:var(--muted);font-size:12.5px;line-height:1.45}
+.irow{display:flex;justify-content:space-between;gap:12px;align-items:baseline;font-size:14.5px}.irow span{color:var(--muted);flex:none}.irow b{font-weight:600;text-align:right;word-break:break-all}
+.arow{display:flex;align-items:center;gap:12px;padding:6px 0;cursor:pointer;font-size:15px;font-weight:600;background:none;color:inherit;text-align:left;width:100%}
+.arow .set-ico{flex:none}.arow small{display:block;color:var(--muted);font-weight:400;font-size:12.5px}.arow .chev{margin-left:auto;color:var(--muted);font-size:12px}
+.arow.danger{color:#FF6B6B}.arow.danger .set-ico{background:rgba(255,107,107,.15);color:#FF6B6B}
+.sform{display:flex;flex-direction:column;gap:9px;padding-top:4px}.sform[hidden]{display:none}
+.sform input,.sform textarea,.hsearch input{width:100%;background:var(--bg);border:1.5px solid var(--line);border-radius:12px;padding:12px 14px;font-size:15px;transition:border-color .2s}
+.sform input:focus,.sform textarea:focus,.hsearch input:focus{border-color:var(--gold)}.sform textarea{min-height:120px;resize:vertical}
+.sform .fmsg{font-size:13px;min-height:16px}.fmsg.err{color:#FF6B6B}.fmsg.ok{color:#4CC38A}
+.sbtn{background:var(--gold);color:#14210f;font-weight:700;border-radius:12px;padding:12px;font-size:15px}.sbtn:disabled{opacity:.5}.sbtn.ghost{background:var(--bg);color:var(--text);border:1.5px solid var(--line)}.sbtn.red{background:#E5484D;color:#fff}
+.tgl{display:flex;align-items:center;gap:12px;padding:8px 0;cursor:pointer}.tgl .tx{flex:1;font-size:15px;font-weight:500}.tgl .tx small{display:block;color:var(--muted);font-weight:400;font-size:12.5px;margin-top:1px}
+.tgl input{position:absolute;opacity:0;pointer-events:none}.tgl .tsw{flex:none;width:46px;height:26px;border-radius:13px;background:var(--line2,#3a4640);position:relative;transition:background .2s}
+.tgl .tsw::after{content:'';position:absolute;top:3px;left:3px;width:20px;height:20px;border-radius:50%;background:#fff;transition:transform .2s}
+.tgl input:checked+.tsw{background:var(--gold)}.tgl input:checked+.tsw::after{transform:translateX(20px);background:#14210f}.tgl input:focus-visible+.tsw{outline:2px solid var(--gold);outline-offset:2px}.tgl.off{opacity:.45;pointer-events:none}
+.tone{display:flex;align-items:center;gap:10px;padding:8px 2px;cursor:pointer}.tone .rd{flex:none;width:20px;height:20px;border-radius:50%;border:2px solid var(--muted);display:grid;place-items:center}
+.tone.sel .rd{border-color:var(--gold)}.tone.sel .rd::after{content:'';width:10px;height:10px;border-radius:50%;background:var(--gold)}.tone span{flex:1;font-size:15px}
+.tone button{flex:none;width:36px;height:36px;border-radius:50%;background:var(--gold-s);color:var(--accent);display:grid;place-items:center}
+.hsearch{position:relative}.hsearch i{position:absolute;left:14px;top:50%;transform:translateY(-50%);color:var(--muted)}.hsearch input{padding-left:40px}
+.hcats{display:grid;grid-template-columns:1fr 1fr;gap:10px}.hcat{background:var(--soft);border-radius:14px;padding:14px 12px;display:flex;flex-direction:column;gap:8px;font-size:14px;font-weight:600;text-align:left;color:inherit;cursor:pointer}
+.hcat .set-ico{width:34px;height:34px}.hcat small{color:var(--muted);font-weight:400;font-size:12px}
+.faq{background:var(--soft);border-radius:14px;overflow:hidden}.faq button{width:100%;text-align:left;padding:13px 14px;font-weight:600;font-size:14.5px;display:flex;gap:10px;align-items:center;color:inherit}
+.faq button i{margin-left:auto;color:var(--muted);font-size:12px;transition:transform .2s}.faq.open button i{transform:rotate(180deg)}
+.faq .ans{display:none;padding:0 14px 14px;color:var(--muted);font-size:14px;line-height:1.55}.faq.open .ans{display:block}
+.hnote{background:var(--gold-s);border-radius:12px;padding:10px 12px;font-size:13px;line-height:1.45}
+.sreq{border-top:1px solid var(--line);padding-top:8px;font-size:13.5px}.sreq b{display:block}.sreq small{color:var(--muted)}
 .day{align-self:center;background:var(--surface);color:var(--muted);font-size:12px;font-weight:500;padding:5px 12px;border-radius:10px;margin-bottom:6px;box-shadow:0 1px 2px rgba(0,0,0,.06)}
 .msg{max-width:80%;padding:8px 12px 6px;border-radius:14px;font-size:15px;line-height:1.4;word-wrap:break-word;box-shadow:0 1px 2px rgba(0,0,0,.07);animation:pop .22s ease both}
 @keyframes pop{from{opacity:0;transform:scale(.94) translateY(6px)}to{opacity:1;transform:none}}
@@ -675,6 +704,24 @@ mark{background:var(--gold-s);color:inherit;border-radius:3px;padding:0 1px}
     <div class="chat-list" id="notifList" style="overflow-y:auto;flex:1"></div>
   </div>
 
+  <!-- ACCOUNT -->
+  <div class="screen" id="accScreen">
+    <div class="screen-head"><button class="icon-btn light" data-close="accScreen" aria-label="Back"><i class="fa-solid fa-arrow-left"></i></button><div class="grow"><strong>Account</strong><small>Manage your SUNLIGHT account</small></div></div>
+    <div class="sbody" id="accBody"></div>
+  </div>
+
+  <!-- NOTIFICATION SETTINGS -->
+  <div class="screen" id="nfScreen">
+    <div class="screen-head"><button class="icon-btn light" data-close="nfScreen" aria-label="Back"><i class="fa-solid fa-arrow-left"></i></button><div class="grow"><strong>Notifications</strong><small>Alerts, sounds and vibration</small></div></div>
+    <div class="sbody" id="nfBody"></div>
+  </div>
+
+  <!-- HELP CENTRE -->
+  <div class="screen" id="helpScreen">
+    <div class="screen-head"><button class="icon-btn light" id="helpBack" aria-label="Back"><i class="fa-solid fa-arrow-left"></i></button><div class="grow"><strong id="helpTitle">Help</strong><small id="helpSub">Help centre</small></div></div>
+    <div class="sbody" id="helpBody"></div>
+  </div>
+
   <!-- CONVERSATION -->
   <div class="screen chat-screen" id="chatScreen">
     <div class="screen-head">
@@ -953,7 +1000,7 @@ $('#authForm').addEventListener('submit', async e => {
 function logout(silent) {
   if (typeof call !== 'undefined' && call && !call.done) hangup();
   if (token && !silent) api('logout', { method: 'POST', body: {} }).catch(() => {});
-  token = null; me = null; current = null; chats = []; contacts = []; results = [];
+  token = null; me = null; chatSeen = stSeen = null; nprefs = { ...NDEF }; current = null; chats = []; contacts = []; results = [];
   localStorage.removeItem('sl_token');
   clearInterval(pollTimer); sigChats = sigContacts = sigMsgs = sigStatus = ''; resetSearch(); stMine = []; stUsers = []; if (typeof svClose === 'function' && sv) svClose();
   ['chatScreen', 'newChat'].forEach(closeScreen);
@@ -962,7 +1009,7 @@ function logout(silent) {
 }
 
 async function start(user) {
-  me = user;
+  me = user; chatSeen = stSeen = null; likeSeen = 0; loadPrefsCache(); loadPrefs();
   closeScreen('auth');
   renderProfile();
   await Promise.all([loadChats(), loadContacts(), loadStatuses()]).catch(() => {});
@@ -975,6 +1022,7 @@ async function start(user) {
 /* ---------- Data loading ---------- */
 async function loadChats() {
   const d = await api('chats');
+  detectMessages(d.chats);
   const next = d.chats.map(c => ({
     id: c.id, name: c.name, avatar: c.avatar || null, online: c.online, unread: c.unread, time: fmt(c.last_at), msg: c.last_body || '',
     type: c.last_type || 'text', deleted: !!c.last_deleted,
@@ -992,7 +1040,7 @@ async function loadContacts() {
 }
 let pollN = 0;
 function poll() {
-  if (!me || document.hidden) return;
+  if (!me || (document.hidden && !bgNotify())) return;
   if (++pollN % 5 === 0) loadStatuses().catch(() => {});   // statuses change slowly: every ~20s                       // no polling while the tab is hidden (saves D1 requests)
   loadChats().catch(() => {}); loadContacts().catch(() => {}); pollNotifs().catch(() => {});
   if ($('#chatScreen').classList.contains('open') && !pending.some(p => p.status === 'sending')) loadMessages().catch(() => {});
@@ -1108,7 +1156,7 @@ document.addEventListener('click', e => {
   const t = e.target.closest('[data-toast]'); if (t) toast(t.dataset.toast);
   const c = e.target.closest('[data-close]'); if (c) { closeScreen(c.dataset.close); if (c.dataset.close === 'newChat') resetSearch(); if (c.dataset.close === 'chatScreen') leaveChat(); }
   const s = e.target.closest('[data-set]');
-  if (s) { const k = s.dataset.set; k === '__logout' ? logout() : k === '__blocked' ? (openScreen('blockedScreen'), loadBlocked()) : k === '__theme' ? toggleTheme() : k === '__photo' ? $('#avatarInput').click() : k === '__rmphoto' ? removeAvatar() : toast(k); }
+  if (s) { const k = s.dataset.set; k === '__logout' ? logout() : k === '__blocked' ? (openScreen('blockedScreen'), loadBlocked()) : k === '__theme' ? toggleTheme() : k === '__photo' ? $('#avatarInput').click() : k === '__rmphoto' ? removeAvatar() : k === 'Account' ? openAccount() : k === 'Notifications' ? openNs() : k === 'Help' ? openHelp() : toast(k); }
 });
 $('#fab').addEventListener('click', () => { resetSearch(); loadContacts().catch(showContactsError); openScreen('newChat'); });
 
@@ -1749,7 +1797,7 @@ async function callTick(delay) {
       const d = await api('calls/poll');                     // idle: is someone calling me?
       if (d.incoming && !call) {
         call = { id: d.incoming.id, video: !!d.incoming.video, peer: d.incoming.from, dir: 'in', since: 0, pendingIce: [], fails: 0 };
-        getIce(); callShow(d.incoming.from, true, call.video); callUI('incoming', call.video ? 'Incoming video call…' : 'Incoming voice call…'); ringStart(); return callTick(1500);
+        getIce(); callShow(d.incoming.from, true, call.video); callUI('incoming', call.video ? 'Incoming video call…' : 'Incoming voice call…'); ringStart(); notify('call', { title: d.incoming.from.name, body: call.video ? 'Incoming video call' : 'Incoming voice call', tag: 'call', onClick: () => {} }); return callTick(1500);
       }
     } catch (err) {
       if (c && ++c.fails >= 12) return callCleanup('Connection lost', true);      // ~12 seconds without reaching the server
@@ -1979,7 +2027,7 @@ const stTime = ts => { const d = new Date(ts), n = new Date(); return d.toDateSt
 async function loadStatuses() {
   const d = await api('statuses');
   const sig = JSON.stringify(d);
-  stMine = d.mine; stUsers = d.users;
+  stMine = d.mine; stUsers = d.users; detectStatuses();
   if (sig !== sigStatus) { sigStatus = sig; renderStories(); }
 }
 renderStories = function () {                               // Home story row + Updates tab, from the real status API
@@ -2589,7 +2637,9 @@ let notifUnread = 0, notifFirst = true;
 function paintBell(n) { const b = $('#bellBadge'); b.hidden = !n; b.textContent = n > 99 ? '99+' : n; }
 async function pollNotifs() {
   const d = await api('notifications');
-  if (!notifFirst && d.unread > notifUnread) { const n = d.notifications.find(x => !x.read); if (n && !$('#notifScreen').classList.contains('open')) toast(`${n.user.name} liked your status`); }
+  const maxId = d.notifications.reduce((m, x) => Math.max(m, x.id), 0);
+  if (!notifFirst) for (const n of d.notifications.filter(x => !x.read && x.id > likeSeen).slice(0, 3).reverse()) { if (!$('#notifScreen').classList.contains('open')) notify('like', { title: n.user.name, body: 'liked your status', tag: 'like' + n.id }); }
+  likeSeen = Math.max(likeSeen, maxId);
   notifFirst = false; notifUnread = d.unread; paintBell(d.unread);
   if ($('#notifScreen').classList.contains('open')) renderNotifs(d);
   return d;
@@ -2665,6 +2715,296 @@ document.addEventListener('click', e => {                   // photo -> full-scr
 }, true);
 
 /* ---------- Init ---------- */
+
+/* =====================================================================
+   SETTINGS: ACCOUNT / NOTIFICATIONS / HELP
+   ===================================================================== */
+const APP_NAME = 'SUNLIGHT', APP_VER = '1.0.0';
+const msgBox = (el, text, ok) => { const m = [...el.querySelectorAll('.fmsg')].pop(); if (m) { m.textContent = text || ''; m.className = 'fmsg ' + (text ? (ok ? 'ok' : 'err') : ''); } };
+const fmtDate = t => t ? new Date(t).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' }) : '—';
+const arow = (id, ic, t, sub, cls) => `<button type="button" class="arow ${cls || ''}" data-toggle="${id}"><span class="set-ico"><i class="fa-solid ${ic}"></i></span><span>${t}<small>${sub}</small></span><i class="fa-solid fa-chevron-down chev"></i></button>`;
+
+/* ---------- ACCOUNT ---------- */
+let acc = null;
+async function openAccount() {
+  openScreen('accScreen'); $('#accBody').innerHTML = skeleton();
+  try { acc = (await api('account')).account; drawAccount(); } catch (err) { $('#accBody').innerHTML = empty('fa-solid fa-triangle-exclamation', esc(err.message)); }
+}
+function drawAccount(keep) {
+  const a = acc, open = keep || [];
+  $('#accBody').innerHTML = `
+  <div class="scard"><h4>Account information</h4>
+    <div class="irow"><span>Full name</span><b>${esc(a.name)}</b></div>
+    <div class="irow"><span>Username</span><b>@${esc(a.username)}</b></div>
+    <div class="irow"><span>Email</span><b>${a.email ? esc(a.email) : 'Not added'}</b></div>
+    <div class="irow"><span>Joined</span><b>${esc(fmtDate(a.created_at))}</b></div>
+  </div>
+  <div class="scard"><h4>Profile &amp; login</h4>
+    ${arow('fUser', 'fa-at', 'Change username', 'Currently @' + esc(a.username))}
+    <form class="sform" id="fUser" autocomplete="off" ${open.includes('fUser') ? '' : 'hidden'}><input id="nuName" placeholder="New username" maxlength="20" autocapitalize="none" spellcheck="false" aria-label="New username"><div class="fmsg" id="nuHint"></div><input id="nuPw" type="password" placeholder="Your password" autocomplete="current-password" aria-label="Current password"><button class="sbtn" type="submit">Save username</button><div class="fmsg"></div></form>
+    ${arow('fMail', 'fa-envelope', 'Change email', a.pending_email ? 'Waiting to verify ' + esc(a.pending_email) : a.email ? esc(a.email) : 'Add an email address')}
+    <form class="sform" id="fMail" autocomplete="off" ${open.includes('fMail') || a.pending_email ? '' : 'hidden'}>
+      ${a.email_service ? '' : '<div class="hnote">Email verification is not set up on this server yet, so the email cannot be changed right now. The server owner must add the email service keys.</div>'}
+      <input id="neMail" type="email" placeholder="New email address" maxlength="120" autocapitalize="none" aria-label="New email"><input id="nePw" type="password" placeholder="Your password" autocomplete="current-password" aria-label="Current password">
+      <button class="sbtn" type="submit" ${a.email_service ? '' : 'disabled'}>Send verification code</button>
+      <div ${a.pending_email ? '' : 'hidden'} id="neCodeBox" style="display:${a.pending_email ? 'flex' : 'none'};flex-direction:column;gap:9px"><div class="hint">Enter the 6-digit code sent to <b>${esc(a.pending_email || '')}</b>. Your email changes only after it is verified.</div><input id="neCode" inputmode="numeric" maxlength="6" placeholder="6-digit code" aria-label="Verification code"><button class="sbtn" type="button" id="neConfirm">Verify and change email</button><button class="sbtn ghost" type="button" id="neCancel">Cancel change</button></div>
+      <div class="fmsg"></div></form>
+    ${arow('fPass', 'fa-lock', 'Change password', 'Use at least 8 characters with a letter and a number')}
+    <form class="sform" id="fPass" autocomplete="off" ${open.includes('fPass') ? '' : 'hidden'}><input id="npCur" type="password" placeholder="Current password" autocomplete="current-password" aria-label="Current password"><input id="npNew" type="password" placeholder="New password" autocomplete="new-password" aria-label="New password"><input id="npNew2" type="password" placeholder="Repeat new password" autocomplete="new-password" aria-label="Repeat new password"><button class="sbtn" type="submit">Update password</button><div class="fmsg"></div></form>
+  </div>
+  <div class="scard"><h4>Security</h4>
+    <div class="irow"><span>Signed-in devices</span><b>${a.sessions}</b></div>
+    <div class="hint">Passwords are stored only as salted hashes. Changing your password signs out your other devices.</div>
+    <button type="button" class="arow" id="accOthers"><span class="set-ico"><i class="fa-solid fa-mobile-screen"></i></span><span>Sign out other devices<small>Keep only this device signed in</small></span></button>
+    <button type="button" class="arow" id="accLogout"><span class="set-ico"><i class="fa-solid fa-right-from-bracket"></i></span><span>Log out<small>Sign out of this device</small></span></button>
+  </div>
+  <div class="scard"><h4>Danger zone</h4>
+    ${arow('fDel', 'fa-user-xmark', 'Delete account', 'Permanently remove your account and data', 'danger')}
+    <form class="sform" id="fDel" autocomplete="off" ${open.includes('fDel') ? '' : 'hidden'}><div class="hnote">This permanently deletes your profile, messages, calls, statuses, contacts and uploads. It cannot be undone.</div><input id="ndPw" type="password" placeholder="Your password" autocomplete="current-password" aria-label="Password"><input id="ndConf" placeholder="Type DELETE to confirm" autocapitalize="characters" aria-label="Type DELETE"><button class="sbtn red" type="submit">Delete my account</button><div class="fmsg"></div></form>
+  </div>`;
+}
+$('#accBody').addEventListener('click', async e => {
+  const t = e.target.closest('[data-toggle]');
+  if (t) { const f = $('#' + t.dataset.toggle); f.hidden = !f.hidden; if (!f.hidden) { const i = f.querySelector('input'); if (i) setTimeout(() => i.focus(), 50); } return; }
+  if (e.target.closest('#accLogout')) return logout();
+  if (e.target.closest('#accOthers')) {
+    try { await api('account/logout-others', { body: {} }); acc.sessions = 1; drawAccount(); toast('Other devices signed out'); } catch (err) { toast(err.message); } return;
+  }
+  const f = $('#fMail');
+  if (e.target.closest('#neConfirm')) {
+    const b = e.target.closest('button'); b.disabled = true;
+    try { const d = await api('account/email/confirm', { body: { code: $('#neCode').value.trim() } }); acc.email = d.email; acc.pending_email = null; drawAccount(); toast('Email updated'); }
+    catch (err) { msgBox(f, err.message); } b.disabled = false; return;
+  }
+  if (e.target.closest('#neCancel')) { try { await api('account/email/cancel', { body: {} }); acc.pending_email = null; drawAccount(['fMail']); } catch (err) { msgBox(f, err.message); } }
+});
+let nuTimer = 0;
+$('#accBody').addEventListener('input', e => {
+  if (e.target.id !== 'nuName') return;
+  const v = e.target.value.trim().toLowerCase(), h = $('#nuHint'); clearTimeout(nuTimer);
+  if (!v) { h.textContent = ''; h.className = 'fmsg'; return; }
+  nuTimer = setTimeout(async () => {
+    try { const d = await api('account/username-check?u=' + encodeURIComponent(v)); if ($('#nuName') && $('#nuName').value.trim().toLowerCase() === v) { h.textContent = d.available ? '✓ @' + v + ' is available' : d.reason; h.className = 'fmsg ' + (d.available ? 'ok' : 'err'); } } catch {}
+  }, 350);
+});
+$('#accBody').addEventListener('submit', async e => {
+  e.preventDefault(); const f = e.target, btn = f.querySelector('button[type=submit]'); btn.disabled = true; msgBox(f, '');
+  try {
+    if (f.id === 'fUser') {
+      const d = await api('account/username', { body: { username: $('#nuName').value, password: $('#nuPw').value } });
+      acc.username = me.username = d.username; renderProfile(); drawAccount(); toast('Username changed to @' + d.username);
+    } else if (f.id === 'fMail') {
+      const d = await api('account/email/request', { body: { email: $('#neMail').value, password: $('#nePw').value } });
+      acc.pending_email = d.pending_email; drawAccount(['fMail']); msgBox($('#fMail'), 'Code sent. Check your inbox.', true);
+    } else if (f.id === 'fPass') {
+      if ($('#npNew').value !== $('#npNew2').value) throw new Error('The new passwords do not match');
+      await api('account/password', { body: { current: $('#npCur').value, password: $('#npNew').value } });
+      acc.sessions = 1; drawAccount(); toast('Password updated');
+    } else if (f.id === 'fDel') {
+      await api('account/delete', { body: { password: $('#ndPw').value, confirm: $('#ndConf').value.trim() } });
+      logout(true); toast('Your account was deleted');
+    }
+  } catch (err) { msgBox(f, err.message); btn.disabled = false; }
+});
+$('#accScreen').addEventListener('transitionend', () => {});
+
+/* ---------- NOTIFICATIONS: preferences ---------- */
+const NDEF = { messages: true, groups: true, calls: true, sound: true, tone: 'default', vibrate: true, status_likes: true, status_replies: true, status_activity: true, browser: false };
+const TONE_LABEL = { default: 'Default', chime: 'Chime', bell: 'Bell', pop: 'Pop', gold: 'Gold', soft: 'Soft' };
+const TONE_NOTES = { default: [[880, 0, .12], [1175, .13, .16]], chime: [[1047, 0, .12], [1319, .12, .12], [1568, .24, .22]], bell: [[1319, 0, .5], [1976, 0, .35]], pop: [[520, 0, .05], [780, .05, .09]], gold: [[784, 0, .1], [988, .1, .1], [1175, .2, .1], [1568, .3, .2]], soft: [[523, 0, .25], [659, .18, .3]] };
+let nprefs = { ...NDEF }, actx = null;
+const prefKey = () => 'sl_np_' + (me ? me.id : 0);
+function loadPrefsCache() { try { nprefs = { ...NDEF, ...JSON.parse(localStorage.getItem(prefKey()) || '{}') }; } catch { nprefs = { ...NDEF }; } }
+async function loadPrefs() { try { const d = await api('settings/notifications'); nprefs = { ...NDEF, ...d.prefs }; try { localStorage.setItem(prefKey(), JSON.stringify(nprefs)); } catch {} } catch {} }
+async function savePrefs(patch) {                            // applied immediately, then saved to the server
+  const before = nprefs; nprefs = { ...nprefs, ...patch };
+  try { const d = await api('settings/notifications', { body: { prefs: patch } }); nprefs = { ...NDEF, ...d.prefs }; try { localStorage.setItem(prefKey(), JSON.stringify(nprefs)); } catch {} }
+  catch (err) { nprefs = before; toast(err.message); drawNs(); }
+}
+const audioCtx = () => { try { actx = actx || new (window.AudioContext || window.webkitAudioContext)(); if (actx.state === 'suspended') actx.resume().catch(() => {}); return actx; } catch { return null; } };
+['pointerdown', 'keydown'].forEach(ev => document.addEventListener(ev, () => { if (!actx) audioCtx(); }, { once: true, passive: true }));
+function playTone(name) {
+  const c = audioCtx(); if (!c) return false;
+  const t0 = c.currentTime + .02;
+  for (const [f, st, d] of TONE_NOTES[name] || TONE_NOTES.default) {
+    const o = c.createOscillator(), g = c.createGain(); o.type = name === 'bell' ? 'triangle' : 'sine'; o.frequency.value = f;
+    g.gain.setValueAtTime(0, t0 + st); g.gain.linearRampToValueAtTime(.22, t0 + st + .015); g.gain.exponentialRampToValueAtTime(.0001, t0 + st + d);
+    o.connect(g); g.connect(c.destination); o.start(t0 + st); o.stop(t0 + st + d + .05);
+  }
+  return true;
+}
+const canVibrate = () => typeof navigator.vibrate === 'function';
+const bnState = () => !('Notification' in window) ? 'unsupported' : Notification.permission;      // default | granted | denied | unsupported
+const bgNotify = () => nprefs.browser && bnState() === 'granted';
+function showBrowserNotif(title, body, tag, onClick) {
+  try {
+    const opts = { body, tag, icon: undefined, badge: undefined, renotify: true };
+    if (navigator.serviceWorker && navigator.serviceWorker.getRegistration) {
+      navigator.serviceWorker.getRegistration().then(r => { if (r) r.showNotification(title, opts); else { const n = new Notification(title, opts); n.onclick = () => { window.focus(); onClick && onClick(); n.close(); }; } }).catch(() => {});
+    } else { const n = new Notification(title, opts); n.onclick = () => { window.focus(); onClick && onClick(); n.close(); }; }
+  } catch {}
+}
+const KIND_PREF = { message: 'messages', call: 'calls', like: 'status_likes', reply: 'status_replies', activity: 'status_activity', group: 'groups' };
+function notify(kind, o) {                                   // only ever called from REAL events (new message, incoming call, like, reply, new status)
+  if (!me || !nprefs[KIND_PREF[kind]]) return false;
+  const hidden = document.hidden;
+  if (kind !== 'call') { if (!hidden) toast(o.title + (o.body ? ': ' + o.body : '')); if (nprefs.sound && !hidden) playTone(nprefs.tone); }
+  if (nprefs.vibrate && canVibrate()) { try { navigator.vibrate(kind === 'call' ? [300, 150, 300] : [120]); } catch {} }
+  if (hidden && bgNotify()) showBrowserNotif(o.title, o.body || '', o.tag || kind, o.onClick);
+  return true;
+}
+function drawNs() {
+  const p = nprefs, st = bnState();
+  const tg = (k, t, s, dis) => `<label class="tgl${dis ? ' off' : ''}"><span class="tx">${t}${s ? `<small>${s}</small>` : ''}</span><input type="checkbox" data-np="${k}" ${p[k] ? 'checked' : ''}><span class="tsw"></span></label>`;
+  const bnMsg = st === 'unsupported' ? 'This browser does not support notifications.' : st === 'denied' ? 'Notifications are blocked for this site. Open your browser menu (⋮) → Site settings → Notifications, or Android Settings → Apps → your browser → Notifications, then allow SUNLIGHT and try again.' : st === 'granted' ? (p.browser ? 'On. You are alerted while SUNLIGHT is open in the background. Alerts need the tab or installed app to stay running; closed apps are not notified yet.' : 'Permission is granted. Turn on to receive alerts.') : 'Off. You will be asked for permission when you turn this on.';
+  $('#nfBody').innerHTML = `
+  <div class="scard"><h4>Messages &amp; calls</h4>${tg('messages', 'Message notifications', 'New private messages')}${tg('groups', 'Group message notifications', 'Groups are not available yet. Your choice is saved for when they launch.')}${tg('calls', 'Call notifications', 'Incoming voice and video calls')}</div>
+  <div class="scard"><h4>Sounds</h4>${tg('sound', 'Message sounds', 'Play a tone for new messages and activity while SUNLIGHT is open')}
+    <div id="toneList" ${p.sound ? '' : 'style="opacity:.45"'}>${Object.keys(TONE_LABEL).map(k => `<div class="tone${p.tone === k ? ' sel' : ''}" data-tone="${k}" role="radio" aria-checked="${p.tone === k}" tabindex="0"><span class="rd"></span><span>${TONE_LABEL[k]}</span><button type="button" data-preview="${k}" aria-label="Preview ${TONE_LABEL[k]}"><i class="fa-solid fa-play"></i></button></div>`).join('')}</div>
+    <button type="button" class="sbtn ghost" id="toneReset">Restore default tone</button></div>
+  <div class="scard"><h4>Vibration</h4>${canVibrate() ? tg('vibrate', 'Vibrate', 'Short vibration with alerts and incoming calls') : '<div class="hint">Vibration is not supported by this device or browser (many browsers also block it on iPhone and desktop).</div>'}</div>
+  <div class="scard"><h4>Status</h4>${tg('status_likes', 'Likes on my status', '')}${tg('status_replies', 'Status replies', 'Private replies to your status')}${tg('status_activity', 'Status activity', 'A contact posts a new status')}</div>
+  <div class="scard"><h4>Browser notifications</h4>${tg('browser', 'Show notifications outside the app', 'Needs your browser permission', st === 'unsupported')}<div class="hnote" id="bnNote">${bnMsg}</div></div>
+  <button type="button" class="sbtn ghost" id="nsReset">Restore all default settings</button>`;
+}
+async function openNs() { openScreen('nfScreen'); drawNs(); await loadPrefs(); drawNs(); }
+$('#nfBody').addEventListener('change', async e => {
+  const k = e.target.dataset.np; if (!k) return;
+  if (k === 'browser' && e.target.checked) {
+    if (bnState() === 'unsupported') { e.target.checked = false; return toast('This browser does not support notifications'); }
+    let perm = Notification.permission;
+    if (perm === 'default') { try { perm = await Notification.requestPermission(); } catch { perm = 'denied'; } }
+    if (perm !== 'granted') { e.target.checked = false; drawNs(); return toast(perm === 'denied' ? 'Permission denied. See the note below to allow it.' : 'Permission was not granted'); }
+    if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => {});
+  }
+  await savePrefs({ [k]: e.target.checked }); drawNs();
+  if (k === 'vibrate' && e.target.checked && canVibrate()) navigator.vibrate(120);
+  if (k === 'sound' && e.target.checked) playTone(nprefs.tone);
+});
+$('#nfBody').addEventListener('click', async e => {
+  const pv = e.target.closest('[data-preview]'); if (pv) { e.stopPropagation(); if (!playTone(pv.dataset.preview)) toast('Sound is not available on this browser'); return; }
+  const t = e.target.closest('[data-tone]'); if (t) { await savePrefs({ tone: t.dataset.tone }); drawNs(); playTone(nprefs.tone); return; }
+  if (e.target.closest('#toneReset')) { await savePrefs({ tone: 'default' }); drawNs(); playTone('default'); return; }
+  if (e.target.closest('#nsReset')) { try { const d = await api('settings/notifications/reset', { body: {} }); nprefs = { ...NDEF, ...d.prefs }; try { localStorage.setItem(prefKey(), JSON.stringify(nprefs)); } catch {} drawNs(); toast('Default settings restored'); } catch (err) { toast(err.message); } }
+});
+
+/* ---------- NOTIFICATIONS: real events ---------- */
+let chatSeen = null, stSeen = null, likeSeen = 0;
+const notifText = c => c.deleted ? '' : c.type === 'image' ? '📷 Photo' : c.type === 'voice' ? '🎤 Voice message' : c.type === 'video' ? '🎥 Video' : (c.msg || '').slice(0, 80);
+function detectMessages(raw) {                               // raw: chats from the server
+  const first = chatSeen === null; chatSeen = chatSeen || new Map();
+  for (const c of raw) {
+    const prev = chatSeen.get(c.id); chatSeen.set(c.id, c.last_id);
+    if (first || prev === c.last_id || (prev != null && c.last_id < prev)) continue;
+    if (c.last_sender === me.id || c.last_deleted) continue;
+    if (current && current.id === c.id && $('#chatScreen').classList.contains('open') && !document.hidden) continue;       // you are looking at this chat
+    const u = { id: c.id, name: c.name };
+    const txt = notifText({ type: c.last_type, msg: c.last_body, deleted: c.last_deleted });
+    if (c.last_status) notify('reply', { title: c.name, body: 'Replied to your status' + (txt ? ': ' + txt : ''), tag: 'chat' + c.id, onClick: () => openChat(c.id) });
+    else notify('message', { title: c.name, body: txt, tag: 'chat' + c.id, onClick: () => openChat(c.id) });
+  }
+}
+function detectStatuses() {
+  const ids = new Set(); const fresh = [];
+  for (const g of stUsers) for (const s of g.items) { ids.add(s.id); if (stSeen && !stSeen.has(s.id)) fresh.push(g); }
+  const was = stSeen; stSeen = ids;
+  if (!was) return;
+  const g = fresh[0]; if (g) notify('activity', { title: (g.user && g.user.name) || g.name || 'A contact', body: 'posted a new status', tag: 'status' + ((g.user && g.user.id) || '') });
+}
+
+/* ---------- HELP CENTRE ---------- */
+const HELP = [
+  { id: 'start', icon: 'fa-rocket', title: 'Getting Started', faq: [
+    ['What is SUNLIGHT?', 'SUNLIGHT is a messaging app. You can chat privately with text, voice notes, photos and videos, post statuses, and make voice and video calls to your contacts.'],
+    ['How do I start a chat?', 'On the Chats tab tap the round button at the bottom right, search for a person by name or username, then tap their name to open a conversation.'],
+    ['How do I add a contact?', 'Search for the person in the new-chat screen and tap Add. People you add appear in your contacts list.'] ] },
+  { id: 'account', icon: 'fa-key', title: 'Account and Login', faq: [
+    ['How do I change my username?', 'Settings → Account → Change username. Pick a new name (3–20 letters, numbers or _), and confirm with your password. We tell you if it is taken.'],
+    ['How do I change my password?', 'Settings → Account → Change password. Enter your current password and a new one (8+ characters with a letter and a number). Your other devices are signed out.'],
+    ['Why can\'t I change my email?', 'Changing email needs a verification code sent by email. If the server has not been connected to an email service yet, the change is not available. Your email never changes before you verify the code.'],
+    ['I forgot my password. What can I do?', 'Password reset by email is not available yet. Use Help → Contact support and describe the problem.'],
+    ['How do I delete my account?', 'Settings → Account → Delete account. You must enter your password and type DELETE. Deletion is permanent and removes your data.'] ] },
+  { id: 'chat', icon: 'fa-comment', title: 'Private Messaging', faq: [
+    ['What do the ticks mean?', 'One tick: sent. Two ticks: delivered to the other person. Two blue ticks: read.'],
+    ['How do I send a voice note, photo or video?', 'In a chat use the microphone to record a voice note, the paperclip to pick a photo, or the camera to take one. Videos appear only when video storage is enabled on the server.'],
+    ['How do I delete a message or clear a chat?', 'Press and hold a message to delete it. Open the ⋮ menu in a chat and choose Clear chat to hide the history on your side only.'],
+    ['How do I block someone?', 'Open the chat, tap ⋮, then Block. Blocked people cannot message or call you. Manage them in Settings → Blocked users.'] ] },
+  { id: 'contacts', icon: 'fa-address-book', title: 'Contacts', faq: [
+    ['How do I find someone?', 'Search by name or username in the new-chat screen. Only a person\'s name, username and photo are visible to others.'],
+    ['How do I remove a contact?', 'Open the new-chat/contacts list and remove the person. Your existing messages are kept.'] ] },
+  { id: 'status', icon: 'fa-circle-notch', title: 'Status and Updates', faq: [
+    ['Who can see my status?', 'Only people you have added who have also added you back. Statuses last 24 hours.'],
+    ['Can people reply or like?', 'Yes. Replies are private messages to you, and likes show in your notifications. You can see who viewed and liked your status.'] ] },
+  { id: 'calls', icon: 'fa-phone', title: 'Voice Calls', faq: [
+    ['How do I call someone?', 'Open the chat and tap the phone (voice) or video icon at the top. The call history shows inside the chat and in the Calls tab.'],
+    ['Why does a call say connecting for a long time?', 'Calls need a working internet connection on both phones. On some mobile networks a relay (TURN) server is required; if the server owner has not set one up, calls can fail between certain networks.'],
+    ['Will I get calls when the app is closed?', 'Not yet. SUNLIGHT rings only while it is open (even in the background tab). Push alerts for a closed app are not available yet.'],
+    ['I hear crackling or echo.', 'Use earphones, and avoid being in the same room as the other phone during a call.'] ] },
+  { id: 'groups', icon: 'fa-users', title: 'Groups and Communities', faq: [
+    ['Can I create a group?', 'Groups and Communities are not available yet. They are shown as coming soon.'] ] },
+  { id: 'privacy', icon: 'fa-shield-halved', title: 'Privacy and Security', faq: [
+    ['Who can see my email?', 'Nobody else. Other users only see your name, username and photo.'],
+    ['How is my password protected?', 'It is stored only as a salted hash, never as plain text.'],
+    ['Are messages end-to-end encrypted?', 'No. Messages are protected in transit (HTTPS) and stored on the server so they can be delivered. Do not share secrets you would not give to the service.'] ] },
+  { id: 'trouble', icon: 'fa-screwdriver-wrench', title: 'Troubleshooting', faq: [
+    ['Messages are not arriving.', 'Check your internet connection and that you are logged in. The app checks for new messages every few seconds while it is open.'],
+    ['I do not get notifications.', 'Open Settings → Notifications and make sure alerts are on. For alerts outside the app, enable Browser notifications and allow them in your browser/Android settings.'],
+    ['The app shows "Server error".', 'Try again in a moment. If it keeps happening, send a support request and include the reference code shown in the message.'],
+    ['Camera or microphone does not work.', 'Allow camera and microphone for this site in your browser settings (⋮ → Site settings) and reload.'] ] }
+];
+let helpView = { v: 'home' };
+const faqHTML = (f, i) => `<div class="faq" data-faq><button type="button" aria-expanded="false">${esc(f[0])}<i class="fa-solid fa-chevron-down"></i></button><div class="ans">${esc(f[1])}</div></div>`;
+function helpHead(t, s) { $('#helpTitle').textContent = t; $('#helpSub').textContent = s; }
+function drawHelp() {
+  const b = $('#helpBody'), v = helpView;
+  if (v.v === 'home') {
+    helpHead('Help', 'Help centre, contact us');
+    b.innerHTML = `<div class="hsearch"><i class="fa-solid fa-magnifying-glass"></i><input id="helpQ" type="search" placeholder="Search help topics" autocomplete="off" aria-label="Search help"></div>
+      <div id="helpMain"><div class="hcats">${HELP.map(c => `<button type="button" class="hcat" data-hcat="${c.id}"><span class="set-ico"><i class="fa-solid ${c.icon}"></i></span>${c.title}<small>${c.faq.length} article${c.faq.length > 1 ? 's' : ''}</small></button>`).join('')}</div>
+      <div class="scard" style="margin-top:14px"><button type="button" class="arow" data-hgo="support"><span class="set-ico"><i class="fa-solid fa-headset"></i></span><span>Contact support<small>Send us a request about a problem</small></span><i class="fa-solid fa-chevron-right chev"></i></button>
+      <button type="button" class="arow" data-hgo="about"><span class="set-ico"><i class="fa-solid fa-circle-info"></i></span><span>About SUNLIGHT<small>Version, terms and privacy</small></span><i class="fa-solid fa-chevron-right chev"></i></button></div></div>`;
+  } else if (v.v === 'cat') {
+    const c = HELP.find(x => x.id === v.id); helpHead(c.title, 'Help centre');
+    b.innerHTML = c.faq.map(faqHTML).join('') + `<button type="button" class="sbtn ghost" data-hgo="support">Still need help? Contact support</button>`;
+  } else if (v.v === 'support') {
+    helpHead('Contact support', 'Send us a request');
+    b.innerHTML = `<form class="scard sform" id="supForm" autocomplete="off"><input id="supSub" maxlength="100" placeholder="Subject" aria-label="Subject"><textarea id="supMsg" maxlength="2000" placeholder="Describe your problem (what you did, what happened)" aria-label="Describe the problem"></textarea><div class="hint"><span id="supCnt">0</span>/2000. Do not include your password.</div><button class="sbtn" type="submit">Submit request</button><div class="fmsg"></div></form><div class="scard" id="supList" hidden><h4>Your requests</h4></div>`;
+    api('support').then(d => { if (!d.requests.length || helpView.v !== 'support') return; const l = $('#supList'); l.hidden = false; l.innerHTML = '<h4>Your requests</h4>' + d.requests.map(r => `<div class="sreq"><b>${esc(r.subject)}</b><small>#${r.id} · ${esc(fmtDate(r.created_at))} · ${esc(r.status)}</small></div>`).join(''); }).catch(() => {});
+  } else if (v.v === 'done') {
+    helpHead('Request sent', 'Thank you');
+    b.innerHTML = `<div class="scard" style="align-items:center;text-align:center;padding:28px 16px"><span class="set-ico" style="width:56px;height:56px;font-size:24px;background:rgba(76,195,138,.18);color:#4CC38A"><i class="fa-solid fa-check"></i></span><strong style="font-size:17px">Your request was received</strong><div class="hint">Reference #${v.id}. It has been saved. Replies are not delivered inside the app yet, so please check back by sending another request if it is urgent.</div><button class="sbtn" data-hgo="home">Back to Help</button></div>`;
+  } else if (v.v === 'about') {
+    helpHead('About SUNLIGHT', 'Version ' + APP_VER);
+    b.innerHTML = `<div class="scard" style="align-items:center;text-align:center"><span class="set-ico" style="width:56px;height:56px;font-size:26px"><i class="fa-solid fa-sun"></i></span><strong style="font-size:20px;letter-spacing:.08em">${APP_NAME}</strong><div class="hint">Version ${APP_VER}</div><div class="hint">SUNLIGHT is a messaging app for private chats, voice notes, photos, statuses and voice and video calls.</div></div>
+      <div class="scard"><h4>Terms of Service</h4><div class="hint">The Terms of Service have not been published yet. When they are, they will appear here.</div></div>
+      <div class="scard"><h4>Privacy Policy</h4><div class="hint">A Privacy Policy has not been published yet. For transparency, this is what the app stores today (this is a summary, not a legal policy): your name, username, optional email, a salted password hash, profile photo, your messages and uploads, contacts, statuses, call records and your notification settings. Other users see only your name, username and photo.</div></div>`;
+  }
+  b.scrollTop = 0;
+}
+const helpGo = (v, extra) => { helpView = { v, ...extra }; drawHelp(); };
+function openHelp() { helpView = { v: 'home' }; drawHelp(); openScreen('helpScreen'); }
+$('#helpBack').addEventListener('click', () => { if (helpView.v === 'home') closeScreen('helpScreen'); else if (helpView.v === 'done' || helpView.v === 'about' || helpView.v === 'support' || helpView.v === 'cat' || helpView.v === 'search') helpGo('home'); });
+$('#helpBody').addEventListener('click', e => {
+  const c = e.target.closest('[data-hcat]'); if (c) return helpGo('cat', { id: c.dataset.hcat });
+  const g = e.target.closest('[data-hgo]'); if (g) return helpGo(g.dataset.hgo);
+  const f = e.target.closest('[data-faq] > button'); if (f) { const q = f.parentElement; q.classList.toggle('open'); f.setAttribute('aria-expanded', q.classList.contains('open')); }
+});
+$('#helpBody').addEventListener('input', e => {
+  if (e.target.id === 'supMsg') { $('#supCnt').textContent = e.target.value.length; return; }
+  if (e.target.id !== 'helpQ') return;
+  const q = e.target.value.trim().toLowerCase(), m = $('#helpMain');
+  if (!q) return drawHelpHome(m);
+  const hits = []; HELP.forEach(c => c.faq.forEach(f => { if ((f[0] + ' ' + f[1] + ' ' + c.title).toLowerCase().includes(q)) hits.push([c.title, f]); }));
+  m.innerHTML = hits.length ? hits.map(h => `<div class="hint" style="margin:6px 4px 4px">${esc(h[0])}</div>` + faqHTML(h[1])).join('') + '' : empty('fa-solid fa-magnifying-glass', 'No help articles match “' + esc(e.target.value.trim()) + '”<small>Try different words or contact support.</small>') + '<button type="button" class="sbtn" data-hgo="support" style="margin-top:10px;width:100%">Contact support</button>';
+});
+function drawHelpHome(m) { const keep = $('#helpQ').value; drawHelp(); $('#helpQ').value = keep; $('#helpQ').focus(); }
+$('#helpBody').addEventListener('submit', async e => {
+  e.preventDefault(); if (e.target.id !== 'supForm') return;
+  const f = e.target, btn = f.querySelector('button[type=submit]'); btn.disabled = true; msgBox(f, '');
+  try { const d = await api('support', { body: { subject: $('#supSub').value, message: $('#supMsg').value } }); helpGo('done', { id: d.request.id }); }
+  catch (err) { msgBox(f, err.message); btn.disabled = false; }
+});
+
 setMode('login');
 if (token) api('me').then(d => start(d.user)).catch(() => logout(true));
 </script>
