@@ -11,6 +11,7 @@ const ONLINE_MS = 30000, SESSION_MS = 30 * 864e5;
 const APP_VERSION = '1.0.0';
 const EMAIL = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 const likeEsc = s => s.replace(/[\\%_]/g, '\\$&');            // escape LIKE wildcards in user input
+const REFS = '(SELECT media_key FROM messages WHERE media_key IS NOT NULL UNION SELECT json_extract(theme,\'$.wp\') FROM chat_prefs WHERE theme IS NOT NULL AND json_extract(theme,\'$.wp\') IS NOT NULL UNION SELECT avatar_key FROM users WHERE avatar_key IS NOT NULL UNION SELECT media_key FROM statuses WHERE media_key IS NOT NULL UNION SELECT media_key FROM group_messages WHERE media_key IS NOT NULL UNION SELECT avatar_key FROM groups WHERE avatar_key IS NOT NULL UNION SELECT media_key FROM channel_posts WHERE media_key IS NOT NULL UNION SELECT avatar_key FROM channels WHERE avatar_key IS NOT NULL UNION SELECT wp_key FROM chat_prefs WHERE wp_key IS NOT NULL)';
 const MEDIA_KEY = /^u\d+\/[a-f0-9]{32}$/;                  // keys we generate: u<userId>/<random>
 const MEDIA_RULES = { image: { max: 1000000 }, voice: { max: 1000000 } };   // max raw bytes per file; files are stored in D1, so they are kept small
 const VIDEO_MAX = 20 * 1024 * 1024;                         // 20 MB per video (R2 free tier is 10 GB)
@@ -68,6 +69,21 @@ const TABLES = [
   `CREATE INDEX IF NOT EXISTS idx_signals_to ON call_signals(to_user, call_id, id)`,
   `CREATE INDEX IF NOT EXISTS idx_status_user ON statuses(user_id, expires_at)`,
   `CREATE INDEX IF NOT EXISTS idx_status_media ON statuses(media_key)`,
+  `CREATE TABLE IF NOT EXISTS groups (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, description TEXT NOT NULL DEFAULT '', avatar_key TEXT, created_by INTEGER NOT NULL, created_at INTEGER NOT NULL)`,
+  `CREATE TABLE IF NOT EXISTS group_members (group_id INTEGER NOT NULL, user_id INTEGER NOT NULL, role TEXT NOT NULL DEFAULT 'member', joined_at INTEGER NOT NULL, added_by INTEGER, PRIMARY KEY (group_id, user_id))`,
+  `CREATE INDEX IF NOT EXISTS idx_gm_user ON group_members(user_id)`,
+  `CREATE TABLE IF NOT EXISTS group_messages (id INTEGER PRIMARY KEY AUTOINCREMENT, group_id INTEGER NOT NULL, sender_id INTEGER NOT NULL, body TEXT NOT NULL DEFAULT '', type TEXT NOT NULL DEFAULT 'text', media_key TEXT, media_type TEXT, media_size INTEGER, duration INTEGER, reply_to INTEGER, created_at INTEGER NOT NULL, deleted_at INTEGER)`,
+  `CREATE INDEX IF NOT EXISTS idx_gmsg_group ON group_messages(group_id, id)`,
+  `CREATE TABLE IF NOT EXISTS group_reactions (message_id INTEGER NOT NULL, user_id INTEGER NOT NULL, emoji TEXT NOT NULL, created_at INTEGER NOT NULL, PRIMARY KEY (message_id, user_id))`,
+  `CREATE TABLE IF NOT EXISTS group_reads (group_id INTEGER NOT NULL, user_id INTEGER NOT NULL, last_id INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (group_id, user_id))`,
+  `CREATE TABLE IF NOT EXISTS channels (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, description TEXT NOT NULL DEFAULT '', avatar_key TEXT, owner_id INTEGER NOT NULL, visibility TEXT NOT NULL DEFAULT 'public', comments_on INTEGER NOT NULL DEFAULT 1, invite_code TEXT, created_at INTEGER NOT NULL)`,
+  `CREATE TABLE IF NOT EXISTS channel_members (channel_id INTEGER NOT NULL, user_id INTEGER NOT NULL, role TEXT NOT NULL DEFAULT 'subscriber', joined_at INTEGER NOT NULL, last_seen_post INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (channel_id, user_id))`,
+  `CREATE INDEX IF NOT EXISTS idx_cm_user ON channel_members(user_id)`,
+  `CREATE TABLE IF NOT EXISTS channel_posts (id INTEGER PRIMARY KEY AUTOINCREMENT, channel_id INTEGER NOT NULL, author_id INTEGER NOT NULL, body TEXT NOT NULL DEFAULT '', type TEXT NOT NULL DEFAULT 'text', media_key TEXT, media_type TEXT, media_size INTEGER, duration INTEGER, created_at INTEGER NOT NULL, edited_at INTEGER, deleted_at INTEGER)`,
+  `CREATE INDEX IF NOT EXISTS idx_cp_channel ON channel_posts(channel_id, id)`,
+  `CREATE TABLE IF NOT EXISTS channel_reactions (post_id INTEGER NOT NULL, user_id INTEGER NOT NULL, emoji TEXT NOT NULL, created_at INTEGER NOT NULL, PRIMARY KEY (post_id, user_id))`,
+  `CREATE TABLE IF NOT EXISTS channel_comments (id INTEGER PRIMARY KEY AUTOINCREMENT, post_id INTEGER NOT NULL, user_id INTEGER NOT NULL, body TEXT NOT NULL, created_at INTEGER NOT NULL, deleted_at INTEGER)`,
+  `CREATE INDEX IF NOT EXISTS idx_cc_post ON channel_comments(post_id, id)`,
   `CREATE TABLE IF NOT EXISTS user_prefs (user_id INTEGER PRIMARY KEY, notif TEXT, updated_at INTEGER NOT NULL DEFAULT 0)`,
   `CREATE TABLE IF NOT EXISTS email_changes (user_id INTEGER PRIMARY KEY, new_email TEXT NOT NULL, code_hash TEXT NOT NULL, salt TEXT NOT NULL, attempts INTEGER NOT NULL DEFAULT 0, expires_at INTEGER NOT NULL, created_at INTEGER NOT NULL)`,
   `CREATE TABLE IF NOT EXISTS support_requests (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, subject TEXT NOT NULL, message TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'open', created_at INTEGER NOT NULL)`,
@@ -90,6 +106,8 @@ function ensureSchema(db) {
     const haveC = (await db.prepare('PRAGMA table_info(calls)').all()).results.map(c => c.name);
     if (!haveC.includes('video')) await addCol(db, 'calls', 'video', 'INTEGER NOT NULL DEFAULT 0');
     const haveP = (await db.prepare('PRAGMA table_info(chat_prefs)').all()).results.map(c => c.name);
+    if (!haveP.includes('wp_key')) await addCol(db, 'chat_prefs', 'wp_key', 'TEXT');
+    if (!haveP.includes('wp_dim')) await addCol(db, 'chat_prefs', 'wp_dim', 'INTEGER NOT NULL DEFAULT 35');
     if (!haveP.includes('cleared_at')) await addCol(db, 'chat_prefs', 'cleared_at', 'INTEGER NOT NULL DEFAULT 0');
     await db.prepare('CREATE INDEX IF NOT EXISTS idx_calls_pair ON calls(caller_id, callee_id)').run();
     await db.prepare('CREATE INDEX IF NOT EXISTS idx_msg_media ON messages(media_key)').run();
@@ -124,7 +142,7 @@ export default {
 };
 
 
-const NOTIF_DEFAULTS = { messages: true, groups: true, calls: true, sound: true, tone: 'default', vibrate: true, status_likes: true, status_replies: true, status_activity: true, browser: false };
+const NOTIF_DEFAULTS = { messages: true, groups: true, channels: true, calls: true, sound: true, tone: 'default', vibrate: true, status_likes: true, status_replies: true, status_activity: true, browser: false };
 const TONES = ['default', 'chime', 'bell', 'pop', 'gold', 'soft'];
 const RESERVED = new Set(['admin', 'administrator', 'support', 'sunlight', 'root', 'system', 'help', 'moderator', 'staff', 'official']);
 const sha = async s => hex(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(s)));
@@ -271,14 +289,24 @@ async function route(req, env, url) {
 
   // ---- chat options: theme / clear / export / block / report ----
   if (p === 'chat/theme' && post) {
-    const peer = await peerOf(body.with); if (!peer) return json({ error: 'User not found' }, 404);
+    let target;                                               // private chat: peer id; group chat: -group id (each user has their OWN row, so one person's wallpaper never changes another's)
+    if (body.group != null) { const gid = Number(body.group); const mem = Number.isInteger(gid) && gid > 0 ? await db.prepare('SELECT 1 ok FROM group_members WHERE group_id=? AND user_id=?').bind(gid, me.id).first() : null; if (!mem) return json({ error: 'Group not found' }, 404); target = -gid; }
+    else { const peer = await peerOf(body.with); if (!peer) return json({ error: 'User not found' }, 404); target = peer.id; }
     let theme = null;
-    if (body.theme != null) {                                 // validated against a fixed list: nothing else can be stored
-      const bg = body.theme.bg == null ? null : String(body.theme.bg), c = body.theme.color == null ? null : String(body.theme.color);
+    if (body.theme != null) {                                 // validated: fixed lists, own image key, bounded dim: nothing else can be stored
+      const t = body.theme, bg = t.bg == null ? null : String(t.bg), c = t.color == null ? null : String(t.color);
       if ((bg !== null && !THEME_BG.includes(bg)) || (c !== null && !THEME_COLOR.includes(c))) return json({ error: 'Unknown theme' }, 400);
-      theme = bg === null && c === null ? null : JSON.stringify({ bg, color: c });
+      let wp = null, dim = 35;
+      if (t.wp != null) {
+        wp = String(t.wp);
+        if (!MEDIA_KEY.test(wp) || !wp.startsWith('u' + me.id + '/')) return json({ error: 'Invalid wallpaper' }, 400);          // only YOUR OWN uploads
+        const m = await db.prepare('SELECT type FROM media WHERE key=? AND owner_id=?').bind(wp, me.id).first();
+        if (!m || !/^image\/(jpeg|png|webp)$/.test(m.type)) return json({ error: 'Invalid wallpaper' }, 400);
+        if (t.dim != null) { dim = Number(t.dim); if (!Number.isInteger(dim) || dim < 0 || dim > 80) return json({ error: 'Invalid dark overlay' }, 400); }
+      }
+      theme = bg === null && c === null && wp === null ? null : JSON.stringify({ bg, color: c, ...(wp ? { wp, dim } : {}) });
     }
-    await db.prepare('INSERT INTO chat_prefs(user_id,peer_id,theme) VALUES(?1,?2,?3) ON CONFLICT(user_id,peer_id) DO UPDATE SET theme=?3').bind(me.id, peer.id, theme).run();
+    await db.prepare('INSERT INTO chat_prefs(user_id,peer_id,theme) VALUES(?1,?2,?3) ON CONFLICT(user_id,peer_id) DO UPDATE SET theme=?3').bind(me.id, target, theme).run();
     return json({ theme: theme ? JSON.parse(theme) : null });
   }
   if (p === 'chat/clear' && post) {                          // hides history for ME only: nothing is deleted, the other person keeps everything
@@ -473,6 +501,393 @@ async function route(req, env, url) {
     return json({ error: 'Not found' }, 404);
   }
 
+  // =============== SHARED HELPERS: uploads claimed by group messages / channel posts / pictures ===============
+  const EMOJIS = ['👍', '❤️', '😂', '😮', '😢', '🙏'];
+  const refUsed = async key => !!(await db.prepare(`SELECT 1 ok WHERE ?1 IN ${REFS}`).bind(key).first());
+  const claimMedia = async (key, want) => {                  // want: 'image' | 'voice' | 'video'. Only YOUR OWN, unused, correctly typed upload can be attached
+    key = String(key || '');
+    if (!MEDIA_KEY.test(key) || !key.startsWith('u' + me.id + '/')) return { err: 'Invalid media' };
+    const up = await db.prepare('SELECT type,size FROM media WHERE key=? AND owner_id=?').bind(key, me.id).first();
+    if (!up) return { err: 'Upload not found. Please try again.' };
+    if (!up.type.startsWith(want === 'image' ? 'image/' : want === 'video' ? 'video/' : 'audio/')) return { err: 'Media type does not match' };
+    if (await refUsed(key)) return { err: 'Media already used' };
+    return { key, mtype: up.type, msize: up.size };
+  };
+  const cleanName = (v, max) => String(v == null ? '' : v).replace(/[\u0000-\u001f]/g, ' ').trim().slice(0, max);
+  const GROUP_MAX = 100;
+
+  // =============== GROUPS ===============
+  const gRole = async gid => { const r = await db.prepare('SELECT role,joined_at FROM group_members WHERE group_id=? AND user_id=?').bind(gid, me.id).first(); return r || null; };
+  const isAdminRole = r => r === 'owner' || r === 'admin';
+  const groupDrop = async gid => {                            // remove a whole group, its messages and its uploads
+    const { results: keys } = await db.prepare('SELECT media_key k FROM group_messages WHERE group_id=?1 AND media_key IS NOT NULL UNION SELECT avatar_key FROM groups WHERE id=?1 AND avatar_key IS NOT NULL').bind(gid).all();
+    for (const k of keys) await dropAny(k.k);
+    await db.batch(['DELETE FROM group_reactions WHERE message_id IN (SELECT id FROM group_messages WHERE group_id=?1)', 'DELETE FROM group_messages WHERE group_id=?1', 'DELETE FROM group_reads WHERE group_id=?1', 'DELETE FROM group_members WHERE group_id=?1', 'DELETE FROM chat_prefs WHERE peer_id=-?1', 'DELETE FROM groups WHERE id=?1'].map(q => db.prepare(q).bind(gid)));
+  };
+  const groupLeave = async (gid, uid) => {                    // owner leaving hands the group to the oldest admin, then the oldest member; the last person out deletes it
+    const m = await db.prepare('SELECT role FROM group_members WHERE group_id=? AND user_id=?').bind(gid, uid).first(); if (!m) return;
+    await db.prepare('DELETE FROM group_members WHERE group_id=? AND user_id=?').bind(gid, uid).run();
+    await db.prepare('DELETE FROM group_reads WHERE group_id=? AND user_id=?').bind(gid, uid).run();
+    await db.prepare('DELETE FROM chat_prefs WHERE user_id=? AND peer_id=?').bind(uid, -gid).run();
+    const next = await db.prepare("SELECT user_id FROM group_members WHERE group_id=? ORDER BY CASE role WHEN 'owner' THEN 0 WHEN 'admin' THEN 1 ELSE 2 END, joined_at, user_id LIMIT 1").bind(gid).first();
+    if (!next) return groupDrop(gid);
+    if (m.role === 'owner') await db.prepare("UPDATE group_members SET role='owner' WHERE group_id=? AND user_id=?").bind(gid, next.user_id).run();
+  };
+  const groupView = async (gid, role) => {
+    const g = await db.prepare('SELECT id,name,description,avatar_key,created_by,created_at FROM groups WHERE id=?').bind(gid).first();
+    const n = await db.prepare('SELECT COUNT(*) n FROM group_members WHERE group_id=?').bind(gid).first();
+    return { id: g.id, name: g.name, description: g.description, avatar: g.avatar_key || null, created_at: g.created_at, members: n.n, role };
+  };
+  const gmsgShape = (m, rx, mineId) => ({ id: m.id, sender_id: m.sender_id, sender: { id: m.sender_id, name: m.sname || 'Former member', username: m.suser || null, avatar: m.sav || null }, body: m.deleted_at ? '' : m.body, type: m.type, media_key: m.deleted_at ? null : m.media_key, media_type: m.media_type, media_size: m.media_size, duration: m.duration, reply_to: m.reply_to, created_at: m.created_at, deleted_at: m.deleted_at, reactions: rx });
+
+  if (p === 'groups' && !post) {
+    const { results } = await db.prepare(`
+      SELECT g.id,g.name,g.description,g.avatar_key,gm.role,
+        (SELECT COUNT(*) FROM group_members x WHERE x.group_id=g.id) members,
+        m.id last_id,m.type last_type,m.body last_body,m.created_at last_at,m.sender_id last_sender,m.deleted_at last_deleted,u.name last_name,
+        (SELECT COUNT(*) FROM group_messages z WHERE z.group_id=g.id AND z.id>COALESCE((SELECT last_id FROM group_reads r WHERE r.group_id=g.id AND r.user_id=?1),0) AND z.sender_id!=?1 AND z.created_at>=gm.joined_at AND z.deleted_at IS NULL) unread
+      FROM group_members gm JOIN groups g ON g.id=gm.group_id
+      LEFT JOIN group_messages m ON m.id=(SELECT MAX(id) FROM group_messages WHERE group_id=g.id AND created_at>=gm.joined_at)
+      LEFT JOIN users u ON u.id=m.sender_id
+      WHERE gm.user_id=?1 ORDER BY COALESCE(m.created_at,g.created_at) DESC LIMIT 200`).bind(me.id).all();
+    return json({ groups: results.map(g => ({ id: g.id, name: g.name, description: g.description, avatar: g.avatar_key || null, role: g.role, members: g.members, unread: g.unread, last: g.last_id ? { id: g.last_id, type: g.last_type, body: g.last_deleted ? '' : g.last_body, at: g.last_at, sender_id: g.last_sender, sender: g.last_name || '', deleted: !!g.last_deleted } : null })) });
+  }
+  if (p === 'groups' && post) {
+    const name = cleanName(body.name, 40), desc = cleanName(body.description, 200);
+    if (name.length < 1) return json({ error: 'Enter a group name (max 40 characters)' }, 400);
+    const ids = [...new Set((Array.isArray(body.members) ? body.members : []).map(Number).filter(n => Number.isInteger(n) && n > 0 && n !== me.id))];
+    if (ids.length > GROUP_MAX - 1) return json({ error: `A group can have up to ${GROUP_MAX} members` }, 400);
+    let avatar = null;
+    if (body.avatar_key) { const c = await claimMedia(body.avatar_key, 'image'); if (c.err) return json({ error: c.err }, 400); if (c.msize > 250000) return json({ error: 'Group picture is too large' }, 413); avatar = c.key; }
+    const ok = [];                                           // only people saved in MY contacts, who have not blocked me / are not blocked by me
+    for (const id of ids) { if (await db.prepare('SELECT 1 ok FROM contacts WHERE owner_id=? AND contact_id=?').bind(me.id, id).first() && !(await eitherBlocked(me.id, id))) ok.push(id); }
+    const r = await db.prepare('INSERT INTO groups(name,description,avatar_key,created_by,created_at) VALUES(?,?,?,?,?)').bind(name, desc, avatar, me.id, now).run();
+    const gid = r.meta.last_row_id;
+    await db.batch([db.prepare("INSERT INTO group_members(group_id,user_id,role,joined_at,added_by) VALUES(?,?,'owner',?,?)").bind(gid, me.id, now, me.id), ...ok.map(id => db.prepare("INSERT INTO group_members(group_id,user_id,role,joined_at,added_by) VALUES(?,?,'member',?,?)").bind(gid, id, now, me.id))]);
+    return json({ group: await groupView(gid, 'owner'), skipped: ids.length - ok.length });
+  }
+  if (p === 'groups/info' && !post) {
+    const gid = Number(url.searchParams.get('id')), mine = Number.isInteger(gid) ? await gRole(gid) : null;
+    if (!mine) return json({ error: 'Group not found' }, 404);
+    const { results } = await db.prepare("SELECT u.id,u.name,u.username,u.avatar_key,u.last_seen,gm.role,gm.joined_at FROM group_members gm JOIN users u ON u.id=gm.user_id WHERE gm.group_id=? ORDER BY CASE gm.role WHEN 'owner' THEN 0 WHEN 'admin' THEN 1 ELSE 2 END, u.name").bind(gid).all();
+    return json({ group: await groupView(gid, mine.role), members: results.map(u => ({ ...publicUser(u, now), role: u.role, is_contact: undefined })) });
+  }
+  if (p === 'groups/update' && post) {
+    const gid = Number(body.id), mine = Number.isInteger(gid) ? await gRole(gid) : null;
+    if (!mine) return json({ error: 'Group not found' }, 404);
+    if (!isAdminRole(mine.role)) return json({ error: 'Only admins can edit the group' }, 403);
+    const g = await db.prepare('SELECT name,description,avatar_key FROM groups WHERE id=?').bind(gid).first();
+    let name = g.name, desc = g.description, avatar = g.avatar_key;
+    if (body.name !== undefined) { name = cleanName(body.name, 40); if (!name) return json({ error: 'Enter a group name (max 40 characters)' }, 400); }
+    if (body.description !== undefined) desc = cleanName(body.description, 200);
+    if (body.avatar_key) { const c = await claimMedia(body.avatar_key, 'image'); if (c.err) return json({ error: c.err }, 400); if (c.msize > 250000) return json({ error: 'Group picture is too large' }, 413); avatar = c.key; }
+    else if (body.remove_avatar) avatar = null;
+    await db.prepare('UPDATE groups SET name=?,description=?,avatar_key=? WHERE id=?').bind(name, desc, avatar, gid).run();
+    if (g.avatar_key && g.avatar_key !== avatar) await dropAny(g.avatar_key);
+    return json({ group: await groupView(gid, mine.role) });
+  }
+  if (p === 'groups/members/add' && post) {
+    const gid = Number(body.id), mine = Number.isInteger(gid) ? await gRole(gid) : null;
+    if (!mine) return json({ error: 'Group not found' }, 404);
+    if (!isAdminRole(mine.role)) return json({ error: 'Only admins can add members' }, 403);
+    const ids = [...new Set((Array.isArray(body.user_ids) ? body.user_ids : []).map(Number).filter(n => Number.isInteger(n) && n > 0))];
+    let count = (await db.prepare('SELECT COUNT(*) n FROM group_members WHERE group_id=?').bind(gid).first()).n, added = 0;
+    for (const id of ids) {
+      if (count >= GROUP_MAX) return json({ error: `A group can have up to ${GROUP_MAX} members`, added }, 400);
+      if (!(await db.prepare('SELECT 1 ok FROM contacts WHERE owner_id=? AND contact_id=?').bind(me.id, id).first()) || await eitherBlocked(me.id, id)) continue;
+      const r = await db.prepare("INSERT OR IGNORE INTO group_members(group_id,user_id,role,joined_at,added_by) VALUES(?,?,'member',?,?)").bind(gid, id, now, me.id).run();
+      if (r.meta.changes) { added++; count++; }
+    }
+    return json({ ok: true, added, group: await groupView(gid, mine.role) });
+  }
+  if (p === 'groups/members/remove' && post) {
+    const gid = Number(body.id), uid = Number(body.user_id), mine = Number.isInteger(gid) ? await gRole(gid) : null;
+    if (!mine) return json({ error: 'Group not found' }, 404);
+    const t = await db.prepare('SELECT role FROM group_members WHERE group_id=? AND user_id=?').bind(gid, uid).first();
+    if (!t || uid === me.id) return json({ error: 'Member not found' }, 404);
+    if (!isAdminRole(mine.role)) return json({ error: 'Only admins can remove members' }, 403);
+    if (t.role === 'owner' || (t.role === 'admin' && mine.role !== 'owner')) return json({ error: t.role === 'owner' ? 'The group owner cannot be removed' : 'Only the owner can remove an admin' }, 403);
+    await groupLeave(gid, uid);
+    return json({ ok: true });
+  }
+  if (p === 'groups/members/role' && post) {
+    const gid = Number(body.id), uid = Number(body.user_id), role = body.role, mine = Number.isInteger(gid) ? await gRole(gid) : null;
+    if (!mine) return json({ error: 'Group not found' }, 404);
+    if (role !== 'admin' && role !== 'member') return json({ error: 'Invalid role' }, 400);
+    const t = await db.prepare('SELECT role FROM group_members WHERE group_id=? AND user_id=?').bind(gid, uid).first();
+    if (!t || uid === me.id) return json({ error: 'Member not found' }, 404);
+    if (t.role === 'owner') return json({ error: "The owner's role cannot be changed" }, 403);
+    if (role === 'admin' && !isAdminRole(mine.role)) return json({ error: 'Only admins can promote members' }, 403);
+    if (role === 'member' && mine.role !== 'owner') return json({ error: 'Only the owner can demote an admin' }, 403);
+    await db.prepare('UPDATE group_members SET role=? WHERE group_id=? AND user_id=?').bind(role, gid, uid).run();
+    return json({ ok: true, role });
+  }
+  if (p === 'groups/leave' && post) {
+    const gid = Number(body.id); if (!Number.isInteger(gid) || !(await gRole(gid))) return json({ error: 'Group not found' }, 404);
+    await groupLeave(gid, me.id); return json({ ok: true });
+  }
+  if (p === 'groups/delete' && post) {
+    const gid = Number(body.id), mine = Number.isInteger(gid) ? await gRole(gid) : null;
+    if (!mine) return json({ error: 'Group not found' }, 404);
+    if (mine.role !== 'owner') return json({ error: 'Only the owner can delete the group' }, 403);
+    await groupDrop(gid); return json({ ok: true });
+  }
+  if (p === 'groups/messages' && !post) {
+    const gid = Number(url.searchParams.get('id')), mine = Number.isInteger(gid) ? await gRole(gid) : null;
+    if (!mine) return json({ error: 'Group not found' }, 404);
+    const { results } = await db.prepare(`SELECT * FROM (SELECT m.*,u.name sname,u.username suser,u.avatar_key sav FROM group_messages m LEFT JOIN users u ON u.id=m.sender_id WHERE m.group_id=?1 AND m.created_at>=?2 ORDER BY m.id DESC LIMIT 200) ORDER BY id`).bind(gid, mine.joined_at).all();
+    const ids = results.map(m => m.id), rx = new Map();
+    if (ids.length) { const { results: rr } = await db.prepare(`SELECT message_id,emoji,user_id FROM group_reactions WHERE message_id IN (${ids.map(() => '?').join(',')})`).bind(...ids).all(); for (const r of rr) { const a = rx.get(r.message_id) || new Map(); const e = a.get(r.emoji) || { emoji: r.emoji, count: 0, mine: false }; e.count++; if (r.user_id === me.id) e.mine = true; a.set(r.emoji, e); rx.set(r.message_id, a); } }
+    const last = ids.length ? ids[ids.length - 1] : 0;
+    if (last) await db.prepare('INSERT INTO group_reads(group_id,user_id,last_id) VALUES(?1,?2,?3) ON CONFLICT(group_id,user_id) DO UPDATE SET last_id=MAX(last_id,?3)').bind(gid, me.id, last).run();
+    const gp = await db.prepare('SELECT theme FROM chat_prefs WHERE user_id=? AND peer_id=?').bind(me.id, -gid).first();
+    let gtheme = null; if (gp && gp.theme) try { gtheme = JSON.parse(gp.theme); } catch {}
+    return json({ messages: results.map(m => gmsgShape(m, rx.has(m.id) ? [...rx.get(m.id).values()] : [])), group: await groupView(gid, mine.role), theme: gtheme });
+  }
+  if (p === 'groups/send' && post) {
+    const gid = Number(body.id), mine = Number.isInteger(gid) ? await gRole(gid) : null;
+    if (!mine) return json({ error: 'Group not found' }, 404);
+    const text = String(body.body || '').trim(), type = ['text', 'image', 'voice', 'video'].includes(body.type) ? body.type : 'text';
+    if (text.length > 2000 || (type === 'text' && !text)) return json({ error: 'Message must be 1–2000 characters' }, 400);
+    let key = null, mtype = null, msize = null, dur = null, replyTo = null;
+    if (type !== 'text') { const c = await claimMedia(body.media_key, type); if (c.err) return json({ error: c.err }, 400); key = c.key; mtype = c.mtype; msize = c.msize; dur = type === 'voice' || type === 'video' ? Math.min(3600, Math.max(0, Math.round(Number(body.duration) || 0))) : null; }
+    if (body.reply_to != null) { const rid = Number(body.reply_to); if (Number.isInteger(rid) && await db.prepare('SELECT id FROM group_messages WHERE id=? AND group_id=?').bind(rid, gid).first()) replyTo = rid; }
+    const recent = await db.prepare('SELECT COUNT(*) n FROM group_messages WHERE sender_id=? AND created_at>?').bind(me.id, now - 10000).first();
+    if (recent.n >= 20) return json({ error: 'You are sending too fast. Slow down.' }, 429);
+    const r = await db.prepare('INSERT INTO group_messages(group_id,sender_id,body,type,media_key,media_type,media_size,duration,reply_to,created_at) VALUES(?,?,?,?,?,?,?,?,?,?)').bind(gid, me.id, text, type, key, mtype, msize, dur, replyTo, now).run();
+    await db.prepare('INSERT INTO group_reads(group_id,user_id,last_id) VALUES(?1,?2,?3) ON CONFLICT(group_id,user_id) DO UPDATE SET last_id=MAX(last_id,?3)').bind(gid, me.id, r.meta.last_row_id).run();
+    return json({ id: r.meta.last_row_id, created_at: now });
+  }
+  if (p === 'groups/messages/delete' && post) {
+    const mid = Number(body.id), m = Number.isInteger(mid) ? await db.prepare('SELECT id,group_id,sender_id,media_key FROM group_messages WHERE id=? AND deleted_at IS NULL').bind(mid).first() : null;
+    const mine = m ? await gRole(m.group_id) : null;
+    if (!m || !mine) return json({ error: 'Message not found' }, 404);
+    if (m.sender_id !== me.id && !isAdminRole(mine.role)) return json({ error: 'You can only delete your own messages' }, 403);
+    await db.prepare("UPDATE group_messages SET deleted_at=?, body='', media_key=NULL WHERE id=?").bind(now, mid).run();
+    await db.prepare('DELETE FROM group_reactions WHERE message_id=?').bind(mid).run();
+    if (m.media_key) await dropAny(m.media_key);
+    return json({ ok: true });
+  }
+  if (p === 'groups/react' && post) {
+    const mid = Number(body.message_id), m = Number.isInteger(mid) ? await db.prepare('SELECT id,group_id FROM group_messages WHERE id=? AND deleted_at IS NULL').bind(mid).first() : null;
+    if (!m || !(await gRole(m.group_id))) return json({ error: 'Message not found' }, 404);
+    const emoji = body.emoji;
+    if (emoji === null || emoji === '') { await db.prepare('DELETE FROM group_reactions WHERE message_id=? AND user_id=?').bind(mid, me.id).run(); return json({ ok: true, emoji: null }); }
+    if (!EMOJIS.includes(emoji)) return json({ error: 'Reaction not allowed' }, 400);
+    const cur = await db.prepare('SELECT emoji FROM group_reactions WHERE message_id=? AND user_id=?').bind(mid, me.id).first();
+    if (cur && cur.emoji === emoji) { await db.prepare('DELETE FROM group_reactions WHERE message_id=? AND user_id=?').bind(mid, me.id).run(); return json({ ok: true, emoji: null }); }   // tap the same one again to remove
+    await db.prepare('INSERT INTO group_reactions(message_id,user_id,emoji,created_at) VALUES(?1,?2,?3,?4) ON CONFLICT(message_id,user_id) DO UPDATE SET emoji=?3,created_at=?4').bind(mid, me.id, emoji, now).run();
+    return json({ ok: true, emoji });
+  }
+
+  // =============== CHANNELS ===============
+  const cRole = async cid => { const r = await db.prepare('SELECT role,joined_at FROM channel_members WHERE channel_id=? AND user_id=?').bind(cid, me.id).first(); return r ? r.role : null; };
+  const chanDrop = async cid => {
+    const { results: keys } = await db.prepare('SELECT media_key k FROM channel_posts WHERE channel_id=?1 AND media_key IS NOT NULL UNION SELECT avatar_key FROM channels WHERE id=?1 AND avatar_key IS NOT NULL').bind(cid).all();
+    for (const k of keys) await dropAny(k.k);
+    await db.batch(['DELETE FROM channel_comments WHERE post_id IN (SELECT id FROM channel_posts WHERE channel_id=?1)', 'DELETE FROM channel_reactions WHERE post_id IN (SELECT id FROM channel_posts WHERE channel_id=?1)', 'DELETE FROM channel_posts WHERE channel_id=?1', 'DELETE FROM channel_members WHERE channel_id=?1', 'DELETE FROM channels WHERE id=?1'].map(q => db.prepare(q).bind(cid)));
+  };
+  // a person may READ a channel if it is public, or if they are a member (private channels: members only)
+  const chanAccess = async cid => {
+    if (!Number.isInteger(cid)) return null;
+    const c = await db.prepare('SELECT * FROM channels WHERE id=?').bind(cid).first(); if (!c) return null;
+    const role = await cRole(cid);
+    if (c.visibility === 'private' && !role) return null;
+    return { c, role };
+  };
+  const chanView = async (c, role) => {
+    const n = await db.prepare('SELECT COUNT(*) n FROM channel_members WHERE channel_id=?').bind(c.id).first();
+    const own = c.owner_id === me.id ? null : await db.prepare('SELECT name FROM users WHERE id=?').bind(c.owner_id).first();
+    return { id: c.id, name: c.name, description: c.description, avatar: c.avatar_key || null, visibility: c.visibility, comments_on: !!c.comments_on, subscribers: n.n, role: role || null, subscribed: !!role, created_at: c.created_at, owner: own ? own.name : 'You', invite_code: role === 'owner' || role === 'admin' ? (c.visibility === 'private' ? c.invite_code : null) : null };
+  };
+  const postShape = (m, rx) => { const total = rx.reduce((a, r) => a + r.count, 0); return { id: m.id, channel_id: m.channel_id, author: { id: m.author_id, name: m.aname || 'Former member' }, author_id: m.author_id, body: m.deleted_at ? '' : m.body, type: m.type, media_key: m.deleted_at ? null : m.media_key, media_type: m.media_type, duration: m.duration, created_at: m.created_at, edited_at: m.edited_at, deleted_at: m.deleted_at, reactions: rx, likes: total, comments: m.ccount || 0 }; };
+
+  if (p === 'channels' && !post) {                           // channels I subscribe to or manage
+    const { results } = await db.prepare(`
+      SELECT c.id,c.name,c.description,c.avatar_key,c.visibility,cm.role,cm.last_seen_post,
+        (SELECT COUNT(*) FROM channel_members x WHERE x.channel_id=c.id) subs,
+        p.id last_id,p.type last_type,p.body last_body,p.created_at last_at,
+        (SELECT COUNT(*) FROM channel_posts z WHERE z.channel_id=c.id AND z.id>cm.last_seen_post AND z.deleted_at IS NULL AND z.author_id!=?1) unread
+      FROM channel_members cm JOIN channels c ON c.id=cm.channel_id
+      LEFT JOIN channel_posts p ON p.id=(SELECT MAX(id) FROM channel_posts WHERE channel_id=c.id AND deleted_at IS NULL)
+      WHERE cm.user_id=?1 ORDER BY COALESCE(p.created_at,c.created_at) DESC LIMIT 200`).bind(me.id).all();
+    return json({ channels: results.map(c => ({ id: c.id, name: c.name, description: c.description, avatar: c.avatar_key || null, visibility: c.visibility, role: c.role, subscribers: c.subs, unread: c.unread, last: c.last_id ? { id: c.last_id, type: c.last_type, body: c.last_body, at: c.last_at } : null })) });
+  }
+  if (p === 'channels/discover' && !post) {                  // PUBLIC channels only; private ones are never listed
+    const q = String(url.searchParams.get('q') || '').trim().slice(0, 40), like = '%' + likeEsc(q.toLowerCase()) + '%';
+    const { results } = await db.prepare(`SELECT c.id,c.name,c.description,c.avatar_key,(SELECT COUNT(*) FROM channel_members x WHERE x.channel_id=c.id) subs,(SELECT role FROM channel_members m WHERE m.channel_id=c.id AND m.user_id=?1) role
+      FROM channels c WHERE c.visibility='public' AND (?2='' OR LOWER(c.name) LIKE ?3 ESCAPE '\\' OR LOWER(c.description) LIKE ?3 ESCAPE '\\') ORDER BY subs DESC, c.id DESC LIMIT 50`).bind(me.id, q, like).all();
+    return json({ channels: results.map(c => ({ id: c.id, name: c.name, description: c.description, avatar: c.avatar_key || null, subscribers: c.subs, subscribed: !!c.role, role: c.role || null })) });
+  }
+  if (p === 'channels' && post) {
+    const name = cleanName(body.name, 40), desc = cleanName(body.description, 300), vis = body.visibility === 'private' ? 'private' : 'public';
+    if (!name) return json({ error: 'Enter a channel name (max 40 characters)' }, 400);
+    const mineCount = await db.prepare("SELECT COUNT(*) n FROM channels WHERE owner_id=?").bind(me.id).first();
+    if (mineCount.n >= 20) return json({ error: 'You can own up to 20 channels' }, 400);
+    let avatar = null;
+    if (body.avatar_key) { const c = await claimMedia(body.avatar_key, 'image'); if (c.err) return json({ error: c.err }, 400); if (c.msize > 250000) return json({ error: 'Channel picture is too large' }, 413); avatar = c.key; }
+    const code = rand(10);
+    const r = await db.prepare('INSERT INTO channels(name,description,avatar_key,owner_id,visibility,comments_on,invite_code,created_at) VALUES(?,?,?,?,?,?,?,?)').bind(name, desc, avatar, me.id, vis, body.comments_on === false ? 0 : 1, code, now).run();
+    const cid = r.meta.last_row_id;
+    await db.prepare("INSERT INTO channel_members(channel_id,user_id,role,joined_at,last_seen_post) VALUES(?,?,'owner',?,0)").bind(cid, me.id, now).run();
+    return json({ channel: await chanView(await db.prepare('SELECT * FROM channels WHERE id=?').bind(cid).first(), 'owner') });
+  }
+  if (p === 'channels/info' && !post) {
+    const cid = Number(url.searchParams.get('id')); let a = await chanAccess(cid);
+    if (!a && Number.isInteger(cid)) {                       // private channel: an invite code lets you look at the profile (so you can decide to join)
+      const code = String(url.searchParams.get('code') || ''), c = code ? await db.prepare("SELECT * FROM channels WHERE id=? AND visibility='private'").bind(cid).first() : null;
+      if (c && c.invite_code && safeEq(c.invite_code, code)) a = { c, role: null };
+    }
+    if (!a) return json({ error: 'Channel not found' }, 404);
+    return json({ channel: await chanView(a.c, a.role) });
+  }
+  if (p === 'channels/update' && post) {
+    const cid = Number(body.id), a = await chanAccess(cid);
+    if (!a || !a.role) return json({ error: 'Channel not found' }, 404);
+    if (a.role !== 'owner' && a.role !== 'admin') return json({ error: 'Only channel admins can edit the channel' }, 403);
+    const c = a.c; let name = c.name, desc = c.description, avatar = c.avatar_key, vis = c.visibility, com = c.comments_on, code = c.invite_code;
+    if (body.name !== undefined) { name = cleanName(body.name, 40); if (!name) return json({ error: 'Enter a channel name (max 40 characters)' }, 400); }
+    if (body.description !== undefined) desc = cleanName(body.description, 300);
+    if (body.comments_on !== undefined) com = body.comments_on ? 1 : 0;
+    if (body.visibility !== undefined) { if (a.role !== 'owner') return json({ error: 'Only the owner can change visibility' }, 403); vis = body.visibility === 'private' ? 'private' : 'public'; }
+    if (body.reset_invite) { if (a.role !== 'owner') return json({ error: 'Only the owner can reset the invite link' }, 403); code = rand(10); }
+    if (body.avatar_key) { const cl = await claimMedia(body.avatar_key, 'image'); if (cl.err) return json({ error: cl.err }, 400); if (cl.msize > 250000) return json({ error: 'Channel picture is too large' }, 413); avatar = cl.key; }
+    else if (body.remove_avatar) avatar = null;
+    await db.prepare('UPDATE channels SET name=?,description=?,avatar_key=?,visibility=?,comments_on=?,invite_code=? WHERE id=?').bind(name, desc, avatar, vis, com, code, cid).run();
+    if (c.avatar_key && c.avatar_key !== avatar) await dropAny(c.avatar_key);
+    return json({ channel: await chanView(await db.prepare('SELECT * FROM channels WHERE id=?').bind(cid).first(), a.role) });
+  }
+  if (p === 'channels/subscribe' && post) {
+    const cid = Number(body.id), c = Number.isInteger(cid) ? await db.prepare('SELECT * FROM channels WHERE id=?').bind(cid).first() : null;
+    if (!c) return json({ error: 'Channel not found' }, 404);
+    if (c.visibility === 'private' && !(await cRole(cid))) { const code = String(body.code || ''); if (!code || !c.invite_code || !safeEq(c.invite_code, code)) return json({ error: 'Channel not found' }, 404); }
+    const last = (await db.prepare('SELECT MAX(id) m FROM channel_posts WHERE channel_id=?').bind(cid).first()).m || 0;
+    await db.prepare("INSERT OR IGNORE INTO channel_members(channel_id,user_id,role,joined_at,last_seen_post) VALUES(?,?,'subscriber',?,?)").bind(cid, me.id, now, last).run();
+    return json({ channel: await chanView(c, await cRole(cid)) });
+  }
+  if (p === 'channels/unsubscribe' && post) {
+    const cid = Number(body.id), role = Number.isInteger(cid) ? await cRole(cid) : null;
+    if (!role) return json({ error: 'Channel not found' }, 404);
+    if (role === 'owner') return json({ error: 'The owner cannot unsubscribe. Delete the channel instead.' }, 400);
+    await db.prepare('DELETE FROM channel_members WHERE channel_id=? AND user_id=?').bind(cid, me.id).run();
+    return json({ ok: true });
+  }
+  if (p === 'channels/subscribers' && !post) {
+    const cid = Number(url.searchParams.get('id')), role = Number.isInteger(cid) ? await cRole(cid) : null;
+    if (!role) return json({ error: 'Channel not found' }, 404);
+    if (role === 'subscriber') return json({ error: 'Only channel admins can see the subscriber list' }, 403);
+    const { results } = await db.prepare("SELECT u.id,u.name,u.username,u.avatar_key,u.last_seen,cm.role,cm.joined_at FROM channel_members cm JOIN users u ON u.id=cm.user_id WHERE cm.channel_id=? ORDER BY CASE cm.role WHEN 'owner' THEN 0 WHEN 'admin' THEN 1 ELSE 2 END, cm.joined_at LIMIT 500").bind(cid).all();
+    return json({ subscribers: results.map(u => ({ ...publicUser(u, now), role: u.role })) });
+  }
+  if (p === 'channels/subscribers/remove' && post) {
+    const cid = Number(body.id), uid = Number(body.user_id), role = Number.isInteger(cid) ? await cRole(cid) : null;
+    if (!role) return json({ error: 'Channel not found' }, 404);
+    if (role === 'subscriber') return json({ error: 'Only channel admins can remove subscribers' }, 403);
+    const t = await db.prepare('SELECT role FROM channel_members WHERE channel_id=? AND user_id=?').bind(cid, uid).first();
+    if (!t || uid === me.id) return json({ error: 'Subscriber not found' }, 404);
+    if (t.role === 'owner' || (t.role === 'admin' && role !== 'owner')) return json({ error: 'You cannot remove this person' }, 403);
+    await db.prepare('DELETE FROM channel_members WHERE channel_id=? AND user_id=?').bind(cid, uid).run();
+    return json({ ok: true });
+  }
+  if (p === 'channels/admins' && post) {
+    const cid = Number(body.id), uid = Number(body.user_id), role = Number.isInteger(cid) ? await cRole(cid) : null;
+    if (!role) return json({ error: 'Channel not found' }, 404);
+    if (role !== 'owner') return json({ error: 'Only the owner can add or remove admins' }, 403);
+    if (body.role !== 'admin' && body.role !== 'subscriber') return json({ error: 'Invalid role' }, 400);
+    const t = await db.prepare('SELECT role FROM channel_members WHERE channel_id=? AND user_id=?').bind(cid, uid).first();
+    if (!t || uid === me.id || t.role === 'owner') return json({ error: 'Subscriber not found' }, 404);
+    await db.prepare('UPDATE channel_members SET role=? WHERE channel_id=? AND user_id=?').bind(body.role, cid, uid).run();
+    return json({ ok: true, role: body.role });
+  }
+  if (p === 'channels/delete' && post) {
+    const cid = Number(body.id), role = Number.isInteger(cid) ? await cRole(cid) : null;
+    if (!role) return json({ error: 'Channel not found' }, 404);
+    if (role !== 'owner') return json({ error: 'Only the owner can delete the channel' }, 403);
+    await chanDrop(cid); return json({ ok: true });
+  }
+  if (p === 'channels/posts' && !post) {
+    const cid = Number(url.searchParams.get('id')), a = await chanAccess(cid);
+    if (!a) return json({ error: 'Channel not found' }, 404);
+    const before = Number(url.searchParams.get('before')) || 0;
+    const { results } = await db.prepare(`SELECT * FROM (SELECT p.*,u.name aname,(SELECT COUNT(*) FROM channel_comments cc WHERE cc.post_id=p.id AND cc.deleted_at IS NULL) ccount FROM channel_posts p LEFT JOIN users u ON u.id=p.author_id WHERE p.channel_id=?1 AND (?2=0 OR p.id<?2) ORDER BY p.id DESC LIMIT 50) ORDER BY id`).bind(cid, before).all();
+    const ids = results.map(m => m.id), rx = new Map();
+    if (ids.length) { const { results: rr } = await db.prepare(`SELECT post_id,emoji,user_id FROM channel_reactions WHERE post_id IN (${ids.map(() => '?').join(',')})`).bind(...ids).all(); for (const r of rr) { const m = rx.get(r.post_id) || new Map(); const e = m.get(r.emoji) || { emoji: r.emoji, count: 0, mine: false }; e.count++; if (r.user_id === me.id) e.mine = true; m.set(r.emoji, e); rx.set(r.post_id, m); } }
+    if (a.role && ids.length && !before) await db.prepare('UPDATE channel_members SET last_seen_post=MAX(last_seen_post,?3) WHERE channel_id=?1 AND user_id=?2').bind(cid, me.id, ids[ids.length - 1]).run();
+    return json({ posts: results.map(m => postShape(m, rx.has(m.id) ? [...rx.get(m.id).values()] : [])), channel: await chanView(a.c, a.role), more: results.length === 50 });
+  }
+  if (p === 'channels/posts' && post) {
+    const cid = Number(body.id), role = Number.isInteger(cid) ? await cRole(cid) : null;
+    if (!role) return json({ error: 'Channel not found' }, 404);
+    if (role === 'subscriber') return json({ error: 'Only channel admins can publish posts' }, 403);
+    const text = String(body.body || '').trim(), type = ['text', 'image', 'video'].includes(body.type) ? body.type : 'text';
+    if (text.length > 4000 || (type === 'text' && !text)) return json({ error: 'A post must be 1–4000 characters' }, 400);
+    let key = null, mtype = null, msize = null, dur = null;
+    if (type !== 'text') { const c = await claimMedia(body.media_key, type); if (c.err) return json({ error: c.err }, 400); key = c.key; mtype = c.mtype; msize = c.msize; dur = type === 'video' ? Math.min(3600, Math.max(0, Math.round(Number(body.duration) || 0))) : null; }
+    const recent = await db.prepare('SELECT COUNT(*) n FROM channel_posts WHERE author_id=? AND created_at>?').bind(me.id, now - 10000).first();
+    if (recent.n >= 10) return json({ error: 'You are posting too fast. Slow down.' }, 429);
+    const r = await db.prepare('INSERT INTO channel_posts(channel_id,author_id,body,type,media_key,media_type,media_size,duration,created_at) VALUES(?,?,?,?,?,?,?,?,?)').bind(cid, me.id, text, type, key, mtype, msize, dur, now).run();
+    await db.prepare('UPDATE channel_members SET last_seen_post=MAX(last_seen_post,?3) WHERE channel_id=?1 AND user_id=?2').bind(cid, me.id, r.meta.last_row_id).run();
+    return json({ id: r.meta.last_row_id, created_at: now });
+  }
+  if (p === 'channels/posts/edit' && post) {
+    const pid = Number(body.post_id), m = Number.isInteger(pid) ? await db.prepare('SELECT * FROM channel_posts WHERE id=? AND deleted_at IS NULL').bind(pid).first() : null;
+    const role = m ? await cRole(m.channel_id) : null;
+    if (!m || !role) return json({ error: 'Post not found' }, 404);
+    if (m.author_id !== me.id || role === 'subscriber') return json({ error: 'You can only edit your own posts' }, 403);
+    const text = String(body.body || '').trim();
+    if (text.length > 4000 || (m.type === 'text' && !text)) return json({ error: 'A post must be 1–4000 characters' }, 400);
+    await db.prepare('UPDATE channel_posts SET body=?,edited_at=? WHERE id=?').bind(text, now, pid).run();
+    return json({ ok: true, edited_at: now });
+  }
+  if (p === 'channels/posts/delete' && post) {
+    const pid = Number(body.post_id), m = Number.isInteger(pid) ? await db.prepare('SELECT * FROM channel_posts WHERE id=? AND deleted_at IS NULL').bind(pid).first() : null;
+    const role = m ? await cRole(m.channel_id) : null;
+    if (!m || !role) return json({ error: 'Post not found' }, 404);
+    if (!((m.author_id === me.id && role !== 'subscriber') || role === 'owner')) return json({ error: 'You cannot delete this post' }, 403);
+    await db.batch([db.prepare("UPDATE channel_posts SET deleted_at=?,body='',media_key=NULL WHERE id=?").bind(now, pid), db.prepare('DELETE FROM channel_reactions WHERE post_id=?').bind(pid), db.prepare('DELETE FROM channel_comments WHERE post_id=?').bind(pid)]);
+    if (m.media_key) await dropAny(m.media_key);
+    return json({ ok: true });
+  }
+  if (p === 'channels/react' && post) {
+    const pid = Number(body.post_id), m = Number.isInteger(pid) ? await db.prepare('SELECT id,channel_id FROM channel_posts WHERE id=? AND deleted_at IS NULL').bind(pid).first() : null;
+    if (!m || !(await cRole(m.channel_id))) return json({ error: 'Post not found' }, 404);
+    const emoji = body.emoji;
+    if (emoji === null || emoji === '') { await db.prepare('DELETE FROM channel_reactions WHERE post_id=? AND user_id=?').bind(pid, me.id).run(); return json({ ok: true, emoji: null }); }
+    if (!EMOJIS.includes(emoji)) return json({ error: 'Reaction not allowed' }, 400);
+    const cur = await db.prepare('SELECT emoji FROM channel_reactions WHERE post_id=? AND user_id=?').bind(pid, me.id).first();
+    if (cur && cur.emoji === emoji) { await db.prepare('DELETE FROM channel_reactions WHERE post_id=? AND user_id=?').bind(pid, me.id).run(); return json({ ok: true, emoji: null }); }
+    await db.prepare('INSERT INTO channel_reactions(post_id,user_id,emoji,created_at) VALUES(?1,?2,?3,?4) ON CONFLICT(post_id,user_id) DO UPDATE SET emoji=?3,created_at=?4').bind(pid, me.id, emoji, now).run();
+    return json({ ok: true, emoji });
+  }
+  if (p === 'channels/comments' && !post) {
+    const pid = Number(url.searchParams.get('post_id')), m = Number.isInteger(pid) ? await db.prepare('SELECT id,channel_id FROM channel_posts WHERE id=? AND deleted_at IS NULL').bind(pid).first() : null;
+    const a = m ? await chanAccess(m.channel_id) : null;
+    if (!a) return json({ error: 'Post not found' }, 404);
+    const { results } = await db.prepare('SELECT cc.id,cc.user_id,cc.body,cc.created_at,u.name FROM channel_comments cc LEFT JOIN users u ON u.id=cc.user_id WHERE cc.post_id=? AND cc.deleted_at IS NULL ORDER BY cc.id LIMIT 200').bind(pid).all();
+    return json({ comments: results.map(c => ({ id: c.id, user_id: c.user_id, name: c.name || 'Former member', body: c.body, created_at: c.created_at })), comments_on: !!a.c.comments_on });
+  }
+  if (p === 'channels/comments' && post) {
+    const pid = Number(body.post_id), m = Number.isInteger(pid) ? await db.prepare('SELECT id,channel_id FROM channel_posts WHERE id=? AND deleted_at IS NULL').bind(pid).first() : null;
+    const role = m ? await cRole(m.channel_id) : null;
+    if (!m || !role) return json({ error: 'Post not found' }, 404);
+    const c = await db.prepare('SELECT comments_on FROM channels WHERE id=?').bind(m.channel_id).first();
+    if (!c.comments_on) return json({ error: 'Comments are turned off for this channel' }, 403);
+    const text = String(body.body || '').trim();
+    if (text.length < 1 || text.length > 500) return json({ error: 'A comment must be 1–500 characters' }, 400);
+    const recent = await db.prepare('SELECT COUNT(*) n FROM channel_comments WHERE user_id=? AND created_at>?').bind(me.id, now - 10000).first();
+    if (recent.n >= 8) return json({ error: 'You are commenting too fast. Slow down.' }, 429);
+    const r = await db.prepare('INSERT INTO channel_comments(post_id,user_id,body,created_at) VALUES(?,?,?,?)').bind(pid, me.id, text, now).run();
+    return json({ ok: true, id: r.meta.last_row_id });
+  }
+  if (p === 'channels/comments/delete' && post) {
+    const id = Number(body.id), c = Number.isInteger(id) ? await db.prepare('SELECT cc.id,cc.user_id,p.channel_id FROM channel_comments cc JOIN channel_posts p ON p.id=cc.post_id WHERE cc.id=? AND cc.deleted_at IS NULL').bind(id).first() : null;
+    const role = c ? await cRole(c.channel_id) : null;
+    if (!c || !role) return json({ error: 'Comment not found' }, 404);
+    if (c.user_id !== me.id && role === 'subscriber') return json({ error: 'You cannot delete this comment' }, 403);
+    await db.prepare('UPDATE channel_comments SET deleted_at=?,body=? WHERE id=?').bind(now, '', id).run();
+    return json({ ok: true });
+  }
+
   // =============== ACCOUNT MANAGEMENT ===============
   if (p === 'account' && !post) {
     const u = await db.prepare('SELECT id,name,username,email,created_at FROM users WHERE id=?').bind(me.id).first();
@@ -549,6 +964,9 @@ async function route(req, env, url) {
     const id = me.id;
     const { results: keys } = await db.prepare('SELECT key FROM media WHERE owner_id=?').bind(id).all();
     for (const k of keys) await dropAny(k.key);
+    { const { results: gs } = await db.prepare('SELECT group_id FROM group_members WHERE user_id=?').bind(id).all(); for (const g of gs) await groupLeave(g.group_id, id); }
+    { const { results: cs } = await db.prepare('SELECT id FROM channels WHERE owner_id=?').bind(id).all(); for (const c of cs) await chanDrop(c.id); }
+    await db.batch(['DELETE FROM channel_members WHERE user_id=?1', 'DELETE FROM channel_reactions WHERE user_id=?1', 'DELETE FROM channel_comments WHERE user_id=?1', "UPDATE channel_posts SET deleted_at=CAST(strftime('%s','now') AS INTEGER)*1000, body='', media_key=NULL WHERE author_id=?1 AND deleted_at IS NULL"].map(q => db.prepare(q).bind(id)));
     await db.batch([
       'DELETE FROM call_signals WHERE to_user=?1 OR call_id IN (SELECT id FROM calls WHERE caller_id=?1 OR callee_id=?1)', 'DELETE FROM calls WHERE caller_id=?1 OR callee_id=?1',
       'DELETE FROM status_likes WHERE user_id=?1 OR status_id IN (SELECT id FROM statuses WHERE user_id=?1)', 'DELETE FROM status_views WHERE viewer_id=?1 OR status_id IN (SELECT id FROM statuses WHERE user_id=?1)',
@@ -760,8 +1178,8 @@ async function route(req, env, url) {
     if (!type) return json({ error: 'This file type is not allowed' }, 415);
     const old = now - 3600000;                              // tidy up this user's uploads that were never sent in a message
     await db.batch([
-      db.prepare('DELETE FROM media_chunks WHERE key IN (SELECT key FROM media WHERE owner_id=? AND created_at<? AND key NOT IN (SELECT media_key FROM messages WHERE media_key IS NOT NULL) AND key NOT IN (SELECT avatar_key FROM users WHERE avatar_key IS NOT NULL) AND key NOT IN (SELECT media_key FROM statuses WHERE media_key IS NOT NULL))').bind(me.id, old),
-      db.prepare('DELETE FROM media WHERE owner_id=? AND created_at<? AND key NOT IN (SELECT media_key FROM messages WHERE media_key IS NOT NULL) AND key NOT IN (SELECT avatar_key FROM users WHERE avatar_key IS NOT NULL) AND key NOT IN (SELECT media_key FROM statuses WHERE media_key IS NOT NULL)').bind(me.id, old)
+      db.prepare(`DELETE FROM media_chunks WHERE key IN (SELECT key FROM media WHERE owner_id=? AND created_at<? AND key NOT IN ${REFS})`).bind(me.id, old),
+      db.prepare(`DELETE FROM media WHERE owner_id=? AND created_at<? AND key NOT IN ${REFS}`).bind(me.id, old)
     ]);
     const key = `u${me.id}/${rand(16)}`, stmts = [db.prepare('INSERT INTO media(key,owner_id,type,size,created_at) VALUES(?,?,?,?,?)').bind(key, me.id, type, size, now)];
     for (let i = 0, n = 0; i < data.length; i += CHUNK, n++) stmts.push(db.prepare('INSERT INTO media_chunks(key,idx,data) VALUES(?,?,?)').bind(key, n, data.slice(i, i + CHUNK)));
@@ -782,7 +1200,7 @@ async function route(req, env, url) {
     const type = at(4, 'ftyp') ? 'video/mp4' : (h[0] === 0x1A && h[1] === 0x45 && h[2] === 0xDF && h[3] === 0xA3) ? 'video/webm' : null;   // real file signature, never the client's claim
     if (!type) return json({ error: 'This video format is not allowed (use MP4 or WebM)' }, 415);
     const old = now - 3600000;                              // tidy up this user's videos that were never sent
-    const stale = (await db.prepare("SELECT key FROM media WHERE owner_id=? AND created_at<? AND type LIKE 'video/%' AND key NOT IN (SELECT media_key FROM messages WHERE media_key IS NOT NULL) AND key NOT IN (SELECT media_key FROM statuses WHERE media_key IS NOT NULL) LIMIT 10").bind(me.id, old).all()).results;
+    const stale = (await db.prepare(`SELECT key FROM media WHERE owner_id=? AND created_at<? AND type LIKE 'video/%' AND key NOT IN ${REFS} LIMIT 10`).bind(me.id, old).all()).results;
     for (const s of stale) await dropAny(s.key);
     const key = `u${me.id}/${rand(16)}`;
     await env.MEDIA.put(key, buf, { httpMetadata: { contentType: type } });
@@ -796,6 +1214,10 @@ async function route(req, env, url) {
     const allowed = key.startsWith('u' + me.id + '/') ||
       await db.prepare('SELECT 1 ok FROM messages WHERE media_key=? AND deleted_at IS NULL AND (sender_id=? OR receiver_id=?)').bind(key, me.id, me.id).first() ||
       await db.prepare('SELECT 1 ok FROM users WHERE avatar_key=?').bind(key).first() ||   // profile photos
+      await db.prepare('SELECT 1 ok FROM group_messages gm JOIN group_members m ON m.group_id=gm.group_id WHERE gm.media_key=? AND gm.deleted_at IS NULL AND m.user_id=?').bind(key, me.id).first() ||   // group media: members only
+      await db.prepare('SELECT 1 ok FROM groups g JOIN group_members m ON m.group_id=g.id WHERE g.avatar_key=? AND m.user_id=?').bind(key, me.id).first() ||
+      await db.prepare("SELECT 1 ok FROM channel_posts p JOIN channels c ON c.id=p.channel_id WHERE p.media_key=? AND p.deleted_at IS NULL AND (c.visibility='public' OR EXISTS(SELECT 1 FROM channel_members m WHERE m.channel_id=c.id AND m.user_id=?))").bind(key, me.id).first() ||   // public channels are readable by anyone signed in; private ones by members only
+      await db.prepare("SELECT 1 ok FROM channels c WHERE c.avatar_key=? AND (c.visibility='public' OR EXISTS(SELECT 1 FROM channel_members m WHERE m.channel_id=c.id AND m.user_id=?))").bind(key, me.id).first() ||
       await db.prepare('SELECT 1 ok FROM statuses s WHERE s.media_key=? AND s.expires_at>? AND (s.user_id=?3 OR (EXISTS(SELECT 1 FROM contacts c WHERE c.owner_id=s.user_id AND c.contact_id=?3) AND EXISTS(SELECT 1 FROM contacts c2 WHERE c2.owner_id=?3 AND c2.contact_id=s.user_id) AND NOT EXISTS(SELECT 1 FROM blocks b WHERE (b.blocker_id=s.user_id AND b.blocked_id=?3) OR (b.blocker_id=?3 AND b.blocked_id=s.user_id))))').bind(key, now, me.id).first();   // status media: owner and MUTUAL contacts only
     const m = allowed ? await db.prepare('SELECT type FROM media WHERE key=?').bind(key).first() : null;
     if (!m) return json({ error: 'Not found' }, 404);
