@@ -84,6 +84,9 @@ function ensureSchema(db) {
     for (const [col, type] of Object.entries(MSG_COLS)) if (!haveM.includes(col)) await addCol(db, 'messages', col, type);
     const haveC = (await db.prepare('PRAGMA table_info(calls)').all()).results.map(c => c.name);
     if (!haveC.includes('video')) await addCol(db, 'calls', 'video', 'INTEGER NOT NULL DEFAULT 0');
+    const haveP = (await db.prepare('PRAGMA table_info(chat_prefs)').all()).results.map(c => c.name);
+    if (!haveP.includes('cleared_at')) await addCol(db, 'chat_prefs', 'cleared_at', 'INTEGER NOT NULL DEFAULT 0');
+    await db.prepare('CREATE INDEX IF NOT EXISTS idx_calls_pair ON calls(caller_id, callee_id)').run();
     await db.prepare('CREATE INDEX IF NOT EXISTS idx_msg_media ON messages(media_key)').run();
     await db.prepare('CREATE INDEX IF NOT EXISTS idx_msg_deliv ON messages(receiver_id, delivered_at)').run();
   })().catch(e => { ready = null; throw e; });
@@ -256,7 +259,7 @@ async function route(req, env, url) {
   if (p === 'chat/clear' && post) {                          // hides history for ME only: nothing is deleted, the other person keeps everything
     const peer = await peerOf(body.with); if (!peer) return json({ error: 'User not found' }, 404);
     const last = await db.prepare('SELECT MAX(id) m FROM messages WHERE (sender_id=?1 AND receiver_id=?2) OR (sender_id=?2 AND receiver_id=?1)').bind(me.id, peer.id).first();
-    await db.prepare('INSERT INTO chat_prefs(user_id,peer_id,cleared_id) VALUES(?1,?2,?3) ON CONFLICT(user_id,peer_id) DO UPDATE SET cleared_id=?3').bind(me.id, peer.id, (last && last.m) || 0).run();
+    await db.prepare('INSERT INTO chat_prefs(user_id,peer_id,cleared_id,cleared_at) VALUES(?1,?2,?3,?4) ON CONFLICT(user_id,peer_id) DO UPDATE SET cleared_id=?3,cleared_at=?4').bind(me.id, peer.id, (last && last.m) || 0, now).run();
     return json({ ok: true });
   }
   if (p === 'chat/export' && !post) {
@@ -432,6 +435,13 @@ async function route(req, env, url) {
       return json({ ok: true });
     }
     if (p === 'calls/history' && !post) {
+      const w = url.searchParams.get('with');
+      if (w !== null) {                                      // calls with ONE person (shown inside that chat); respects "Clear chat"
+        const peerId = parseInt(w, 10); if (!Number.isInteger(peerId)) return json({ error: 'User not found' }, 404);
+        const pf = await db.prepare('SELECT cleared_at FROM chat_prefs WHERE user_id=? AND peer_id=?').bind(me.id, peerId).first();
+        const { results } = await db.prepare(`SELECT id,caller_id,state,video,created_at,duration FROM calls WHERE ((caller_id=?1 AND callee_id=?2) OR (caller_id=?2 AND callee_id=?1)) AND state NOT IN ('ringing','active') AND created_at>?3 ORDER BY id DESC LIMIT 100`).bind(me.id, peerId, (pf && pf.cleared_at) || 0).all();
+        return json({ calls: results.reverse().map(c => ({ id: c.id, direction: c.caller_id === me.id ? 'out' : 'in', video: !!c.video, state: c.state, created_at: c.created_at, duration: c.duration })) });
+      }
       const { results } = await db.prepare(`SELECT c.id,c.caller_id,c.state,c.video,c.created_at,c.duration,u.id uid,u.name,u.username,u.avatar_key,u.last_seen FROM calls c JOIN users u ON u.id=CASE WHEN c.caller_id=?1 THEN c.callee_id ELSE c.caller_id END WHERE (c.caller_id=?1 OR c.callee_id=?1) AND c.state!='ringing' ORDER BY c.id DESC LIMIT 100`).bind(me.id).all();
       return json({ calls: results.map(c => ({ id: c.id, direction: c.caller_id === me.id ? 'out' : 'in', video: !!c.video, state: c.state, created_at: c.created_at, duration: c.duration, peer: publicUser({ id: c.uid, name: c.name, username: c.username, avatar_key: c.avatar_key, last_seen: c.last_seen }, now) })) });
     }
