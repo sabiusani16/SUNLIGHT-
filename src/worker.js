@@ -8,6 +8,7 @@ const THEME_BG = ['midnight', 'forest', 'gold', 'ocean', 'rose', 'slate', 'dots'
 const PAGE = null; /*__PAGE__*/
 const RING_MS = 45000, BEAT_MS = 25000, STUN = [{ urls: ['stun:stun.cloudflare.com:3478', 'stun:stun.l.google.com:19302'] }];
 const ONLINE_MS = 30000, SESSION_MS = 30 * 864e5;
+const APP_VERSION = '1.0.0';
 const EMAIL = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 const likeEsc = s => s.replace(/[\\%_]/g, '\\$&');            // escape LIKE wildcards in user input
 const MEDIA_KEY = /^u\d+\/[a-f0-9]{32}$/;                  // keys we generate: u<userId>/<random>
@@ -67,6 +68,10 @@ const TABLES = [
   `CREATE INDEX IF NOT EXISTS idx_signals_to ON call_signals(to_user, call_id, id)`,
   `CREATE INDEX IF NOT EXISTS idx_status_user ON statuses(user_id, expires_at)`,
   `CREATE INDEX IF NOT EXISTS idx_status_media ON statuses(media_key)`,
+  `CREATE TABLE IF NOT EXISTS user_prefs (user_id INTEGER PRIMARY KEY, notif TEXT, updated_at INTEGER NOT NULL DEFAULT 0)`,
+  `CREATE TABLE IF NOT EXISTS email_changes (user_id INTEGER PRIMARY KEY, new_email TEXT NOT NULL, code_hash TEXT NOT NULL, salt TEXT NOT NULL, attempts INTEGER NOT NULL DEFAULT 0, expires_at INTEGER NOT NULL, created_at INTEGER NOT NULL)`,
+  `CREATE TABLE IF NOT EXISTS support_requests (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, subject TEXT NOT NULL, message TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'open', created_at INTEGER NOT NULL)`,
+  `CREATE INDEX IF NOT EXISTS idx_support_user ON support_requests(user_id, id)`,
   `CREATE TABLE IF NOT EXISTS status_views (status_id INTEGER NOT NULL, viewer_id INTEGER NOT NULL, viewed_at INTEGER NOT NULL, PRIMARY KEY (status_id, viewer_id))`
 ];
 const USER_COLS = { username: "TEXT", email: 'TEXT', name: "TEXT NOT NULL DEFAULT ''", pass_hash: "TEXT NOT NULL DEFAULT ''", salt: "TEXT NOT NULL DEFAULT ''", created_at: 'INTEGER NOT NULL DEFAULT 0', last_seen: 'INTEGER NOT NULL DEFAULT 0', avatar_key: 'TEXT' };
@@ -118,6 +123,26 @@ export default {
   }
 };
 
+
+const NOTIF_DEFAULTS = { messages: true, groups: true, calls: true, sound: true, tone: 'default', vibrate: true, status_likes: true, status_replies: true, status_activity: true, browser: false };
+const TONES = ['default', 'chime', 'bell', 'pop', 'gold', 'soft'];
+const RESERVED = new Set(['admin', 'administrator', 'support', 'sunlight', 'root', 'system', 'help', 'moderator', 'staff', 'official']);
+const sha = async s => hex(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(s)));
+const cleanPrefs = raw => {                                  // only known keys, strict types: anything else is ignored
+  const out = { ...NOTIF_DEFAULTS }; let o = raw; if (typeof o === 'string') { try { o = JSON.parse(o); } catch { o = {}; } }
+  if (o && typeof o === 'object') for (const k of Object.keys(NOTIF_DEFAULTS)) {
+    if (k === 'tone') { if (TONES.includes(o.tone)) out.tone = o.tone; } else if (typeof o[k] === 'boolean') out[k] = o[k];
+  }
+  return out;
+};
+async function sendMail(env, to, subject, text) {            // needs RESEND_API_KEY + MAIL_FROM (Worker secrets); never invents a provider
+  if (!env.RESEND_API_KEY || !env.MAIL_FROM) return false;
+  try {
+    const r = await fetch('https://api.resend.com/emails', { method: 'POST', headers: { authorization: 'Bearer ' + env.RESEND_API_KEY, 'content-type': 'application/json' }, body: JSON.stringify({ from: env.MAIL_FROM, to: [to], subject, text }) });
+    return r.ok;
+  } catch { return false; }
+}
+
 async function startSession(db, user, now) {
   const token = rand(32);
   await db.prepare('INSERT INTO sessions(token,user_id,created_at) VALUES(?,?,?)').bind(token, user.id, now).run();
@@ -140,7 +165,7 @@ async function route(req, env, url) {
 
   if (p === 'health') {
     const r = await db.prepare('SELECT COUNT(*) n FROM users').first();
-    return json({ ok: true, database: 'connected', video: !!env.MEDIA, assets: !!env.ASSETS, users: r.n });
+    return json({ ok: true, version: APP_VERSION, database: 'connected', video: !!env.MEDIA, assets: !!env.ASSETS, users: r.n });
   }
 
   if (p === 'register' && post) {
@@ -448,11 +473,128 @@ async function route(req, env, url) {
     return json({ error: 'Not found' }, 404);
   }
 
+  // =============== ACCOUNT MANAGEMENT ===============
+  if (p === 'account' && !post) {
+    const u = await db.prepare('SELECT id,name,username,email,created_at FROM users WHERE id=?').bind(me.id).first();
+    const pend = await db.prepare('SELECT new_email,expires_at FROM email_changes WHERE user_id=? AND expires_at>?').bind(me.id, now).first();
+    const sc = await db.prepare('SELECT COUNT(*) n FROM sessions WHERE user_id=? AND created_at>?').bind(me.id, now - SESSION_MS).first();
+    return json({ account: { name: u.name, username: u.username, email: u.email || null, created_at: u.created_at || null, pending_email: pend ? pend.new_email : null, sessions: sc.n, email_service: !!(env.RESEND_API_KEY && env.MAIL_FROM) } });
+  }
+  const pwOk = async pw => { const u = await db.prepare('SELECT pass_hash,salt FROM users WHERE id=?').bind(me.id).first(); return !!(u && u.pass_hash && typeof pw === 'string' && safeEq(await hashPw(pw, u.salt), u.pass_hash)); };
+  if (p === 'account/username-check' && !post) {
+    const u = String(url.searchParams.get('u') || '').trim().toLowerCase();
+    if (!/^[a-z0-9_]{3,20}$/.test(u)) return json({ available: false, reason: 'Username: 3–20 letters, numbers or _' });
+    if (RESERVED.has(u)) return json({ available: false, reason: 'This username is reserved' });
+    const t = await db.prepare('SELECT id FROM users WHERE username=?').bind(u).first();
+    if (t && t.id === me.id) return json({ available: false, reason: 'This is already your username' });
+    return json({ available: !t, reason: t ? 'Username already taken' : '' });
+  }
+  if (p === 'account/username' && post) {
+    const u = String(body.username || '').trim().toLowerCase();
+    if (!/^[a-z0-9_]{3,20}$/.test(u)) return json({ error: 'Username: 3–20 letters, numbers or _' }, 400);
+    if (RESERVED.has(u)) return json({ error: 'This username is reserved' }, 400);
+    if (!(await pwOk(String(body.password || '')))) return json({ error: 'Your password is incorrect' }, 403);
+    try { const r = await db.prepare('UPDATE users SET username=?1 WHERE id=?2 AND NOT EXISTS(SELECT 1 FROM users WHERE username=?1 AND id!=?2)').bind(u, me.id).run(); if (!r.meta.changes) { const same = await db.prepare('SELECT username FROM users WHERE id=?').bind(me.id).first(); return same && same.username === u ? json({ ok: true, username: u }) : json({ error: 'Username already taken' }, 409); } }
+    catch (e) { if (/UNIQUE|constraint/i.test(String(e && e.message))) return json({ error: 'Username already taken' }, 409); throw e; }
+    return json({ ok: true, username: u });
+  }
+  if (p === 'account/email/request' && post) {
+    const email = String(body.email || '').trim().toLowerCase();
+    if (!EMAIL.test(email) || email.length > 120) return json({ error: 'Enter a valid email address' }, 400);
+    if (!(await pwOk(String(body.password || '')))) return json({ error: 'Your password is incorrect' }, 403);
+    if (!(env.RESEND_API_KEY && env.MAIL_FROM)) return json({ error: 'Email verification is not set up on this server yet, so your email cannot be changed right now.', code: 'EMAIL_NOT_CONFIGURED' }, 503);
+    const cur = await db.prepare('SELECT email FROM users WHERE id=?').bind(me.id).first();
+    if (cur && cur.email === email) return json({ error: 'This is already your email' }, 400);
+    const taken = await db.prepare('SELECT id FROM users WHERE email=? AND id!=?').bind(email, me.id).first();
+    if (taken) return json({ error: 'This email is already used by another account' }, 409);
+    const last = await db.prepare('SELECT created_at FROM email_changes WHERE user_id=?').bind(me.id).first();
+    if (last && now - last.created_at < 60000) return json({ error: 'Please wait a minute before requesting another code' }, 429);
+    const code = String(crypto.getRandomValues(new Uint32Array(1))[0] % 1000000).padStart(6, '0'), salt = rand(8);
+    await db.prepare('INSERT INTO email_changes(user_id,new_email,code_hash,salt,attempts,expires_at,created_at) VALUES(?1,?2,?3,?4,0,?5,?6) ON CONFLICT(user_id) DO UPDATE SET new_email=?2,code_hash=?3,salt=?4,attempts=0,expires_at=?5,created_at=?6').bind(me.id, email, await sha(salt + code), salt, now + 900000, now).run();
+    if (!(await sendMail(env, email, 'Your SUNLIGHT verification code', `Your SUNLIGHT code is ${code}. It expires in 15 minutes. If you did not ask to change your email, ignore this message.`))) {
+      await db.prepare('DELETE FROM email_changes WHERE user_id=?').bind(me.id).run();
+      return json({ error: 'The verification email could not be sent. Please try again later.', code: 'EMAIL_SEND_FAILED' }, 502);
+    }
+    return json({ ok: true, pending_email: email });
+  }
+  if (p === 'account/email/confirm' && post) {
+    const code = String(body.code || '').trim();
+    const c = await db.prepare('SELECT * FROM email_changes WHERE user_id=?').bind(me.id).first();
+    if (!c || c.expires_at < now) return json({ error: 'No pending email change, or the code expired. Request a new code.' }, 400);
+    if (c.attempts >= 5) { await db.prepare('DELETE FROM email_changes WHERE user_id=?').bind(me.id).run(); return json({ error: 'Too many wrong codes. Request a new code.' }, 429); }
+    if (!/^\d{6}$/.test(code) || !safeEq(await sha(c.salt + code), c.code_hash)) { await db.prepare('UPDATE email_changes SET attempts=attempts+1 WHERE user_id=?').bind(me.id).run(); return json({ error: 'Wrong code' }, 400); }
+    try { await db.prepare('UPDATE users SET email=? WHERE id=?').bind(c.new_email, me.id).run(); }
+    catch (e) { if (/UNIQUE|constraint/i.test(String(e && e.message))) return json({ error: 'This email is already used by another account' }, 409); throw e; }
+    await db.prepare('DELETE FROM email_changes WHERE user_id=?').bind(me.id).run();
+    return json({ ok: true, email: c.new_email });
+  }
+  if (p === 'account/email/cancel' && post) { await db.prepare('DELETE FROM email_changes WHERE user_id=?').bind(me.id).run(); return json({ ok: true }); }
+  if (p === 'account/password' && post) {
+    const cur = String(body.current || ''), np = String(body.password || '');
+    if (!(await pwOk(cur))) return json({ error: 'Your current password is incorrect' }, 403);
+    if (np.length < 8 || np.length > 100) return json({ error: 'New password must be 8–100 characters' }, 400);
+    if (!/[A-Za-z]/.test(np) || !/\d/.test(np)) return json({ error: 'New password needs at least one letter and one number' }, 400);
+    if (np === cur) return json({ error: 'New password must be different from the current one' }, 400);
+    const salt = rand(16);
+    await db.batch([db.prepare('UPDATE users SET pass_hash=?,salt=? WHERE id=?').bind(await hashPw(np, salt), salt, me.id), db.prepare('DELETE FROM sessions WHERE user_id=? AND token!=?').bind(me.id, tok)]);   // other devices are signed out
+    return json({ ok: true });
+  }
+  if (p === 'account/logout-others' && post) {
+    await db.prepare('DELETE FROM sessions WHERE user_id=? AND token!=?').bind(me.id, tok).run();
+    return json({ ok: true });
+  }
+  if (p === 'account/delete' && post) {
+    if (String(body.confirm || '') !== 'DELETE') return json({ error: 'Type DELETE to confirm' }, 400);
+    if (!(await pwOk(String(body.password || '')))) return json({ error: 'Your password is incorrect' }, 403);
+    const id = me.id;
+    const { results: keys } = await db.prepare('SELECT key FROM media WHERE owner_id=?').bind(id).all();
+    for (const k of keys) await dropAny(k.key);
+    await db.batch([
+      'DELETE FROM call_signals WHERE to_user=?1 OR call_id IN (SELECT id FROM calls WHERE caller_id=?1 OR callee_id=?1)', 'DELETE FROM calls WHERE caller_id=?1 OR callee_id=?1',
+      'DELETE FROM status_likes WHERE user_id=?1 OR status_id IN (SELECT id FROM statuses WHERE user_id=?1)', 'DELETE FROM status_views WHERE viewer_id=?1 OR status_id IN (SELECT id FROM statuses WHERE user_id=?1)',
+      'DELETE FROM notifications WHERE user_id=?1 OR actor_id=?1', 'DELETE FROM statuses WHERE user_id=?1',
+      'DELETE FROM messages WHERE sender_id=?1 OR receiver_id=?1', 'DELETE FROM contacts WHERE owner_id=?1 OR contact_id=?1', 'DELETE FROM blocks WHERE blocker_id=?1 OR blocked_id=?1',
+      'DELETE FROM chat_prefs WHERE user_id=?1 OR peer_id=?1', 'DELETE FROM user_prefs WHERE user_id=?1', 'DELETE FROM email_changes WHERE user_id=?1', 'DELETE FROM sessions WHERE user_id=?1', 'DELETE FROM users WHERE id=?1'
+    ].map(q => db.prepare(q).bind(id)));
+    return json({ ok: true });
+  }
+
+  // =============== NOTIFICATION PREFERENCES ===============
+  if (p === 'settings/notifications' && !post) {
+    const r = await db.prepare('SELECT notif FROM user_prefs WHERE user_id=?').bind(me.id).first();
+    return json({ prefs: cleanPrefs(r && r.notif), tones: TONES });
+  }
+  if (p === 'settings/notifications' && post) {
+    const r = await db.prepare('SELECT notif FROM user_prefs WHERE user_id=?').bind(me.id).first();
+    const next = cleanPrefs({ ...cleanPrefs(r && r.notif), ...(body.prefs && typeof body.prefs === 'object' ? body.prefs : {}) });
+    await db.prepare('INSERT INTO user_prefs(user_id,notif,updated_at) VALUES(?1,?2,?3) ON CONFLICT(user_id) DO UPDATE SET notif=?2,updated_at=?3').bind(me.id, JSON.stringify(next), now).run();
+    return json({ prefs: next });
+  }
+  if (p === 'settings/notifications/reset' && post) {
+    await db.prepare('DELETE FROM user_prefs WHERE user_id=?').bind(me.id).run();
+    return json({ prefs: { ...NOTIF_DEFAULTS } });
+  }
+
+  // =============== HELP: SUPPORT REQUESTS ===============
+  if (p === 'support' && post) {
+    const subject = String(body.subject || '').trim(), message = String(body.message || '').trim();
+    if (subject.length < 3 || subject.length > 100) return json({ error: 'Subject must be 3–100 characters' }, 400);
+    if (message.length < 10 || message.length > 2000) return json({ error: 'Describe the problem in 10–2000 characters' }, 400);
+    const recent = await db.prepare('SELECT COUNT(*) n FROM support_requests WHERE user_id=? AND created_at>?').bind(me.id, now - 3600000).first();
+    if (recent.n >= 5) return json({ error: 'You have sent several requests already. Please wait a while.' }, 429);
+    const r = await db.prepare('INSERT INTO support_requests(user_id,subject,message,status,created_at) VALUES(?,?,?,?,?)').bind(me.id, subject, message, 'open', now).run();
+    return json({ ok: true, request: { id: r.meta.last_row_id, subject, status: 'open', created_at: now } });
+  }
+  if (p === 'support' && !post) {
+    const { results } = await db.prepare('SELECT id,subject,message,status,created_at FROM support_requests WHERE user_id=? ORDER BY id DESC LIMIT 20').bind(me.id).all();
+    return json({ requests: results });
+  }
+
   if (p === 'chats') {
     await db.prepare('UPDATE messages SET delivered_at=? WHERE receiver_id=? AND delivered_at IS NULL').bind(now, me.id).run();
     const { results } = await db.prepare(`
       SELECT u.id,u.name,u.avatar_key,u.last_seen,m.body last_body,m.type last_type,m.created_at last_at,m.sender_id last_sender,m.read_at last_read,m.delivered_at last_delivered,
-        m.deleted_at last_deleted,
+        m.deleted_at last_deleted,m.id last_id,m.status_id last_status,
         (SELECT COUNT(*) FROM messages x WHERE x.sender_id=u.id AND x.receiver_id=?1 AND x.read_at IS NULL AND x.id>COALESCE((SELECT cleared_id FROM chat_prefs WHERE user_id=?1 AND peer_id=u.id),0)) unread
       FROM users u JOIN messages m ON m.id=(SELECT MAX(id) FROM messages WHERE ((sender_id=?1 AND receiver_id=u.id) OR (sender_id=u.id AND receiver_id=?1)) AND id>COALESCE((SELECT cleared_id FROM chat_prefs WHERE user_id=?1 AND peer_id=u.id),0))
       WHERE u.id!=?1 ORDER BY m.id DESC LIMIT 200`).bind(me.id).all();
