@@ -4,3 +4,6 @@ ALTER TABLE users ADD COLUMN suspended_at INTEGER;
 -- Admin audit log (who reset / edited / suspended whom; never passwords or message text)
 CREATE TABLE IF NOT EXISTS admin_log (id INTEGER PRIMARY KEY AUTOINCREMENT, admin_id INTEGER NOT NULL, target_id INTEGER NOT NULL, action TEXT NOT NULL, detail TEXT, created_at INTEGER NOT NULL);
 CREATE INDEX IF NOT EXISTS idx_admin_log_target ON admin_log(target_id, id);
+-- Phone number (set by administrators for now). Skip the ALTER if the column already exists.
+ALTER TABLE users ADD COLUMN phone TEXT;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_users_phone ON users(phone) WHERE phone IS NOT NULL;
