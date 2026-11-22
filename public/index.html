@@ -1038,6 +1038,7 @@ async function api(path, opts = {}) {
   const data = await res.json().catch(() => null);
   if (!data) throw new Error(`Unexpected server response (HTTP ${res.status}). Make sure the Worker is deployed.`);
   if (res.status === 401 && token && path !== 'login' && path !== 'register') logout(true);
+  if (res.status === 403 && data.code === 'SUSPENDED' && token) { logout(true); toast(data.error); }
   if (!res.ok) throw new Error(data.error || 'Something went wrong');
   return data;
 }
@@ -2938,6 +2939,7 @@ function drawAccount(keep) {
   <div class="scard"><h4>Account information</h4>
     <div class="irow"><span>Full name</span><b>${esc(a.name)}</b></div>
     <div class="irow"><span>Username</span><b>@${esc(a.username)}</b></div>
+    <div class="irow"><span>User ID</span><b>${me.id}</b></div>
     <div class="irow"><span>Email</span><b>${a.email ? esc(a.email) : 'Not added'}</b></div>
     <div class="irow"><span>Joined</span><b>${esc(fmtDate(a.created_at))}</b></div>
   </div>
