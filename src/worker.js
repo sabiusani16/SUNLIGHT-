@@ -11,7 +11,11 @@ const ONLINE_MS = 30000, SESSION_MS = 30 * 864e5;
 const APP_VERSION = '1.0.0';
 const EMAIL = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 const likeEsc = s => s.replace(/[\\%_]/g, '\\$&');            // escape LIKE wildcards in user input
-const REFS = '(SELECT media_key FROM messages WHERE media_key IS NOT NULL UNION SELECT json_extract(theme,\'$.wp\') FROM chat_prefs WHERE theme IS NOT NULL AND json_extract(theme,\'$.wp\') IS NOT NULL UNION SELECT avatar_key FROM users WHERE avatar_key IS NOT NULL UNION SELECT media_key FROM statuses WHERE media_key IS NOT NULL UNION SELECT media_key FROM group_messages WHERE media_key IS NOT NULL UNION SELECT avatar_key FROM groups WHERE avatar_key IS NOT NULL UNION SELECT media_key FROM channel_posts WHERE media_key IS NOT NULL UNION SELECT avatar_key FROM channels WHERE avatar_key IS NOT NULL UNION SELECT wp_key FROM chat_prefs WHERE wp_key IS NOT NULL)';
+// D1 allows at most 5 terms in a compound SELECT, so "is this media key still referenced anywhere?" is a chain of EXISTS checks, not a big UNION.
+const mediaUsed = col => '(' + [
+  'SELECT 1 FROM messages WHERE media_key=', "SELECT 1 FROM chat_prefs WHERE json_extract(theme,'$.wp')=", 'SELECT 1 FROM users WHERE avatar_key=', 'SELECT 1 FROM statuses WHERE media_key=',
+  'SELECT 1 FROM group_messages WHERE media_key=', 'SELECT 1 FROM groups WHERE avatar_key=', 'SELECT 1 FROM channel_posts WHERE media_key=', 'SELECT 1 FROM channels WHERE avatar_key=', 'SELECT 1 FROM chat_prefs WHERE wp_key='
+].map(q => `EXISTS(${q}${col})`).join(' OR ') + ')';
 const MEDIA_KEY = /^u\d+\/[a-f0-9]{32}$/;                  // keys we generate: u<userId>/<random>
 const MEDIA_RULES = { image: { max: 1000000 }, voice: { max: 1000000 } };   // max raw bytes per file; files are stored in D1, so they are kept small
 const VIDEO_MAX = 20 * 1024 * 1024;                         // 20 MB per video (R2 free tier is 10 GB)
@@ -54,6 +58,7 @@ const TABLES = [
   `CREATE TABLE IF NOT EXISTS media (key TEXT PRIMARY KEY, owner_id INTEGER NOT NULL, type TEXT NOT NULL, size INTEGER NOT NULL, created_at INTEGER NOT NULL)`,
   `CREATE TABLE IF NOT EXISTS media_chunks (key TEXT NOT NULL, idx INTEGER NOT NULL, data TEXT NOT NULL, PRIMARY KEY (key, idx))`,
   `CREATE TABLE IF NOT EXISTS statuses (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, type TEXT NOT NULL, body TEXT, caption TEXT, bg INTEGER, media_key TEXT, created_at INTEGER NOT NULL, expires_at INTEGER NOT NULL)`,
+  `CREATE TABLE IF NOT EXISTS chat_activity (user_id INTEGER NOT NULL, peer_id INTEGER NOT NULL, state TEXT NOT NULL, at INTEGER NOT NULL, PRIMARY KEY (user_id, peer_id))`,
   `CREATE TABLE IF NOT EXISTS chat_prefs (user_id INTEGER NOT NULL, peer_id INTEGER NOT NULL, theme TEXT, cleared_id INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (user_id, peer_id))`,
   `CREATE TABLE IF NOT EXISTS blocks (blocker_id INTEGER NOT NULL, blocked_id INTEGER NOT NULL, created_at INTEGER NOT NULL, PRIMARY KEY (blocker_id, blocked_id))`,
   `CREATE INDEX IF NOT EXISTS idx_blocks_blocked ON blocks(blocked_id)`,
@@ -509,7 +514,7 @@ async function route(req, env, url) {
 
   // =============== SHARED HELPERS: uploads claimed by group messages / channel posts / pictures ===============
   const EMOJIS = ['👍', '❤️', '😂', '😮', '😢', '🙏'];
-  const refUsed = async key => !!(await db.prepare(`SELECT 1 ok WHERE ?1 IN ${REFS}`).bind(key).first());
+  const refUsed = async key => !!(await db.prepare(`SELECT 1 ok WHERE ${mediaUsed('?1')}`).bind(key).first());
   const claimMedia = async (key, want) => {                  // want: 'image' | 'voice' | 'video'. Only YOUR OWN, unused, correctly typed upload can be attached
     key = String(key || '');
     if (!MEDIA_KEY.test(key) || !key.startsWith('u' + me.id + '/')) return { err: 'Invalid media' };
@@ -1014,14 +1019,24 @@ async function route(req, env, url) {
     return json({ requests: results });
   }
 
+  // "typing…" / "recording audio…" shown to the person you are chatting with. Short-lived (expires by itself) and never shown if either side blocked the other.
+  if (p === 'chat/activity' && post) {
+    const peer = await peerOf(body.to); if (!peer) return json({ ok: true });
+    const st = body.state === 'typing' || body.state === 'recording' ? body.state : null;
+    if (!st) await db.prepare('DELETE FROM chat_activity WHERE user_id=? AND peer_id=?').bind(me.id, peer.id).run();
+    else if (!(await eitherBlocked(me.id, peer.id))) await db.prepare('INSERT INTO chat_activity(user_id,peer_id,state,at) VALUES(?1,?2,?3,?4) ON CONFLICT(user_id,peer_id) DO UPDATE SET state=?3,at=?4').bind(me.id, peer.id, st, now).run();
+    return json({ ok: true });
+  }
+  const ACT_MS = 7000;
   if (p === 'chats') {
     await db.prepare('UPDATE messages SET delivered_at=? WHERE receiver_id=? AND delivered_at IS NULL').bind(now, me.id).run();
     const { results } = await db.prepare(`
       SELECT u.id,u.name,u.avatar_key,u.last_seen,m.body last_body,m.type last_type,m.created_at last_at,m.sender_id last_sender,m.read_at last_read,m.delivered_at last_delivered,
         m.deleted_at last_deleted,m.id last_id,m.status_id last_status,
+        (SELECT state FROM chat_activity a WHERE a.user_id=u.id AND a.peer_id=?1 AND a.at>?2) activity,
         (SELECT COUNT(*) FROM messages x WHERE x.sender_id=u.id AND x.receiver_id=?1 AND x.read_at IS NULL AND x.id>COALESCE((SELECT cleared_id FROM chat_prefs WHERE user_id=?1 AND peer_id=u.id),0)) unread
       FROM users u JOIN messages m ON m.id=(SELECT MAX(id) FROM messages WHERE ((sender_id=?1 AND receiver_id=u.id) OR (sender_id=u.id AND receiver_id=?1)) AND id>COALESCE((SELECT cleared_id FROM chat_prefs WHERE user_id=?1 AND peer_id=u.id),0))
-      WHERE u.id!=?1 ORDER BY m.id DESC LIMIT 200`).bind(me.id).all();
+      WHERE u.id!=?1 ORDER BY m.id DESC LIMIT 200`).bind(me.id, now - ACT_MS).all();
     return json({ chats: results.map(c => ({ ...c, avatar: c.avatar_key || null, avatar_key: undefined, online: now - c.last_seen < ONLINE_MS, last_seen: undefined })) });
   }
 
@@ -1039,7 +1054,8 @@ async function route(req, env, url) {
     let theme = null; if (pref && pref.theme) try { theme = JSON.parse(pref.theme); } catch {}
     const blocked = !!(await iBlocked(me.id, peerId));
     const messages = results.map(({ status_snap, ...m }) => { let st = null; if (status_snap && !m.deleted_at) try { st = JSON.parse(status_snap); } catch {} return { ...m, status: st }; });   // private status-reply preview
-    return json({ messages, theme, blocked, online: now - peer.last_seen < ONLINE_MS, last_seen: peer.last_seen });
+    const act = await db.prepare('SELECT state FROM chat_activity WHERE user_id=? AND peer_id=? AND at>?').bind(peerId, me.id, now - ACT_MS).first();
+    return json({ messages, theme, blocked, activity: act ? act.state : null, online: now - peer.last_seen < ONLINE_MS, last_seen: peer.last_seen });
   }
 
   if (p === 'messages' && post) {
@@ -1184,8 +1200,8 @@ async function route(req, env, url) {
     if (!type) return json({ error: 'This file type is not allowed' }, 415);
     const old = now - 3600000;                              // tidy up this user's uploads that were never sent in a message
     await db.batch([
-      db.prepare(`DELETE FROM media_chunks WHERE key IN (SELECT key FROM media WHERE owner_id=? AND created_at<? AND key NOT IN ${REFS})`).bind(me.id, old),
-      db.prepare(`DELETE FROM media WHERE owner_id=? AND created_at<? AND key NOT IN ${REFS}`).bind(me.id, old)
+      db.prepare(`DELETE FROM media_chunks WHERE key IN (SELECT m.key FROM media m WHERE m.owner_id=? AND m.created_at<? AND NOT ${mediaUsed('m.key')})`).bind(me.id, old),
+      db.prepare(`DELETE FROM media WHERE owner_id=? AND created_at<? AND NOT ${mediaUsed('media.key')}`).bind(me.id, old)
     ]);
     const key = `u${me.id}/${rand(16)}`, stmts = [db.prepare('INSERT INTO media(key,owner_id,type,size,created_at) VALUES(?,?,?,?,?)').bind(key, me.id, type, size, now)];
     for (let i = 0, n = 0; i < data.length; i += CHUNK, n++) stmts.push(db.prepare('INSERT INTO media_chunks(key,idx,data) VALUES(?,?,?)').bind(key, n, data.slice(i, i + CHUNK)));
@@ -1206,7 +1222,7 @@ async function route(req, env, url) {
     const type = at(4, 'ftyp') ? 'video/mp4' : (h[0] === 0x1A && h[1] === 0x45 && h[2] === 0xDF && h[3] === 0xA3) ? 'video/webm' : null;   // real file signature, never the client's claim
     if (!type) return json({ error: 'This video format is not allowed (use MP4 or WebM)' }, 415);
     const old = now - 3600000;                              // tidy up this user's videos that were never sent
-    const stale = (await db.prepare(`SELECT key FROM media WHERE owner_id=? AND created_at<? AND type LIKE 'video/%' AND key NOT IN ${REFS} LIMIT 10`).bind(me.id, old).all()).results;
+    const stale = (await db.prepare(`SELECT m.key FROM media m WHERE m.owner_id=? AND m.created_at<? AND m.type LIKE 'video/%' AND NOT ${mediaUsed('m.key')} LIMIT 10`).bind(me.id, old).all()).results;
     for (const s of stale) await dropAny(s.key);
     const key = `u${me.id}/${rand(16)}`;
     await env.MEDIA.put(key, buf, { httpMetadata: { contentType: type } });
