@@ -320,7 +320,7 @@ async function route(req, env, url) {
       return json({ ok: true, changed });
     }
     // Reset a forgotten password. The admin must confirm they verified the owner. A new random password is shown ONCE (never stored in readable form);
-    // the user is signed out everywhere and changes it in Settings → Account → Change password.
+    // the user is signed out everywhere. Users cannot change passwords themselves (admin only).
     if (p === 'admin/users/password' && post) {
       const id = Number(body.id); if (!Number.isInteger(id)) return json({ error: 'User not found' }, 404);
       if (body.verified !== true) return json({ error: 'Confirm that you verified the account owner first' }, 400);
@@ -329,7 +329,12 @@ async function route(req, env, url) {
       const t = await db.prepare('SELECT id FROM users WHERE id=?').bind(id).first(); if (!t) return json({ error: 'User not found' }, 404);
       const A = 'abcdefghjkmnpqrstuvwxyz', N = '23456789', pick = (set, k) => { const b = crypto.getRandomValues(new Uint8Array(k)); return Array.from(b, x => set[x % set.length]); };
       const chars = [...pick(A, 6), ...pick(A.toUpperCase(), 2), ...pick(N, 4)]; const sh = crypto.getRandomValues(new Uint8Array(chars.length));
-      const password = chars.map((c, i) => [c, sh[i]]).sort((a, b) => a[1] - b[1]).map(x => x[0]).join('');   // 12 chars, easy to read out (no 0/O/1/l)
+      let password = chars.map((c, i) => [c, sh[i]]).sort((a, b) => a[1] - b[1]).map(x => x[0]).join('');   // 12 chars, easy to read out (no 0/O/1/l)
+      if (typeof body.password === 'string' && body.password) {   // admin may choose the password instead (users cannot change it themselves)
+        const np = body.password;
+        if (np.length < 8 || np.length > 100 || !/[A-Za-z]/.test(np) || !/\d/.test(np)) return json({ error: 'Password must be 8–100 characters with a letter and a number' }, 400);
+        password = np;
+      }
       const salt = rand(16);
       await db.batch([db.prepare('UPDATE users SET pass_hash=?,salt=? WHERE id=?').bind(await hashPw(password, salt), salt, id), db.prepare('DELETE FROM sessions WHERE user_id=?').bind(id)]);
       await logAdmin(id, 'password_reset', 'owner verified by admin');
@@ -1026,21 +1031,16 @@ async function route(req, env, url) {
     if (t && t.id === me.id) return json({ available: false, reason: 'This is already your username' });
     return json({ available: !t, reason: t ? 'Username already taken' : '' });
   }
-  if (p === 'account/username' && post) {
-    const u = String(body.username || '').trim().toLowerCase();
-    if (!/^[a-z0-9_]{3,20}$/.test(u)) return json({ error: 'Username: 3–20 letters, numbers or _' }, 400);
-    if (RESERVED.has(u)) return json({ error: 'This username is reserved' }, 400);
-    if (!(await pwOk(String(body.password || '')))) return json({ error: 'Your password is incorrect' }, 403);
-    try { const r = await db.prepare('UPDATE users SET username=?1 WHERE id=?2 AND NOT EXISTS(SELECT 1 FROM users WHERE username=?1 AND id!=?2)').bind(u, me.id).run(); if (!r.meta.changes) { const same = await db.prepare('SELECT username FROM users WHERE id=?').bind(me.id).first(); return same && same.username === u ? json({ ok: true, username: u }) : json({ error: 'Username already taken' }, 409); } }
-    catch (e) { if (/UNIQUE|constraint/i.test(String(e && e.message))) return json({ error: 'Username already taken' }, 409); throw e; }
-    return json({ ok: true, username: u });
-  }
-  // The person adds, changes or removes their own phone number (not SMS-verified yet). Needs the password; one number = one account.
+  // LOCK POLICY: a user can never change or remove their username or password on the website - only an admin can.
+  if (p === 'account/username' && post) return json({ error: 'Your username is locked. Only an admin can change it.', code: 'LOCKED' }, 403);
+  // The person may ADD a phone number once, while none is set (not SMS-verified). After that it is locked: only an admin can change or remove it.
   if (p === 'account/phone' && post) {
     const c = cleanPhone(body.phone); if (c.error) return json({ error: c.error }, 400);
     if (!(await pwOk(String(body.password || '')))) return json({ error: 'Your password is incorrect' }, 403);
-    const v = c.phone || null;
-    try { await db.prepare('UPDATE users SET phone=? WHERE id=?').bind(v, me.id).run(); }
+    const v = c.phone; if (!v) return json({ error: 'Enter a phone number' }, 400);
+    const curP = await db.prepare('SELECT phone FROM users WHERE id=?').bind(me.id).first();
+    if (curP && curP.phone) return json({ error: 'Your phone number is locked. Only an admin can change it.', code: 'LOCKED' }, 403);
+    try { const r = await db.prepare("UPDATE users SET phone=? WHERE id=? AND (phone IS NULL OR phone='')").bind(v, me.id).run(); if (!r.meta.changes) return json({ error: 'Your phone number is locked. Only an admin can change it.', code: 'LOCKED' }, 403); }
     catch (e) { if (/UNIQUE|constraint/i.test(String(e && e.message))) return json({ error: 'This phone number is already used by another account' }, 409); throw e; }
     return json({ ok: true, phone: v });
   }
@@ -1048,6 +1048,7 @@ async function route(req, env, url) {
     const email = String(body.email || '').trim().toLowerCase();
     if (!EMAIL.test(email) || email.length > 120) return json({ error: 'Enter a valid email address' }, 400);
     if (!(await pwOk(String(body.password || '')))) return json({ error: 'Your password is incorrect' }, 403);
+    { const e0 = await db.prepare('SELECT email FROM users WHERE id=?').bind(me.id).first(); if (e0 && e0.email) return json({ error: 'Your email is locked. Only an admin can change it.', code: 'LOCKED' }, 403); }
     if (!(env.RESEND_API_KEY && env.MAIL_FROM)) return json({ error: 'Email verification is not set up on this server yet, so your email cannot be changed right now.', code: 'EMAIL_NOT_CONFIGURED' }, 503);
     const cur = await db.prepare('SELECT email FROM users WHERE id=?').bind(me.id).first();
     if (cur && cur.email === email) return json({ error: 'This is already your email' }, 400);
@@ -1069,22 +1070,13 @@ async function route(req, env, url) {
     if (!c || c.expires_at < now) return json({ error: 'No pending email change, or the code expired. Request a new code.' }, 400);
     if (c.attempts >= 5) { await db.prepare('DELETE FROM email_changes WHERE user_id=?').bind(me.id).run(); return json({ error: 'Too many wrong codes. Request a new code.' }, 429); }
     if (!/^\d{6}$/.test(code) || !safeEq(await sha(c.salt + code), c.code_hash)) { await db.prepare('UPDATE email_changes SET attempts=attempts+1 WHERE user_id=?').bind(me.id).run(); return json({ error: 'Wrong code' }, 400); }
-    try { await db.prepare('UPDATE users SET email=? WHERE id=?').bind(c.new_email, me.id).run(); }
+    try { const r = await db.prepare("UPDATE users SET email=? WHERE id=? AND (email IS NULL OR email='')").bind(c.new_email, me.id).run(); if (!r.meta.changes) { await db.prepare('DELETE FROM email_changes WHERE user_id=?').bind(me.id).run(); return json({ error: 'Your email is locked. Only an admin can change it.', code: 'LOCKED' }, 403); } }
     catch (e) { if (/UNIQUE|constraint/i.test(String(e && e.message))) return json({ error: 'This email is already used by another account' }, 409); throw e; }
     await db.prepare('DELETE FROM email_changes WHERE user_id=?').bind(me.id).run();
     return json({ ok: true, email: c.new_email });
   }
   if (p === 'account/email/cancel' && post) { await db.prepare('DELETE FROM email_changes WHERE user_id=?').bind(me.id).run(); return json({ ok: true }); }
-  if (p === 'account/password' && post) {
-    const cur = String(body.current || ''), np = String(body.password || '');
-    if (!(await pwOk(cur))) return json({ error: 'Your current password is incorrect' }, 403);
-    if (np.length < 8 || np.length > 100) return json({ error: 'New password must be 8–100 characters' }, 400);
-    if (!/[A-Za-z]/.test(np) || !/\d/.test(np)) return json({ error: 'New password needs at least one letter and one number' }, 400);
-    if (np === cur) return json({ error: 'New password must be different from the current one' }, 400);
-    const salt = rand(16);
-    await db.batch([db.prepare('UPDATE users SET pass_hash=?,salt=? WHERE id=?').bind(await hashPw(np, salt), salt, me.id), db.prepare('DELETE FROM sessions WHERE user_id=? AND token!=?').bind(me.id, tok)]);   // other devices are signed out
-    return json({ ok: true });
-  }
+  if (p === 'account/password' && post) return json({ error: 'Your password is locked. Only an admin can change it - contact support if you forgot it.', code: 'LOCKED' }, 403);
   if (p === 'account/logout-others' && post) {
     await db.prepare('DELETE FROM sessions WHERE user_id=? AND token!=?').bind(me.id, tok).run();
     return json({ ok: true });
@@ -1364,9 +1356,21 @@ async function route(req, env, url) {
     const m = allowed ? await db.prepare('SELECT type FROM media WHERE key=?').bind(key).first() : null;
     if (!m) return json({ error: 'Not found' }, 404);
     if (m.type.startsWith('video/')) {                      // videos stream straight from R2 (same permission check as above)
-      const obj = env.MEDIA ? await env.MEDIA.get(key) : null;
-      if (!obj) return json({ error: 'Not found' }, 404);
-      return new Response(obj.body, { headers: { 'content-type': m.type, 'content-length': String(obj.size), 'cache-control': 'private, no-store', ...CORS } });
+      if (!env.MEDIA) return json({ error: 'Video storage (R2) is not connected to this server', code: 'NO_R2' }, 503);
+      const head = await env.MEDIA.head(key);
+      if (!head) return json({ error: 'The video file is missing from storage', code: 'R2_MISSING' }, 404);
+      const size = head.size, H = { 'content-type': m.type, 'accept-ranges': 'bytes', 'cache-control': 'private, no-store', ...CORS };
+      const rg = /^bytes=(\d*)-(\d*)$/.exec(req.headers.get('range') || '');
+      if (rg && (rg[1] || rg[2])) {                         // partial content, so players can seek and start before the whole file arrives
+        let a = rg[1] === '' ? Math.max(0, size - Number(rg[2])) : Number(rg[1]), b = rg[1] === '' || rg[2] === '' ? size - 1 : Math.min(Number(rg[2]), size - 1);
+        if (a > b || a >= size) return new Response(null, { status: 416, headers: { ...H, 'content-range': 'bytes */' + size } });
+        const part = await env.MEDIA.get(key, { range: { offset: a, length: b - a + 1 } });
+        if (!part) return json({ error: 'The video file is missing from storage', code: 'R2_MISSING' }, 404);
+        return new Response(part.body, { status: 206, headers: { ...H, 'content-range': `bytes ${a}-${b}/${size}`, 'content-length': String(b - a + 1) } });
+      }
+      const obj = await env.MEDIA.get(key);
+      if (!obj) return json({ error: 'The video file is missing from storage', code: 'R2_MISSING' }, 404);
+      return new Response(obj.body, { headers: { ...H, 'content-length': String(obj.size) } });
     }
     const { results } = await db.prepare('SELECT data FROM media_chunks WHERE key=? ORDER BY idx').bind(key).all();
     return json({ type: m.type, data: results.map(r => r.data).join('') });
