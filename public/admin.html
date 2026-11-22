@@ -105,6 +105,20 @@ select{background:var(--soft);border:0;border-radius:12px;padding:10px 12px;font
 .btn.sm{margin-top:0;padding:9px 14px;font-size:14px}
 .row2{display:flex;gap:8px;flex-wrap:wrap}
 .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+
+.tabs{display:flex;gap:6px;margin-bottom:14px;overflow-x:auto}.tab{padding:10px 16px;border-radius:12px;background:var(--surface);border:1px solid var(--line);font-weight:700;font-size:14px;white-space:nowrap;display:inline-flex;gap:8px;align-items:center}
+.tab[aria-selected=true]{background:var(--green);color:#fff;border-color:var(--green)}:root[data-theme=dark] .tab[aria-selected=true]{background:var(--gold);color:#1a1a1a;border-color:var(--gold)}
+.tab .n{background:var(--danger);color:#fff;border-radius:999px;font-size:11.5px;padding:1px 7px;font-weight:800}.tab .n[hidden]{display:none}
+.stats.five{grid-template-columns:repeat(2,1fr)}@media(min-width:760px){.stats.five{grid-template-columns:repeat(5,1fr)}}
+.badge.open{background:rgba(245,197,66,.2);color:#B58900}:root[data-theme=dark] .badge.open{color:var(--gold)}.badge.review,.badge.progress{background:rgba(80,150,255,.16);color:#2f6fd0}:root[data-theme=dark] .badge.review,:root[data-theme=dark] .badge.progress{color:#7db4ff}.badge.resolved{background:var(--ok-s);color:var(--ok)}.badge.rejected{background:var(--danger-s);color:var(--danger)}
+.rrow{width:100%;text-align:left;display:grid;grid-template-columns:.5fr 1.6fr 1.1fr 1fr .9fr;gap:12px;align-items:center;padding:12px 16px;border-bottom:1px solid var(--line)}.rrow:hover{background:var(--soft)}.rrow:last-child{border-bottom:0}
+.rhd{display:grid;grid-template-columns:.5fr 1.6fr 1.1fr 1fr .9fr;gap:12px;padding:12px 16px;color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.05em;font-weight:700;border-bottom:1px solid var(--line)}
+.rrow small{display:block;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.rrow strong{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.newdot{display:inline-block;background:var(--gold);color:#1a1a1a;font-size:11px;font-weight:800;border-radius:999px;padding:1px 7px;margin-left:6px}
+@media(max-width:759px){.rhd{display:none}.rrow{grid-template-columns:1fr 1fr;gap:6px 12px}}
+.thr{display:flex;flex-direction:column;gap:8px;max-height:46vh;overflow:auto;padding:4px 0 8px}.bub{max-width:88%;padding:9px 12px;border-radius:14px;background:var(--soft);align-self:flex-start;white-space:pre-wrap;word-break:break-word;font-size:14.5px}.bub.adm{background:var(--gold);color:#1a1a1a;align-self:flex-end}.bub small{display:block;font-size:11px;opacity:.7;margin-top:3px}.bub img,.evid{display:block;max-width:100%;max-height:260px;border-radius:10px;margin-top:6px}
+.fld textarea,.ta{width:100%;background:var(--soft);border:1.5px solid var(--line);border-radius:12px;padding:11px 12px;min-height:80px;font:inherit;color:inherit;resize:vertical}
+.quote{background:var(--soft);border-left:3px solid var(--gold);padding:8px 12px;border-radius:8px;white-space:pre-wrap;word-break:break-word;margin:6px 0}
 </style>
 </head>
 <body>
@@ -163,8 +177,27 @@ async function gate() {
 function state(title, text, extra, hook) { $('#main').innerHTML = `<div class="card state"><b>${esc(title)}</b>${text}${extra || ''}</div>`; if (hook) hook(); }
 
 /* ---------- dashboard ---------- */
+let tab = 'users', navTimer = 0, panelPoll = 0;
+const TABS = [['users', 'Users'], ['reports', 'Reports'], ['support', 'Support Inbox']];
 function shell() {
-  $('#main').innerHTML = `
+  $('#main').innerHTML = `<div class="tabs" role="tablist">${TABS.map(t => `<button class="tab" role="tab" data-tab="${t[0]}" aria-selected="${t[0] === tab}">${t[1]}<span class="n" id="n_${t[0]}" hidden></span></button>`).join('')}</div><div id="view"></div>`;
+  document.querySelectorAll('.tab').forEach(b => b.onclick = () => { tab = b.dataset.tab; document.querySelectorAll('.tab').forEach(x => x.setAttribute('aria-selected', x === b)); showTab(); });
+  clearInterval(navTimer); navTimer = setInterval(refreshNav, 15000); showTab();
+}
+async function refreshNav() {
+  try {
+    const o = await api('admin/overview');
+    const set = (id, n) => { const e = $('#' + id); if (e) { e.textContent = n; e.hidden = !n; } };
+    set('n_reports', o.reports_pending); set('n_support', o.support_unread);
+    if (tab === 'support' && window.supLoad && o.support_unread !== refreshNav.last && $('#scrim').hidden) window.supLoad();
+    if (tab === 'reports' && window.repLoad && o.reports_pending !== refreshNav.lastR && $('#scrim').hidden) window.repLoad();
+    refreshNav.lastR = o.reports_pending;
+    refreshNav.last = o.support_unread;
+  } catch {}
+}
+function showTab() { refreshNav(); clearTimeout(timer); ++reqN; if (tab === 'users') showUsers(); else if (tab === 'reports') showReports(); else showSupport(); }
+function showUsers() {
+  $('#view').innerHTML = `
   <h2>Users</h2>
   <div class="stats" id="stats"></div>
   <div class="card bar">
@@ -217,7 +250,7 @@ function pager(d) {
 document.addEventListener('click', e => { const r = e.target.closest('.urow'); if (r) openUser(+r.dataset.id); });
 
 /* ---------- details ---------- */
-const closeP = () => { $('#scrim').hidden = true; };
+const closeP = () => { $('#scrim').hidden = true; clearInterval(panelPoll); };
 $('#scrim').addEventListener('click', e => { if (e.target.id === 'scrim') closeP(); });
 document.addEventListener('keydown', e => { if (e.key === 'Escape') closeP(); });
 async function openUser(id) {
@@ -276,6 +309,128 @@ async function openUser(id) {
     };
   } catch (e) { p.innerHTML = `<div class="ph"><h3>Could not load</h3><button class="x" id="cl">×</button></div><p class="muted">${esc(e.message)}</p>`; $('#cl').onclick = closeP; }
 }
+/* ---------- shared helpers for Reports and Support ---------- */
+const RLBL = { open: 'Pending', review: 'Under review', resolved: 'Resolved', rejected: 'Rejected' }, SLBL = { open: 'Pending', progress: 'In Progress', resolved: 'Resolved' };
+const CATL = { harassment: 'Harassment', spam: 'Spam', fake_account: 'Fake Account', inappropriate: 'Inappropriate Content', scam: 'Scam or Fraud', other: 'Other', threats: 'Threats or violence', contact: 'Contact Admin', problem: 'Problem', help: 'Help', account: 'Account Support' };
+const fmtDT = ts => ts ? new Date(ts).toLocaleString([], { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '';
+const imgCache = new Map();
+function secureImg(el, key) {                              // images are private: fetched with the admin token
+  if (!imgCache.has(key)) imgCache.set(key, api('media/' + key).then(d => 'data:' + d.type + ';base64,' + d.data));
+  imgCache.get(key).then(u => { el.src = u; }).catch(() => { el.replaceWith(Object.assign(document.createElement('span'), { className: 'muted', textContent: '(image unavailable)' })); });
+}
+function pager2(d, fn, what) {
+  const a = (d.page - 1) * d.per + 1, b = Math.min(d.total, d.page * d.per), el = $('#pager');
+  el.innerHTML = `<span class="muted">${d.total ? `${a}–${b} of ${d.total}` : '0 ' + what} · Page ${d.page} of ${d.pages}</span><span><button id="prev" ${d.page <= 1 ? 'disabled' : ''}>Previous</button> <button id="next" ${d.page >= d.pages ? 'disabled' : ''}>Next</button></span>`;
+  $('#prev').onclick = () => fn(-1); $('#next').onclick = () => fn(1);
+}
+
+/* ---------- REPORTS ---------- */
+let rs = { q: '', status: 'all', category: 'all', page: 1 };
+function showReports() {
+  $('#view').innerHTML = `<h2>Reports</h2><div class="stats five" id="rstats"></div>
+  <div class="card bar"><label class="search"><span class="sr">Search reports</span><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg><input id="rq" type="search" placeholder="Search username or report ID" autocomplete="off" value="${esc(rs.q)}"></label>
+  <div class="chips" role="group" aria-label="Filter by status">${[['all', 'All'], ['open', 'Pending'], ['review', 'Under review'], ['resolved', 'Resolved'], ['rejected', 'Rejected']].map(([k, l]) => `<button class="chip" data-s="${k}" aria-pressed="${rs.status === k}">${l}</button>`).join('')}</div>
+  <label><span class="sr">Category</span><select id="rcat"><option value="all">All categories</option>${['harassment', 'spam', 'fake_account', 'inappropriate', 'scam', 'other', 'threats'].map(c => `<option value="${c}" ${rs.category === c ? 'selected' : ''}>${CATL[c]}</option>`).join('')}</select></label></div>
+  <div class="card list" id="list"></div><div class="pager" id="pager"></div>`;
+  $('#rq').addEventListener('input', e => { clearTimeout(timer); timer = setTimeout(() => { rs.q = e.target.value.trim(); rs.page = 1; repLoad(); }, 300); });
+  document.querySelectorAll('#view .chip').forEach(c => c.onclick = () => { rs.status = c.dataset.s; rs.page = 1; document.querySelectorAll('#view .chip').forEach(x => x.setAttribute('aria-pressed', x === c)); repLoad(); });
+  $('#rcat').onchange = e => { rs.category = e.target.value; rs.page = 1; repLoad(); };
+  repLoad();
+}
+async function repLoad() {
+  if (tab !== 'reports' || !$('#list')) return;
+  const my = ++reqN, list = $('#list');
+  try {
+    const d = await api('admin/reports?' + new URLSearchParams({ q: rs.q, status: rs.status, category: rs.category, page: rs.page, per: 20 })); if (my !== reqN) return;
+    const c = d.stats; $('#rstats').innerHTML = [['Total reports', c.total, ''], ['Pending', c.pending, 'y'], ['Under review', c.review, ''], ['Resolved', c.resolved, 'g'], ['Rejected', c.rejected, 'r']].map(([l, v, k]) => `<div class="card stat ${k}"><span>${l}</span><b>${v}</b></div>`).join('');
+    if (!d.reports.length) { list.innerHTML = `<div class="state"><b>${rs.q || rs.status !== 'all' || rs.category !== 'all' ? 'No reports match' : 'No reports yet'}</b>${rs.q || rs.status !== 'all' || rs.category !== 'all' ? 'Try a different search or filter.' : 'Reports submitted by users will appear here.'}</div>`; return pager2(d, n => { rs.page += n; repLoad(); }, 'reports'); }
+    list.innerHTML = `<div class="rhd"><span>ID</span><span>Reporter → Reported</span><span>Category</span><span>Date</span><span>Status</span></div>` + d.reports.map(r => `
+      <button class="rrow" data-rid="${r.id}" aria-label="Open report ${r.id}"><span><span class="lbl">ID</span>#${r.id}</span>
+      <span><strong>@${esc(r.reporter || '?')} → @${esc(r.reported || '?')}</strong><small>${r.has_evidence ? '📎 ' : ''}${esc(r.details || 'No description')}</small></span>
+      <span><span class="lbl">Category</span>${esc(CATL[r.reason] || r.reason)}</span><span><span class="lbl">Date</span>${fmtDT(r.created_at)}</span><span><span class="lbl">Status</span><span class="badge ${r.status}">${RLBL[r.status] || r.status}</span></span></button>`).join('');
+    pager2(d, n => { rs.page += n; repLoad(); scrollTo(0, 0); }, 'reports');
+  } catch (e) { if (my === reqN) list.innerHTML = `<div class="state"><b>Could not load reports</b>${esc(e.message)}<br><button id="retry">Try again</button></div>`, $('#retry').onclick = repLoad; }
+}
+window.repLoad = repLoad;
+document.addEventListener('click', e => { const r = e.target.closest('.rrow'); if (r) openReport(+r.dataset.rid); });
+async function openReport(id) {
+  const p = $('#panel'); $('#scrim').hidden = false; p.innerHTML = '<div class="state"><b>Loading…</b></div>';
+  try {
+    const d = await api('admin/report?id=' + id), r = d.report;
+    p.innerHTML = `<div class="ph"><div><h3>Report #${r.id}</h3><p>${esc(CATL[r.reason] || r.reason)} · ${fmtDT(r.created_at)}</p></div><button class="x" id="cl" aria-label="Close">×</button></div>
+      <div class="sec"><h4>Status</h4><span class="badge ${r.status}">${RLBL[r.status]}</span>
+        <div class="row2" style="margin-top:10px;flex-wrap:wrap"><button class="btn sm" data-st="review" ${r.status === 'review' ? 'disabled' : ''}>Review Report</button><button class="btn sm ok" data-st="resolved" ${r.status === 'resolved' ? 'disabled' : ''}>Mark as Resolved</button><button class="btn sm danger" data-st="rejected" ${r.status === 'rejected' ? 'disabled' : ''}>Reject Report</button>${r.status !== 'open' ? '<button class="btn sm" data-st="open">Back to Pending</button>' : ''}</div></div>
+      <div class="sec"><h4>People</h4><p class="note" style="margin:0">Reporter: <b>@${esc(r.reporter.username || '?')}</b> (ID ${r.reporter.id})<br>Reported user: <b>@${esc(r.reported.username || '?')}</b> (ID ${r.reported.id}) · ${r.other_reports_against} other report${r.other_reports_against === 1 ? '' : 's'} against this user</p>
+        <p class="note">The reported user is never told who reported them.</p></div>
+      <div class="sec"><h4>Description</h4><div class="quote">${esc(r.details || 'No description was written.')}</div>
+        ${r.message_text ? `<h4>Reported message</h4><div class="quote">${esc(r.message_text)}</div>` : ''}${r.evidence_key ? `<h4>Evidence screenshot</h4><img class="evid" alt="Evidence" id="evi">` : ''}</div>
+      <div class="sec"><h4>Internal admin notes</h4><p class="note" style="margin:0 0 8px">Only administrators can see these notes.</p>
+        <div id="notes">${d.notes.length ? d.notes.map(n => `<div class="logl">${esc(n.note)}<br><span class="muted">${esc(n.admin || 'admin')} · ${fmtDT(n.created_at)}</span></div>`).join('') : '<p class="muted">No notes yet.</p>'}</div>
+        <textarea class="ta" id="nt" maxlength="1000" placeholder="Add a note"></textarea><button class="btn sm" id="ntB" style="margin-top:8px">Add note</button></div>
+      <div class="sec"><button class="btn sm" id="usrB">Open reported user</button></div>`;
+    $('#cl').onclick = closeP; if (r.evidence_key) secureImg($('#evi'), r.evidence_key);
+    p.querySelectorAll('[data-st]').forEach(b => b.onclick = async () => { b.disabled = true; try { await api('admin/reports/status', { id: r.id, status: b.dataset.st }); toast('Report updated'); openReport(r.id); repLoad(); refreshNav(); } catch (e) { toast(e.message); b.disabled = false; } });
+    $('#ntB').onclick = async () => { const t = $('#nt').value.trim(); if (!t) return; try { await api('admin/reports/note', { id: r.id, note: t }); toast('Note added'); openReport(r.id); } catch (e) { toast(e.message); } };
+    $('#usrB').onclick = () => openUser(r.reported.id);
+  } catch (e) { p.innerHTML = `<div class="ph"><h3>Could not load</h3><button class="x" id="cl">×</button></div><p class="muted">${esc(e.message)}</p>`; $('#cl').onclick = closeP; }
+}
+
+/* ---------- SUPPORT INBOX ---------- */
+let ss = { q: '', status: 'all', page: 1 }, repImg = null;
+function showSupport() {
+  $('#view').innerHTML = `<h2>Support Inbox</h2><div class="stats five" id="sstats"></div>
+  <div class="card bar"><label class="search"><span class="sr">Search conversations</span><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg><input id="sq" type="search" placeholder="Search username, user ID or subject" autocomplete="off" value="${esc(ss.q)}"></label>
+  <div class="chips" role="group" aria-label="Filter">${[['all', 'All'], ['unread', 'Unread'], ['open', 'Pending'], ['progress', 'In Progress'], ['resolved', 'Resolved']].map(([k, l]) => `<button class="chip" data-s="${k}" aria-pressed="${ss.status === k}">${l}</button>`).join('')}</div></div>
+  <div class="card list" id="list"></div><div class="pager" id="pager"></div>`;
+  $('#sq').addEventListener('input', e => { clearTimeout(timer); timer = setTimeout(() => { ss.q = e.target.value.trim(); ss.page = 1; supLoad(); }, 300); });
+  document.querySelectorAll('#view .chip').forEach(c => c.onclick = () => { ss.status = c.dataset.s; ss.page = 1; document.querySelectorAll('#view .chip').forEach(x => x.setAttribute('aria-pressed', x === c)); supLoad(); });
+  supLoad();
+}
+async function supLoad() {
+  if (tab !== 'support' || !$('#list')) return;
+  const my = ++reqN, list = $('#list');
+  try {
+    const d = await api('admin/support?' + new URLSearchParams({ q: ss.q, status: ss.status, page: ss.page, per: 20 })); if (my !== reqN) return;
+    const c = d.stats; $('#sstats').innerHTML = [['Conversations', c.total, ''], ['Unread', c.unread, 'r'], ['Pending', c.pending, 'y'], ['In Progress', c.progress, ''], ['Resolved', c.resolved, 'g']].map(([l, v, k]) => `<div class="card stat ${k}"><span>${l}</span><b>${v}</b></div>`).join('');
+    if (!d.requests.length) { list.innerHTML = `<div class="state"><b>${ss.q || ss.status !== 'all' ? 'No conversations match' : 'No support requests yet'}</b>${ss.q || ss.status !== 'all' ? 'Try a different search or filter.' : 'Messages from users will appear here.'}</div>`; return pager2(d, n => { ss.page += n; supLoad(); }, 'conversations'); }
+    list.innerHTML = `<div class="rhd"><span>ID</span><span>User · Subject</span><span>Type</span><span>Updated</span><span>Status</span></div>` + d.requests.map(r => `
+      <button class="rrow" data-sid="${r.id}" aria-label="Open request ${r.id}"><span><span class="lbl">ID</span>#${r.id}</span>
+      <span><strong>@${esc(r.username || '?')} <span class="muted" style="font-weight:500">(ID ${r.user_id})</span>${r.unread ? '<span class="newdot">NEW</span>' : ''}</strong><small>${esc(r.subject)} — ${esc(r.last)}</small></span>
+      <span><span class="lbl">Type</span>${esc(CATL[r.category] || r.category)}</span><span><span class="lbl">Updated</span>${fmtDT(r.updated_at || r.created_at)}</span><span><span class="lbl">Status</span><span class="badge ${r.status}">${SLBL[r.status] || r.status}</span></span></button>`).join('');
+    pager2(d, n => { ss.page += n; supLoad(); scrollTo(0, 0); }, 'conversations');
+  } catch (e) { if (my === reqN) list.innerHTML = `<div class="state"><b>Could not load</b>${esc(e.message)}<br><button id="retry">Try again</button></div>`, $('#retry').onclick = supLoad; }
+}
+window.supLoad = supLoad;
+document.addEventListener('click', e => { const r = e.target.closest('.rrow[data-sid]'); if (r) openThread(+r.dataset.sid, true); });
+async function openThread(id, first) {
+  const p = $('#panel'); if (first) { $('#scrim').hidden = false; p.innerHTML = '<div class="state"><b>Loading…</b></div>'; repImg = null; }
+  try {
+    const d = await api('admin/support/thread?id=' + id), r = d.request;
+    if (!first) { if ($('#scrim').hidden || !$('#thr')) return; const sig = d.messages.length + ':' + r.status; if ($('#thr').dataset.sig === sig) return; }
+    const keep = first ? '' : ($('#rep') ? $('#rep').value : '');
+    p.innerHTML = `<div class="ph"><div><h3>${esc(r.subject)}</h3><p>#${r.id} · ${esc(CATL[r.category] || r.category)} · @${esc(r.user.username || '?')} (ID ${r.user.id}) · <span class="badge ${r.status}">${SLBL[r.status]}</span></p></div><button class="x" id="cl" aria-label="Close">×</button></div>
+      <div class="thr" id="thr" data-sig="${d.messages.length + ':' + r.status}">${d.messages.map(m => `<div class="bub ${m.sender === 'admin' ? 'adm' : ''}">${m.body ? esc(m.body) : ''}${m.media_key ? `<img alt="Screenshot" data-mk="${esc(m.media_key)}">` : ''}<small>${m.sender === 'admin' ? 'You' : '@' + esc(r.user.username || 'user')} · ${fmtDT(m.created_at)}</small></div>`).join('')}</div>
+      <div class="sec"><textarea class="ta" id="rep" maxlength="2000" placeholder="Reply to @${esc(r.user.username || 'user')}">${esc(keep)}</textarea>
+        <div class="row2" style="margin-top:8px;flex-wrap:wrap"><button class="btn sm" id="repB">Send reply</button><button class="btn sm" id="repA">Attach image</button><span class="muted" id="repF">${repImg ? '✓ image attached' : ''}</span></div><input type="file" id="repP" accept="image/*" hidden></div>
+      <div class="sec row2" style="flex-wrap:wrap"><button class="btn sm" data-ss="progress" ${r.status === 'progress' ? 'disabled' : ''}>Mark In Progress</button><button class="btn sm ok" data-ss="resolved" ${r.status === 'resolved' ? 'disabled' : ''}>Mark Resolved</button>${r.status !== 'open' ? '<button class="btn sm" data-ss="open">Back to Pending</button>' : ''}<button class="btn sm" id="usrB">Open user</button></div>`;
+    $('#cl').onclick = closeP; const t = $('#thr'); t.scrollTop = t.scrollHeight; t.querySelectorAll('img[data-mk]').forEach(i => secureImg(i, i.dataset.mk));
+    $('#repA').onclick = () => $('#repP').click();
+    $('#repP').onchange = async e => {
+      const f = e.target.files[0]; if (!f) return; if (!f.type.startsWith('image/')) return toast('Choose an image');
+      try { const b64 = await new Promise((ok, no) => { const fr = new FileReader(); fr.onload = () => ok(String(fr.result).split(',')[1]); fr.onerror = no; fr.readAsDataURL(f); }); const m = await api('media', { kind: 'image', data: b64 }); repImg = m.key; $('#repF').textContent = '✓ image attached'; }
+      catch (er) { toast(er.message || 'Could not attach (max about 700 KB, JPG/PNG/WebP/GIF)'); }
+    };
+    $('#repB').onclick = async () => {
+      const b = $('#repB'), text = $('#rep').value.trim(); if (!text && !repImg) return; b.disabled = true;
+      try { await api('admin/support/reply', { id: r.id, body: text, media_key: repImg || undefined }); repImg = null; toast('Reply sent'); openThread(r.id, true); supLoad(); refreshNav(); } catch (er) { toast(er.message); b.disabled = false; }
+    };
+    p.querySelectorAll('[data-ss]').forEach(b => b.onclick = async () => { b.disabled = true; try { await api('admin/support/status', { id: r.id, status: b.dataset.ss }); toast('Status updated'); openThread(r.id, true); supLoad(); } catch (er) { toast(er.message); b.disabled = false; } });
+    $('#usrB').onclick = () => openUser(r.user.id);
+    clearInterval(panelPoll); panelPoll = setInterval(() => openThread(id, false), 8000);
+    refreshNav();
+  } catch (e) { if (first) { p.innerHTML = `<div class="ph"><h3>Could not load</h3><button class="x" id="cl">×</button></div><p class="muted">${esc(e.message)}</p>`; $('#cl').onclick = closeP; } }
+}
+
 gate();
 </script>
 </body>

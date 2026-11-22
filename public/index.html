@@ -185,6 +185,12 @@ main::-webkit-scrollbar{display:none}
 .faq button i{margin-left:auto;color:var(--muted);font-size:12px;transition:transform .2s}.faq.open button i{transform:rotate(180deg)}
 .faq .ans{display:none;padding:0 14px 14px;color:var(--muted);font-size:14px;line-height:1.55}.faq.open .ans{display:block}
 .hnote{background:var(--gold-s);border-radius:12px;padding:10px 12px;font-size:13px;line-height:1.45}
+
+.sopts{display:grid;grid-template-columns:1fr 1fr;gap:10px}.sopt{background:var(--soft);border-radius:14px;padding:14px 12px;display:flex;flex-direction:column;gap:8px;font-size:14px;font-weight:600;text-align:left;color:var(--text)}.sopt small{font-weight:400;color:var(--muted);font-size:12px}
+.chip{display:inline-block;font-size:11px;font-weight:700;padding:2px 8px;border-radius:99px;background:var(--soft);color:var(--muted)}.chip.open{background:rgba(245,197,66,.2);color:var(--gold)}.chip.progress{background:rgba(80,150,255,.18);color:#5aa0ff}.chip.resolved{background:rgba(76,195,138,.18);color:#4CC38A}
+.sreq.btn{display:block;width:100%;text-align:left;color:var(--text)}.sreq .dot{display:inline-block;width:9px;height:9px;border-radius:50%;background:var(--gold);margin-left:6px}
+.sthread{display:flex;flex-direction:column;gap:8px;padding:2px 0 8px}.sbub{max-width:86%;padding:9px 12px;border-radius:14px;font-size:14.5px;line-height:1.4;white-space:pre-wrap;word-break:break-word;background:var(--soft);align-self:flex-start}.sbub.me{background:var(--gold);color:#14210f;align-self:flex-end}.sbub small{display:block;font-size:11px;opacity:.7;margin-top:3px}.sbub b{display:block;font-size:12px;margin-bottom:2px}.sbub img{display:block;max-width:100%;max-height:260px;border-radius:10px;margin-top:6px}
+.attach{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--muted)}.attach button{font-size:13px;padding:8px 12px;border-radius:10px;border:1.5px solid var(--line);color:var(--text);background:var(--bg)}
 .sreq{border-top:1px solid var(--line);padding-top:8px;font-size:13.5px}.sreq b{display:block}.sreq small{color:var(--muted)}
 /* ---- groups ---- */
 #gNewScreen,#gInfoScreen{z-index:35}#gPickScreen{z-index:36}
@@ -1123,12 +1129,13 @@ function logout(silent) {
   if (token && !silent) api('logout', { method: 'POST', body: {} }).catch(() => {});
   token = null; me = null; groups = []; gSeen = null; channels = []; chSeen = null; ch = null; chatSeen = stSeen = null; nprefs = { ...NDEF }; current = null; chats = []; contacts = []; results = [];
   localStorage.removeItem('sl_token');
-  clearInterval(pollTimer); sigChats = sigContacts = sigMsgs = sigStatus = ''; resetSearch(); stMine = []; stUsers = []; if (typeof svClose === 'function' && sv) svClose();
+  clearInterval(pollTimer); clearInterval(supTimer); sigChats = sigContacts = sigMsgs = sigStatus = ''; resetSearch(); stMine = []; stUsers = []; if (typeof svClose === 'function' && sv) svClose();
   ['chatScreen', 'newChat'].forEach(closeScreen);
   leaveChat(); mediaDone.forEach(u => URL.revokeObjectURL(u)); media.clear(); mediaDone.clear(); thread = []; pending = [];
   openScreen('auth'); setMode('login');
 }
 
+let supTimer = 0;
 async function start(user) {
   me = user; gSeen = null; groups = []; chSeen = null; channels = []; chatSeen = stSeen = null; likeSeen = 0; loadPrefsCache(); loadPrefs();
   closeScreen('auth');
@@ -1136,7 +1143,7 @@ async function start(user) {
   await Promise.all([loadChats(), loadContacts(), loadStatuses(), loadGroups(), loadChannels()]).catch(() => {});
   showView('chats');
   openChatFromLink(); openChannelFromLink(); callTick(1200); notifFirst = true; pollNotifs().catch(() => {});
-  clearInterval(pollTimer);
+  clearInterval(pollTimer); clearInterval(supTimer); supUnread = 0; checkSupport(); supTimer = setInterval(checkSupport, 45000);
   pollTimer = setInterval(poll, 4000);
 }
 
@@ -1211,7 +1218,7 @@ function renderProfile() {
     ...(me.avatar ? [['fa-trash', 'Remove photo', 'Go back to your initials', '__rmphoto']] : []),
     ['fa-key', 'Account', '@' + me.username, 'Account'],
     ['fa-bell', 'Notifications', 'Message tones', 'Notifications'],
-    ['fa-circle-question', 'Help', 'Help centre, contact us', 'Help'],
+    ['fa-circle-question', 'Help', supUnread ? 'New reply from support' : 'Help centre, contact us', 'Help'],
     ['fa-right-from-bracket', 'Log out', 'Sign out of this device', '__logout']
   ].map(s => `<div class="set-row" data-set="${s[3]}"><span class="set-ico"><i class="fa-solid ${s[0]}"></i></span><div><strong>${s[1]}</strong><small>${esc(s[2])}</small></div></div>`).join('');
 }
@@ -2665,25 +2672,27 @@ function openThemeSheet() {
 }
 
 /* 2. report (user, or one message) */
-const REPORT_WHY = [['spam', 'Spam or unwanted messages'], ['harassment', 'Harassment or bullying'], ['inappropriate', 'Inappropriate or offensive content'], ['scam', 'Scam or fake account'], ['threats', 'Threats or violence'], ['other', 'Something else']];
+const REPORT_WHY = [['harassment', 'Harassment'], ['spam', 'Spam'], ['fake_account', 'Fake account'], ['inappropriate', 'Inappropriate content'], ['scam', 'Scam or fraud'], ['other', 'Other']];
 function openReportSheet(msg) {
-  let why = '';
+  let why = '', evKey = null; rpAttach = k => { evKey = k; const l = $('#rpFile'); if (l) l.textContent = '✓ attached'; };
   const draw = () => {
     const keep = $('#rpText') ? $('#rpText').value : '';
     openGSheet(`<h4>${msg ? 'Report this message' : 'Report ' + esc(current.name)}</h4><p class="sub2">${msg ? 'The message and your details are sent to SUNLIGHT for review.' : 'Your report is private. ' + esc(current.name) + ' will not be told.'}</p>
       ${msg ? `<div class="quote" style="cursor:default"><strong>${esc(current.name)}</strong><span>${esc(previewText(msg))}</span></div>` : ''}
       ${REPORT_WHY.map(([k, n]) => `<button type="button" class="opt${why === k ? ' sel' : ''}" data-why="${k}"><span class="rd"></span>${n}</button>`).join('')}
       <textarea id="rpText" maxlength="500" placeholder="Add details (optional)">${esc(keep)}</textarea>
+      <div class="attach" style="margin:6px 0"><button type="button" data-rattach>Attach screenshot</button><span id="rpFile">${evKey ? '✓ attached' : ''}</span></div>
       <div class="row-btns"><button type="button" data-rcancel>Cancel</button><button type="button" class="go" data-rsend ${why ? '' : 'disabled'}>Submit report</button></div>`);
   };
   draw();
   $('#gsheet').onclick = async e => {
     const w = e.target.closest('[data-why]');
     if (w) { why = w.dataset.why; draw(); }
+    else if (e.target.closest('[data-rattach]')) $('#supPick').dataset.report = '1', $('#supPick').click();
     else if (e.target.closest('[data-rcancel]')) closeGSheet();
     else if (e.target.closest('[data-rsend]') && why) {
       const btn = e.target.closest('[data-rsend]'); btn.disabled = true; btn.textContent = 'Sending…';
-      try { await api('report', { body: { user_id: current.id, reason: why, details: $('#rpText').value.trim(), message_id: msg ? msg.id : undefined } }); closeGSheet(); toast('Report submitted. Thank you.'); }
+      try { await api('report', { body: { user_id: current.id, reason: why, details: $('#rpText').value.trim(), message_id: msg ? msg.id : undefined, evidence_key: evKey || undefined } }); closeGSheet(); toast('Report submitted. Thank you.'); }
       catch (err) { toast(err.message); btn.disabled = false; btn.textContent = 'Submit report'; }
     }
   };
@@ -3161,24 +3170,48 @@ const HELP = [
 let helpView = { v: 'home' };
 const faqHTML = (f, i) => `<div class="faq" data-faq><button type="button" aria-expanded="false">${esc(f[0])}<i class="fa-solid fa-chevron-down"></i></button><div class="ans">${esc(f[1])}</div></div>`;
 function helpHead(t, s) { $('#helpTitle').textContent = t; $('#helpSub').textContent = s; }
+const SUP_ST = { open: 'Pending', progress: 'In Progress', resolved: 'Resolved' };
+let helpPoll = 0, supImg = null, supUnread = 0, rpAttach = null;
+function setSupUnread(n) { n = n || 0; if (n === supUnread) return; supUnread = n; try { renderProfile(); } catch {} }
+const checkSupport = () => api('support/unread').then(d => setSupUnread(d.unread)).catch(() => {});
+async function loadThread(first) {
+  if (helpView.v !== 'thread') return;
+  try {
+    const d = await api('support/thread?id=' + helpView.id); if (helpView.v !== 'thread') return;
+    const box = $('#sthread'); if (!box) return;
+    helpHead(d.request.subject, '#' + d.request.id + ' · ' + (SUP_ST[d.request.status] || d.request.status));
+    const sig = d.messages.length + ':' + d.request.status; if (box.dataset.sig === sig) return; box.dataset.sig = sig;
+    box.innerHTML = d.messages.map(m => `<div class="sbub ${m.sender === 'user' ? 'me' : ''}">${m.sender === 'admin' ? '<b>SUNLIGHT Support</b>' : ''}${m.body ? esc(m.body) : ''}${m.media_key ? `<img alt="Screenshot" data-mk="${esc(m.media_key)}">` : ''}<small>${esc(new Date(m.created_at).toLocaleString([], { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }))}</small></div>`).join('') + (d.request.status === 'resolved' ? '<div class="hint" style="text-align:center">This request is resolved. Send a message to reopen it.</div>' : '');
+    box.querySelectorAll('img[data-mk]').forEach(i => mediaUrl(i.dataset.mk).then(u => i.src = u).catch(() => i.remove()));
+    if (first || d.messages.length) $('#helpBody').scrollTop = $('#helpBody').scrollHeight;
+    setSupUnread(supUnread && !first ? supUnread : 0); if (first) checkSupport();
+  } catch (e) { if (first && $('#sthread')) $('#sthread').innerHTML = `<div class="hint">${esc(e.message)}</div>`; }
+}
 function drawHelp() {
+  clearInterval(helpPoll);
   const b = $('#helpBody'), v = helpView;
   if (v.v === 'home') {
     helpHead('Help', 'Help centre, contact us');
     b.innerHTML = `<div class="hsearch"><i class="fa-solid fa-magnifying-glass"></i><input id="helpQ" type="search" placeholder="Search help topics" autocomplete="off" aria-label="Search help"></div>
       <div id="helpMain"><div class="hcats">${HELP.map(c => `<button type="button" class="hcat" data-hcat="${c.id}"><span class="set-ico"><i class="fa-solid ${c.icon}"></i></span>${c.title}<small>${c.faq.length} article${c.faq.length > 1 ? 's' : ''}</small></button>`).join('')}</div>
-      <div class="scard" style="margin-top:14px"><button type="button" class="arow" data-hgo="support"><span class="set-ico"><i class="fa-solid fa-headset"></i></span><span>Contact support<small>Send us a request about a problem</small></span><i class="fa-solid fa-chevron-right chev"></i></button>
+      <div class="scard" style="margin-top:14px"><button type="button" class="arow" data-hgo="support"><span class="set-ico"><i class="fa-solid fa-headset"></i></span><span>Support${supUnread ? ' <span class="dot" style="display:inline-block;width:9px;height:9px;border-radius:50%;background:var(--gold)"></span>' : ''}<small>${supUnread ? 'You have a new reply' : 'Contact the admin, report a problem, get help'}</small></span><i class="fa-solid fa-chevron-right chev"></i></button>
       <button type="button" class="arow" data-hgo="about"><span class="set-ico"><i class="fa-solid fa-circle-info"></i></span><span>About SUNLIGHT<small>Version, terms and privacy</small></span><i class="fa-solid fa-chevron-right chev"></i></button></div></div>`;
   } else if (v.v === 'cat') {
     const c = HELP.find(x => x.id === v.id); helpHead(c.title, 'Help centre');
     b.innerHTML = c.faq.map(faqHTML).join('') + `<button type="button" class="sbtn ghost" data-hgo="support">Still need help? Contact support</button>`;
   } else if (v.v === 'support') {
-    helpHead('Contact support', 'Send us a request');
-    b.innerHTML = `<form class="scard sform" id="supForm" autocomplete="off"><input id="supSub" maxlength="100" placeholder="Subject" aria-label="Subject"><textarea id="supMsg" maxlength="2000" placeholder="Describe your problem (what you did, what happened)" aria-label="Describe the problem"></textarea><div class="hint"><span id="supCnt">0</span>/2000. Do not include your password.</div><button class="sbtn" type="submit">Submit request</button><div class="fmsg"></div></form><div class="scard" id="supList" hidden><h4>Your requests</h4></div>`;
-    api('support').then(d => { if (!d.requests.length || helpView.v !== 'support') return; const l = $('#supList'); l.hidden = false; l.innerHTML = '<h4>Your requests</h4>' + d.requests.map(r => `<div class="sreq"><b>${esc(r.subject)}</b><small>#${r.id} · ${esc(fmtDate(r.created_at))} · ${esc(r.status)}</small></div>`).join(''); }).catch(() => {});
-  } else if (v.v === 'done') {
-    helpHead('Request sent', 'Thank you');
-    b.innerHTML = `<div class="scard" style="align-items:center;text-align:center;padding:28px 16px"><span class="set-ico" style="width:56px;height:56px;font-size:24px;background:rgba(76,195,138,.18);color:#4CC38A"><i class="fa-solid fa-check"></i></span><strong style="font-size:17px">Your request was received</strong><div class="hint">Reference #${v.id}. It has been saved. Replies are not delivered inside the app yet, so please check back by sending another request if it is urgent.</div><button class="sbtn" data-hgo="home">Back to Help</button></div>`;
+    helpHead('Support', 'Talk to the SUNLIGHT team');
+    const SO = [['contact', 'fa-envelope', 'Contact Admin', 'Send a message'], ['problem', 'fa-bug', 'Report a Problem', 'Something is not working'], ['help', 'fa-life-ring', 'Request Help', 'Ask how to do something'], ['account', 'fa-user-shield', 'Account Support', 'Login, phone, email']];
+    b.innerHTML = `<div class="sopts">${SO.map(o => `<button type="button" class="sopt" data-supnew="${o[0]}"><span class="set-ico"><i class="fa-solid ${o[1]}"></i></span>${o[2]}<small>${o[3]}</small></button>`).join('')}</div><div class="scard" id="supList" style="margin-top:14px" hidden><h4>Your requests</h4></div>`;
+    api('support').then(d => { if (!d.requests.length || helpView.v !== 'support') return; const l = $('#supList'); l.hidden = false; l.innerHTML = '<h4>Your requests</h4>' + d.requests.map(r => `<button type="button" class="sreq btn" data-sthread="${r.id}"><b>${esc(r.subject)}${r.unread ? '<span class="dot" aria-label="New reply"></span>' : ''}</b><small>#${r.id} · ${esc(fmtDate(r.updated_at || r.created_at))} · <span class="chip ${r.status}">${SUP_ST[r.status] || r.status}</span></small><small style="display:block;margin-top:3px">${esc(r.last)}</small></button>`).join(''); setSupUnread(d.requests.filter(r => r.unread).length); }).catch(() => {});
+  } else if (v.v === 'supnew') {
+    const T = { contact: 'Contact Admin', problem: 'Report a Problem', help: 'Request Help', account: 'Account Support' };
+    helpHead(T[v.cat] || 'Contact Admin', 'New request'); supImg = null;
+    b.innerHTML = `<form class="scard sform" id="supForm" data-cat="${esc(v.cat)}" autocomplete="off"><input id="supSub" maxlength="100" placeholder="Subject" aria-label="Subject"><textarea id="supMsg" maxlength="2000" placeholder="Explain your problem (what you did, what happened)" aria-label="Message"></textarea><div class="hint"><span id="supCnt">0</span>/2000. Do not include your password.</div><div class="attach"><button type="button" data-attach>Attach screenshot</button><span id="supFile"></span></div><button class="sbtn" type="submit">Send to admin</button><div class="fmsg"></div></form>`;
+  } else if (v.v === 'thread') {
+    helpHead('Support request', 'Loading…');
+    b.innerHTML = `<div class="sthread" id="sthread"></div><form class="scard sform" id="supReply" autocomplete="off"><textarea id="supRep" maxlength="2000" placeholder="Write a message" aria-label="Your message" style="min-height:70px"></textarea><div class="attach"><button type="button" data-attach>Attach screenshot</button><span id="supFile"></span></div><button class="sbtn" type="submit">Send</button><div class="fmsg"></div></form>`; supImg = null;
+    loadThread(true); helpPoll = setInterval(() => loadThread(false), 8000);
   } else if (v.v === 'about') {
     helpHead('About SUNLIGHT', 'Version ' + APP_VER);
     b.innerHTML = `<div class="scard" style="align-items:center;text-align:center"><span class="set-ico" style="width:56px;height:56px;font-size:26px"><i class="fa-solid fa-sun"></i></span><strong style="font-size:20px;letter-spacing:.08em">${APP_NAME}</strong><div class="hint">Version ${APP_VER}</div><div class="hint">SUNLIGHT is a messaging app for private chats, voice notes, photos, statuses and voice and video calls.</div></div>
@@ -3189,9 +3222,12 @@ function drawHelp() {
 }
 const helpGo = (v, extra) => { helpView = { v, ...extra }; drawHelp(); };
 function openHelp() { helpView = { v: 'home' }; drawHelp(); openScreen('helpScreen'); }
-$('#helpBack').addEventListener('click', () => { if (helpView.v === 'home') closeScreen('helpScreen'); else if (helpView.v === 'done' || helpView.v === 'about' || helpView.v === 'support' || helpView.v === 'cat' || helpView.v === 'search') helpGo('home'); });
+$('#helpBack').addEventListener('click', () => { if (helpView.v === 'home') closeScreen('helpScreen'); else if (helpView.v === 'thread' || helpView.v === 'supnew') helpGo('support'); else if (helpView.v === 'done' || helpView.v === 'about' || helpView.v === 'support' || helpView.v === 'cat' || helpView.v === 'search') helpGo('home'); });
 $('#helpBody').addEventListener('click', e => {
   const c = e.target.closest('[data-hcat]'); if (c) return helpGo('cat', { id: c.dataset.hcat });
+  const sn = e.target.closest('[data-supnew]'); if (sn) return helpGo('supnew', { cat: sn.dataset.supnew });
+  const st = e.target.closest('[data-sthread]'); if (st) return helpGo('thread', { id: Number(st.dataset.sthread) });
+  if (e.target.closest('[data-attach]')) return $('#supPick').click();
   const g = e.target.closest('[data-hgo]'); if (g) return helpGo(g.dataset.hgo);
   const f = e.target.closest('[data-faq] > button'); if (f) { const q = f.parentElement; q.classList.toggle('open'); f.setAttribute('aria-expanded', q.classList.contains('open')); }
 });
@@ -3204,11 +3240,26 @@ $('#helpBody').addEventListener('input', e => {
   m.innerHTML = hits.length ? hits.map(h => `<div class="hint" style="margin:6px 4px 4px">${esc(h[0])}</div>` + faqHTML(h[1])).join('') + '' : empty('fa-solid fa-magnifying-glass', 'No help articles match “' + esc(e.target.value.trim()) + '”<small>Try different words or contact support.</small>') + '<button type="button" class="sbtn" data-hgo="support" style="margin-top:10px;width:100%">Contact support</button>';
 });
 function drawHelpHome(m) { const keep = $('#helpQ').value; drawHelp(); $('#helpQ').value = keep; $('#helpQ').focus(); }
+const supPick = document.createElement('input'); supPick.type = 'file'; supPick.accept = 'image/*'; supPick.id = 'supPick'; supPick.hidden = true; document.body.appendChild(supPick);
+supPick.addEventListener('change', async () => {
+  const file = supPick.files[0]; supPick.value = ''; if (!file) return;
+  if (supPick.dataset.report === '1') {                    // screenshot for a user report
+    supPick.dataset.report = ''; if (!file.type.startsWith('image/')) return toast('Please choose an image');
+    try { const d = await upload(await compressImage(file), 'image'); if (rpAttach) rpAttach(d.key); } catch { toast('That image could not be attached'); } return;
+  }
+  const lab = $('#supFile'); if (!file.type.startsWith('image/')) return toast('Please choose an image');
+  if (lab) lab.textContent = 'Preparing…';
+  try { const d = await upload(await compressImage(file), 'image'); supImg = d.key; if ($('#supFile')) $('#supFile').textContent = '✓ ' + (file.name || 'image').slice(0, 24); }
+  catch { supImg = null; if ($('#supFile')) $('#supFile').textContent = ''; toast('That image could not be attached'); }
+});
 $('#helpBody').addEventListener('submit', async e => {
-  e.preventDefault(); if (e.target.id !== 'supForm') return;
-  const f = e.target, btn = f.querySelector('button[type=submit]'); btn.disabled = true; msgBox(f, '');
-  try { const d = await api('support', { body: { subject: $('#supSub').value, message: $('#supMsg').value } }); helpGo('done', { id: d.request.id }); }
-  catch (err) { msgBox(f, err.message); btn.disabled = false; }
+  e.preventDefault(); const f = e.target; if (f.id !== 'supForm' && f.id !== 'supReply') return;
+  const btn = f.querySelector('button[type=submit]'); btn.disabled = true; msgBox(f, '');
+  try {
+    if (f.id === 'supForm') { const d = await api('support', { body: { category: f.dataset.cat, subject: $('#supSub').value, message: $('#supMsg').value, media_key: supImg || undefined } }); supImg = null; helpGo('thread', { id: d.request.id }); return; }
+    const text = $('#supRep').value.trim(); if (!text && !supImg) { btn.disabled = false; return; }
+    await api('support/reply', { body: { id: helpView.id, body: text, media_key: supImg || undefined } }); supImg = null; $('#supRep').value = ''; $('#supFile').textContent = ''; const t = $('#sthread'); if (t) t.dataset.sig = ''; await loadThread(true); btn.disabled = false;
+  } catch (err) { msgBox(f, err.message); btn.disabled = false; }
 });
 
 /* =====================================================================
