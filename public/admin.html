@@ -199,7 +199,7 @@ async function load() {
       <button class="urow" data-id="${u.id}" aria-label="Open ${esc(u.username)}">
         <span class="who">${avatar(u)}<div><strong>@${esc(u.username)}</strong><small>${esc(u.name)}</small></div></span>
         <span><span class="lbl">ID</span>${u.id}</span>
-        <span><span class="lbl">Phone</span>${u.phone ? esc(u.phone) : '<span class="muted">' + (phoneOn ? 'Not added' : 'Not collected') + '</span>'}</span>
+        <span><span class="lbl">Phone</span>${u.phone ? esc(u.phone) : '<span class="muted">' + 'Not added' + '</span>'}</span>
         <span><span class="lbl">Registered</span>${fmtDate(u.created_at)}</span>
         <span class="st"><span class="lbl">Status</span>${badge(u.status)}</span>
       </button>`).join('');
@@ -227,7 +227,7 @@ async function openUser(id) {
     p.innerHTML = `<div class="ph">${avatar(u, true)}<div><h3>${esc(u.name)}</h3><p>@${esc(u.username)}</p></div><button class="x" id="cl" aria-label="Close">×</button></div>
       <div>${badge(u.status)}${u.admin ? ' <span class="badge active">Administrator</span>' : ''}${u.online ? ' <span class="badge active">Online now</span>' : ''}</div>
       <div class="kv" style="margin-top:14px"><span>User ID</span><b>${u.id}</b><span>Username</span><b>@${esc(u.username)}</b><span>Name</span><b>${esc(u.name)}</b>
-        <span>Phone</span><b>${u.phone ? esc(u.phone) : '<span class="muted">' + (d.phone_enabled ? 'Not added' : 'Not collected by the app') + '</span>'}</b>
+        <span>Phone</span><b>${u.phone ? esc(u.phone) : '<span class="muted">' + (d.phone_enabled ? 'Not added' : 'Not added') + '</span>'}</b>
         <span>Email</span><b>${u.email ? esc(u.email) : '<span class="muted">Not added</span>'}</b>
         <span>Registered</span><b>${fmtTime(u.created_at)}</b><span>Last seen</span><b>${u.online ? 'Now' : fmtTime(u.last_seen)}</b>
         ${u.suspended_at ? `<span>Suspended on</span><b>${fmtTime(u.suspended_at)}</b>` : ''}</div>
@@ -237,6 +237,7 @@ async function openUser(id) {
       <div class="sec"><h4>Edit details</h4>
         <label class="fld"><span>Name</span><input id="eName" maxlength="40" value="${esc(u.name)}"></label>
         <label class="fld"><span>Username</span><input id="eUser" maxlength="20" value="${esc(u.username)}" autocapitalize="none"></label>
+        <label class="fld"><span>Phone number (with country code; leave empty to remove)</span><input id="ePhone" type="tel" maxlength="20" value="${esc(u.phone || '')}" placeholder="+2348031234567"></label>
         <label class="fld"><span>Email (leave empty to remove)</span><input id="eMail" type="email" maxlength="120" value="${esc(u.email || '')}" autocapitalize="none"></label>
         <div class="row2"><button class="btn sm" id="eSave">Save changes</button>${u.avatar ? '<button class="btn sm danger" id="eAv">Remove photo</button>' : ''}</div>
         <p class="note" id="eMsg"></p></div>
@@ -252,7 +253,7 @@ async function openUser(id) {
     const msg = (t, bad) => { const m = $('#eMsg'); if (m) { m.textContent = t; m.style.color = bad ? 'var(--danger)' : 'var(--ok)'; } };
     const es = $('#eSave'); if (es) es.onclick = async () => {
       es.disabled = true;
-      try { const r = await api('admin/users/update', { id: u.id, name: $('#eName').value, username: $('#eUser').value, email: $('#eMail').value }); toast(r.changed.length ? 'Saved' : 'Nothing changed'); if (r.changed.length) { openUser(u.id); load(); } else es.disabled = false; }
+      try { const r = await api('admin/users/update', { id: u.id, name: $('#eName').value, username: $('#eUser').value, email: $('#eMail').value, phone: $('#ePhone').value }); toast(r.changed.length ? 'Saved' : 'Nothing changed'); if (r.changed.length) { openUser(u.id); load(); } else es.disabled = false; }
       catch (e) { msg(e.message, true); es.disabled = false; }
     };
     const ea = $('#eAv'); if (ea) ea.onclick = async () => { if (!confirm('Remove this user\'s profile photo?')) return; try { await api('admin/users/update', { id: u.id, remove_avatar: true }); toast('Photo removed'); openUser(u.id); load(); } catch (e) { msg(e.message, true); } };

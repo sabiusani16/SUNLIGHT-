@@ -2940,6 +2940,7 @@ function drawAccount(keep) {
     <div class="irow"><span>Full name</span><b>${esc(a.name)}</b></div>
     <div class="irow"><span>Username</span><b>@${esc(a.username)}</b></div>
     <div class="irow"><span>User ID</span><b>${me.id}</b></div>
+    <div class="irow"><span>Phone</span><b>${a.phone ? esc(a.phone) : 'Not added'}</b></div>
     <div class="irow"><span>Email</span><b>${a.email ? esc(a.email) : 'Not added'}</b></div>
     <div class="irow"><span>Joined</span><b>${esc(fmtDate(a.created_at))}</b></div>
   </div>
@@ -2952,6 +2953,12 @@ function drawAccount(keep) {
       <input id="neMail" type="email" placeholder="New email address" maxlength="120" autocapitalize="none" aria-label="New email"><input id="nePw" type="password" placeholder="Your password" autocomplete="current-password" aria-label="Current password">
       <button class="sbtn" type="submit" ${a.email_service ? '' : 'disabled'}>Send verification code</button>
       <div ${a.pending_email ? '' : 'hidden'} id="neCodeBox" style="display:${a.pending_email ? 'flex' : 'none'};flex-direction:column;gap:9px"><div class="hint">Enter the 6-digit code sent to <b>${esc(a.pending_email || '')}</b>. Your email changes only after it is verified.</div><input id="neCode" inputmode="numeric" maxlength="6" placeholder="6-digit code" aria-label="Verification code"><button class="sbtn" type="button" id="neConfirm">Verify and change email</button><button class="sbtn ghost" type="button" id="neCancel">Cancel change</button></div>
+      <div class="fmsg"></div></form>
+    ${arow('fPhone', 'fa-mobile-screen-button', a.phone ? 'Change phone number' : 'Add phone number', a.phone ? esc(a.phone) : 'Add your number to your profile')}
+    <form class="sform" id="fPhone" autocomplete="off" ${open.includes('fPhone') ? '' : 'hidden'}>
+      <input id="npPhone" type="tel" inputmode="tel" placeholder="+234 803 123 4567" maxlength="20" value="${a.phone ? esc(a.phone) : ''}" aria-label="Phone number"><div class="hint">Include the country code, for example +234… (Nigerian numbers can start with 0). Only you can see your number. It is not verified by SMS yet.</div>
+      <input id="npPhonePw" type="password" placeholder="Your password" autocomplete="current-password" aria-label="Your password">
+      <button class="sbtn" type="submit">Save number</button>${a.phone ? '<button class="sbtn ghost" type="button" id="npPhoneDel">Remove number</button>' : ''}
       <div class="fmsg"></div></form>
     ${arow('fPass', 'fa-lock', 'Change password', 'Use at least 8 characters with a letter and a number')}
     <form class="sform" id="fPass" autocomplete="off" ${open.includes('fPass') ? '' : 'hidden'}><input id="npCur" type="password" placeholder="Current password" autocomplete="current-password" aria-label="Current password"><input id="npNew" type="password" placeholder="New password" autocomplete="new-password" aria-label="New password"><input id="npNew2" type="password" placeholder="Repeat new password" autocomplete="new-password" aria-label="Repeat new password"><button class="sbtn" type="submit">Update password</button><div class="fmsg"></div></form>
@@ -2971,6 +2978,7 @@ $('#accBody').addEventListener('click', async e => {
   const t = e.target.closest('[data-toggle]');
   if (t) { const f = $('#' + t.dataset.toggle); f.hidden = !f.hidden; if (!f.hidden) { const i = f.querySelector('input'); if (i) setTimeout(() => i.focus(), 50); } return; }
   if (e.target.closest('#accLogout')) return logout();
+  if (e.target.closest('#npPhoneDel')) { const f = $('#fPhone'); try { const d = await api('account/phone', { body: { phone: '', password: $('#npPhonePw').value } }); acc.phone = null; drawAccount(); toast('Phone number removed'); } catch (err) { msgBox(f, err.message); } return; }
   if (e.target.closest('#accOthers')) {
     try { await api('account/logout-others', { body: {} }); acc.sessions = 1; drawAccount(); toast('Other devices signed out'); } catch (err) { toast(err.message); } return;
   }
@@ -2997,6 +3005,9 @@ $('#accBody').addEventListener('submit', async e => {
     if (f.id === 'fUser') {
       const d = await api('account/username', { body: { username: $('#nuName').value, password: $('#nuPw').value } });
       acc.username = me.username = d.username; renderProfile(); drawAccount(); toast('Username changed to @' + d.username);
+    } else if (f.id === 'fPhone') {
+      const d = await api('account/phone', { body: { phone: $('#npPhone').value, password: $('#npPhonePw').value } });
+      acc.phone = d.phone; drawAccount(); toast(d.phone ? 'Phone number saved' : 'Phone number removed');
     } else if (f.id === 'fMail') {
       const d = await api('account/email/request', { body: { email: $('#neMail').value, password: $('#nePw').value } });
       acc.pending_email = d.pending_email; drawAccount(['fMail']); msgBox($('#fMail'), 'Code sent. Check your inbox.', true);
