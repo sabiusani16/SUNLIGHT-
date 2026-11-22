@@ -56,3 +56,10 @@ database_id = "14778838-61d9-4fd5-a6be-a7d778348def"
 # (Settings -> Variables and secrets -> type "Secret", Runtime):
 #   RESEND_API_KEY = your Resend API key
 #   MAIL_FROM      = SUNLIGHT <no-reply@your-verified-domain>
+
+# ---- Admin dashboard (open https://<your-worker>/admin) ----
+# Administrators are existing accounts, chosen by NUMERIC user ID (the ID is shown in Settings -> Account and on /admin).
+# Set it as a variable (not a secret), e.g. in the dashboard: Workers -> sunlight -> Settings -> Variables -> ADMIN_USER_IDS = 1
+# or here:   [vars]
+#            ADMIN_USER_IDS = "1"          (comma-separated for several admins: "1,7")
+# Nobody is an admin until you set this. Checked on the server for every admin request.
