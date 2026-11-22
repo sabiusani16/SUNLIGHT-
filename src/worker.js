@@ -10,6 +10,12 @@ const RING_MS = 45000, BEAT_MS = 25000, STUN = [{ urls: ['stun:stun.cloudflare.c
 const ONLINE_MS = 30000, SESSION_MS = 30 * 864e5;
 const APP_VERSION = '1.0.0';
 const EMAIL = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
+// Phone numbers are stored in international form (+2348031234567). A Nigerian local number (0803…) is converted to +234.
+function cleanPhone(raw) {
+  let v = String(raw == null ? '' : raw).trim().replace(/[\s().-]/g, ''); if (!v) return { empty: true };
+  if (/^0[789]\d{9}$/.test(v)) v = '+234' + v.slice(1); else if (v.startsWith('00')) v = '+' + v.slice(2);
+  return /^\+[1-9]\d{7,14}$/.test(v) ? { phone: v } : { error: 'Enter the phone number with its country code, e.g. +2348031234567' };
+}
 const likeEsc = s => s.replace(/[\\%_]/g, '\\$&');            // escape LIKE wildcards in user input
 // D1 allows at most 5 terms in a compound SELECT, so "is this media key still referenced anywhere?" is a chain of EXISTS checks, not a big UNION.
 const mediaUsed = col => '(' + [
@@ -97,7 +103,7 @@ const TABLES = [
   `CREATE INDEX IF NOT EXISTS idx_support_user ON support_requests(user_id, id)`,
   `CREATE TABLE IF NOT EXISTS status_views (status_id INTEGER NOT NULL, viewer_id INTEGER NOT NULL, viewed_at INTEGER NOT NULL, PRIMARY KEY (status_id, viewer_id))`
 ];
-const USER_COLS = { username: "TEXT", email: 'TEXT', name: "TEXT NOT NULL DEFAULT ''", pass_hash: "TEXT NOT NULL DEFAULT ''", salt: "TEXT NOT NULL DEFAULT ''", created_at: 'INTEGER NOT NULL DEFAULT 0', last_seen: 'INTEGER NOT NULL DEFAULT 0', avatar_key: 'TEXT', suspended_at: 'INTEGER' };
+const USER_COLS = { username: "TEXT", email: 'TEXT', name: "TEXT NOT NULL DEFAULT ''", pass_hash: "TEXT NOT NULL DEFAULT ''", salt: "TEXT NOT NULL DEFAULT ''", created_at: 'INTEGER NOT NULL DEFAULT 0', last_seen: 'INTEGER NOT NULL DEFAULT 0', avatar_key: 'TEXT', suspended_at: 'INTEGER', phone: 'TEXT' };
 const MSG_COLS = { type: "TEXT NOT NULL DEFAULT 'text'", media_key: 'TEXT', media_type: 'TEXT', media_size: 'INTEGER', duration: 'INTEGER', reply_to: 'INTEGER', delivered_at: 'INTEGER', deleted_at: 'INTEGER', status_id: 'INTEGER', status_snap: 'TEXT' };
 let ready = null;
 // Two requests can start the schema check at the same moment (e.g. right after a deploy); the loser must not fail with "duplicate column".
@@ -108,6 +114,7 @@ function ensureSchema(db) {
     const have = (await db.prepare('PRAGMA table_info(users)').all()).results.map(c => c.name);
     for (const [col, type] of Object.entries(USER_COLS)) if (!have.includes(col)) await addCol(db, 'users', col, type);
     await db.prepare('CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email ON users(email) WHERE email IS NOT NULL').run();
+    await db.prepare('CREATE UNIQUE INDEX IF NOT EXISTS idx_users_phone ON users(phone) WHERE phone IS NOT NULL').run();   // one phone number = one account
     const haveM = (await db.prepare('PRAGMA table_info(messages)').all()).results.map(c => c.name);
     for (const [col, type] of Object.entries(MSG_COLS)) if (!haveM.includes(col)) await addCol(db, 'messages', col, type);
     const haveC = (await db.prepare('PRAGMA table_info(calls)').all()).results.map(c => c.name);
@@ -252,7 +259,7 @@ async function route(req, env, url) {
     const shape = (u, hasPhone) => ({ id: u.id, username: u.username, name: u.name, avatar: u.avatar_key || null, created_at: u.created_at || null, last_seen: u.last_seen || null,
       online: now - (u.last_seen || 0) < ONLINE_MS, status: u.suspended_at ? 'suspended' : 'active', suspended_at: u.suspended_at || null, admin: adminIds.includes(u.id), phone: hasPhone ? (u.phone || null) : null });
     const logAdmin = (target, action, detail) => db.prepare('INSERT INTO admin_log(admin_id,target_id,action,detail,created_at) VALUES(?,?,?,?,?)').bind(me.id, target, action, detail, now).run();   // who did what (never passwords or message text)
-    const hasPhone = async () => (await db.prepare('PRAGMA table_info(users)').all()).results.some(c => c.name === 'phone');   // shown only if the app collects phone numbers
+    const hasPhone = async () => true;   // shown only if the app collects phone numbers
     if (p === 'admin/overview' && !post) {
       const t = await db.prepare('SELECT COUNT(*) total, COALESCE(SUM(CASE WHEN suspended_at IS NULL THEN 0 ELSE 1 END),0) suspended, COALESCE(SUM(CASE WHEN created_at>?1 THEN 1 ELSE 0 END),0) recent, COALESCE(SUM(CASE WHEN last_seen>?2 THEN 1 ELSE 0 END),0) seen24 FROM users').bind(now - 7 * 86400000, now - 86400000).first();
       return json({ total: t.total, active: t.total - t.suspended, suspended: t.suspended, recent: t.recent, seen_24h: t.seen24, phone_enabled: await hasPhone() });
@@ -285,7 +292,7 @@ async function route(req, env, url) {
     // Edit account details. Admins cannot edit other administrators (use the app for your own account).
     if (p === 'admin/users/update' && post) {
       const id = Number(body.id); if (!Number.isInteger(id)) return json({ error: 'User not found' }, 404);
-      const t = await db.prepare('SELECT id,username,name,email,avatar_key FROM users WHERE id=?').bind(id).first(); if (!t) return json({ error: 'User not found' }, 404);
+      const t = await db.prepare('SELECT id,username,name,email,phone,avatar_key FROM users WHERE id=?').bind(id).first(); if (!t) return json({ error: 'User not found' }, 404);
       if (adminIds.includes(id) && id !== me.id) return json({ error: 'Administrator accounts cannot be edited here' }, 403);
       const sets = [], args = [], changed = [];
       if (body.name !== undefined) { const v = String(body.name).trim(); if (!v || v.length > 40) return json({ error: 'Name must be 1–40 characters' }, 400); if (v !== t.name) { sets.push('name=?'); args.push(v); changed.push('name'); } }
@@ -300,10 +307,15 @@ async function route(req, env, url) {
         if (v && (v.length > 120 || !EMAIL.test(v))) return json({ error: 'Enter a valid email address' }, 400);
         if ((v || null) !== (t.email || null)) { sets.push('email=?'); args.push(v || null); changed.push(v ? 'email' : 'email removed'); }
       }
+      if (body.phone !== undefined) {
+        const c = cleanPhone(body.phone); if (c.error) return json({ error: c.error }, 400);
+        const v = c.phone || null;
+        if (v !== (t.phone || null)) { sets.push('phone=?'); args.push(v); changed.push(v ? 'phone' : 'phone removed'); }
+      }
       if (body.remove_avatar === true && t.avatar_key) { sets.push('avatar_key=NULL'); changed.push('photo removed'); }
       if (!sets.length) return json({ ok: true, changed: [] });
       try { await db.prepare(`UPDATE users SET ${sets.join(',')} WHERE id=?`).bind(...args, id).run(); }
-      catch (e) { if (/UNIQUE|constraint/i.test(String(e && e.message))) return json({ error: /email/i.test(String(e.message)) ? 'This email is already used by another account' : 'This username is already taken' }, 409); throw e; }
+      catch (e) { if (/UNIQUE|constraint/i.test(String(e && e.message))) return json({ error: /phone/i.test(String(e.message)) ? 'This phone number already belongs to another account' : /email/i.test(String(e.message)) ? 'This email is already used by another account' : 'This username is already taken' }, 409); throw e; }
       await logAdmin(id, 'edit', changed.join(', '));
       return json({ ok: true, changed });
     }
@@ -1000,10 +1012,10 @@ async function route(req, env, url) {
 
   // =============== ACCOUNT MANAGEMENT ===============
   if (p === 'account' && !post) {
-    const u = await db.prepare('SELECT id,name,username,email,created_at FROM users WHERE id=?').bind(me.id).first();
+    const u = await db.prepare('SELECT id,name,username,email,phone,created_at FROM users WHERE id=?').bind(me.id).first();
     const pend = await db.prepare('SELECT new_email,expires_at FROM email_changes WHERE user_id=? AND expires_at>?').bind(me.id, now).first();
     const sc = await db.prepare('SELECT COUNT(*) n FROM sessions WHERE user_id=? AND created_at>?').bind(me.id, now - SESSION_MS).first();
-    return json({ account: { name: u.name, username: u.username, email: u.email || null, created_at: u.created_at || null, pending_email: pend ? pend.new_email : null, sessions: sc.n, email_service: !!(env.RESEND_API_KEY && env.MAIL_FROM) } });
+    return json({ account: { name: u.name, username: u.username, phone: u.phone || null, email: u.email || null, created_at: u.created_at || null, pending_email: pend ? pend.new_email : null, sessions: sc.n, email_service: !!(env.RESEND_API_KEY && env.MAIL_FROM) } });
   }
   const pwOk = async pw => { const u = await db.prepare('SELECT pass_hash,salt FROM users WHERE id=?').bind(me.id).first(); return !!(u && u.pass_hash && typeof pw === 'string' && safeEq(await hashPw(pw, u.salt), u.pass_hash)); };
   if (p === 'account/username-check' && !post) {
@@ -1022,6 +1034,15 @@ async function route(req, env, url) {
     try { const r = await db.prepare('UPDATE users SET username=?1 WHERE id=?2 AND NOT EXISTS(SELECT 1 FROM users WHERE username=?1 AND id!=?2)').bind(u, me.id).run(); if (!r.meta.changes) { const same = await db.prepare('SELECT username FROM users WHERE id=?').bind(me.id).first(); return same && same.username === u ? json({ ok: true, username: u }) : json({ error: 'Username already taken' }, 409); } }
     catch (e) { if (/UNIQUE|constraint/i.test(String(e && e.message))) return json({ error: 'Username already taken' }, 409); throw e; }
     return json({ ok: true, username: u });
+  }
+  // The person adds, changes or removes their own phone number (not SMS-verified yet). Needs the password; one number = one account.
+  if (p === 'account/phone' && post) {
+    const c = cleanPhone(body.phone); if (c.error) return json({ error: c.error }, 400);
+    if (!(await pwOk(String(body.password || '')))) return json({ error: 'Your password is incorrect' }, 403);
+    const v = c.phone || null;
+    try { await db.prepare('UPDATE users SET phone=? WHERE id=?').bind(v, me.id).run(); }
+    catch (e) { if (/UNIQUE|constraint/i.test(String(e && e.message))) return json({ error: 'This phone number is already used by another account' }, 409); throw e; }
+    return json({ ok: true, phone: v });
   }
   if (p === 'account/email/request' && post) {
     const email = String(body.email || '').trim().toLowerCase();
