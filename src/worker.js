@@ -59,6 +59,8 @@ const TABLES = [
   `CREATE TABLE IF NOT EXISTS media_chunks (key TEXT NOT NULL, idx INTEGER NOT NULL, data TEXT NOT NULL, PRIMARY KEY (key, idx))`,
   `CREATE TABLE IF NOT EXISTS statuses (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, type TEXT NOT NULL, body TEXT, caption TEXT, bg INTEGER, media_key TEXT, created_at INTEGER NOT NULL, expires_at INTEGER NOT NULL)`,
   `CREATE TABLE IF NOT EXISTS chat_activity (user_id INTEGER NOT NULL, peer_id INTEGER NOT NULL, state TEXT NOT NULL, at INTEGER NOT NULL, PRIMARY KEY (user_id, peer_id))`,
+  `CREATE TABLE IF NOT EXISTS admin_log (id INTEGER PRIMARY KEY AUTOINCREMENT, admin_id INTEGER NOT NULL, target_id INTEGER NOT NULL, action TEXT NOT NULL, detail TEXT, created_at INTEGER NOT NULL)`,
+  `CREATE INDEX IF NOT EXISTS idx_admin_log_target ON admin_log(target_id, id)`,
   `CREATE TABLE IF NOT EXISTS chat_prefs (user_id INTEGER NOT NULL, peer_id INTEGER NOT NULL, theme TEXT, cleared_id INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (user_id, peer_id))`,
   `CREATE TABLE IF NOT EXISTS blocks (blocker_id INTEGER NOT NULL, blocked_id INTEGER NOT NULL, created_at INTEGER NOT NULL, PRIMARY KEY (blocker_id, blocked_id))`,
   `CREATE INDEX IF NOT EXISTS idx_blocks_blocked ON blocks(blocked_id)`,
@@ -249,6 +251,7 @@ async function route(req, env, url) {
     if (!adminIds.includes(me.id)) return json({ error: 'Not found' }, 404);
     const shape = (u, hasPhone) => ({ id: u.id, username: u.username, name: u.name, avatar: u.avatar_key || null, created_at: u.created_at || null, last_seen: u.last_seen || null,
       online: now - (u.last_seen || 0) < ONLINE_MS, status: u.suspended_at ? 'suspended' : 'active', suspended_at: u.suspended_at || null, admin: adminIds.includes(u.id), phone: hasPhone ? (u.phone || null) : null });
+    const logAdmin = (target, action, detail) => db.prepare('INSERT INTO admin_log(admin_id,target_id,action,detail,created_at) VALUES(?,?,?,?,?)').bind(me.id, target, action, detail, now).run();   // who did what (never passwords or message text)
     const hasPhone = async () => (await db.prepare('PRAGMA table_info(users)').all()).results.some(c => c.name === 'phone');   // shown only if the app collects phone numbers
     if (p === 'admin/overview' && !post) {
       const t = await db.prepare('SELECT COUNT(*) total, COALESCE(SUM(CASE WHEN suspended_at IS NULL THEN 0 ELSE 1 END),0) suspended, COALESCE(SUM(CASE WHEN created_at>?1 THEN 1 ELSE 0 END),0) recent, COALESCE(SUM(CASE WHEN last_seen>?2 THEN 1 ELSE 0 END),0) seen24 FROM users').bind(now - 7 * 86400000, now - 86400000).first();
@@ -276,7 +279,49 @@ async function route(req, env, url) {
         contacts: await n('SELECT COUNT(*) n FROM contacts WHERE owner_id=?'), messages_sent: await n('SELECT COUNT(*) n FROM messages WHERE sender_id=?'),
         groups: await n('SELECT COUNT(*) n FROM group_members WHERE user_id=?'), channels: await n('SELECT COUNT(*) n FROM channel_members WHERE user_id=?'),
         active_statuses: await n(`SELECT COUNT(*) n FROM statuses WHERE user_id=? AND expires_at>${now}`), logged_in_devices: await n(`SELECT COUNT(*) n FROM sessions WHERE user_id=? AND created_at>${now - SESSION_MS}`),
-        reports_against: await n('SELECT COUNT(*) n FROM reports WHERE reported_id=?') }, phone_enabled: hp });
+        reports_against: await n('SELECT COUNT(*) n FROM reports WHERE reported_id=?') }, phone_enabled: hp,
+        log: (await db.prepare('SELECT l.action,l.detail,l.created_at,a.username admin FROM admin_log l LEFT JOIN users a ON a.id=l.admin_id WHERE l.target_id=? ORDER BY l.id DESC LIMIT 8').bind(id).all()).results });
+    }
+    // Edit account details. Admins cannot edit other administrators (use the app for your own account).
+    if (p === 'admin/users/update' && post) {
+      const id = Number(body.id); if (!Number.isInteger(id)) return json({ error: 'User not found' }, 404);
+      const t = await db.prepare('SELECT id,username,name,email,avatar_key FROM users WHERE id=?').bind(id).first(); if (!t) return json({ error: 'User not found' }, 404);
+      if (adminIds.includes(id) && id !== me.id) return json({ error: 'Administrator accounts cannot be edited here' }, 403);
+      const sets = [], args = [], changed = [];
+      if (body.name !== undefined) { const v = String(body.name).trim(); if (!v || v.length > 40) return json({ error: 'Name must be 1–40 characters' }, 400); if (v !== t.name) { sets.push('name=?'); args.push(v); changed.push('name'); } }
+      if (body.username !== undefined) {
+        const v = String(body.username).trim().toLowerCase();
+        if (!/^[a-z0-9_]{3,20}$/.test(v)) return json({ error: 'Username: 3–20 letters, numbers or _' }, 400);
+        if (RESERVED.has(v) && v !== t.username) return json({ error: 'This username is reserved' }, 400);
+        if (v !== t.username) { sets.push('username=?'); args.push(v); changed.push('username ' + t.username + ' → ' + v); }
+      }
+      if (body.email !== undefined) {
+        const v = String(body.email || '').trim().toLowerCase();
+        if (v && (v.length > 120 || !EMAIL.test(v))) return json({ error: 'Enter a valid email address' }, 400);
+        if ((v || null) !== (t.email || null)) { sets.push('email=?'); args.push(v || null); changed.push(v ? 'email' : 'email removed'); }
+      }
+      if (body.remove_avatar === true && t.avatar_key) { sets.push('avatar_key=NULL'); changed.push('photo removed'); }
+      if (!sets.length) return json({ ok: true, changed: [] });
+      try { await db.prepare(`UPDATE users SET ${sets.join(',')} WHERE id=?`).bind(...args, id).run(); }
+      catch (e) { if (/UNIQUE|constraint/i.test(String(e && e.message))) return json({ error: /email/i.test(String(e.message)) ? 'This email is already used by another account' : 'This username is already taken' }, 409); throw e; }
+      await logAdmin(id, 'edit', changed.join(', '));
+      return json({ ok: true, changed });
+    }
+    // Reset a forgotten password. The admin must confirm they verified the owner. A new random password is shown ONCE (never stored in readable form);
+    // the user is signed out everywhere and changes it in Settings → Account → Change password.
+    if (p === 'admin/users/password' && post) {
+      const id = Number(body.id); if (!Number.isInteger(id)) return json({ error: 'User not found' }, 404);
+      if (body.verified !== true) return json({ error: 'Confirm that you verified the account owner first' }, 400);
+      if (id === me.id) return json({ error: 'Change your own password in Settings → Account' }, 400);
+      if (adminIds.includes(id)) return json({ error: 'Administrator accounts cannot be reset here' }, 403);
+      const t = await db.prepare('SELECT id FROM users WHERE id=?').bind(id).first(); if (!t) return json({ error: 'User not found' }, 404);
+      const A = 'abcdefghjkmnpqrstuvwxyz', N = '23456789', pick = (set, k) => { const b = crypto.getRandomValues(new Uint8Array(k)); return Array.from(b, x => set[x % set.length]); };
+      const chars = [...pick(A, 6), ...pick(A.toUpperCase(), 2), ...pick(N, 4)]; const sh = crypto.getRandomValues(new Uint8Array(chars.length));
+      const password = chars.map((c, i) => [c, sh[i]]).sort((a, b) => a[1] - b[1]).map(x => x[0]).join('');   // 12 chars, easy to read out (no 0/O/1/l)
+      const salt = rand(16);
+      await db.batch([db.prepare('UPDATE users SET pass_hash=?,salt=? WHERE id=?').bind(await hashPw(password, salt), salt, id), db.prepare('DELETE FROM sessions WHERE user_id=?').bind(id)]);
+      await logAdmin(id, 'password_reset', 'owner verified by admin');
+      return json({ ok: true, password });
     }
     if (p === 'admin/users/status' && post) {
       const id = Number(body.id), suspend = body.suspended === true;
@@ -286,6 +331,7 @@ async function route(req, env, url) {
       const t = await db.prepare('SELECT id FROM users WHERE id=?').bind(id).first(); if (!t) return json({ error: 'User not found' }, 404);
       await db.prepare('UPDATE users SET suspended_at=? WHERE id=?').bind(suspend ? now : null, id).run();
       if (suspend) await db.prepare('DELETE FROM sessions WHERE user_id=?').bind(id).run();   // signed out everywhere immediately
+      await logAdmin(id, suspend ? 'suspend' : 'reactivate', null);
       return json({ ok: true, status: suspend ? 'suspended' : 'active' });
     }
     return json({ error: 'Not found' }, 404);
