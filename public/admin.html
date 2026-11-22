@@ -70,8 +70,8 @@ select{background:var(--soft);border:0;border-radius:12px;padding:10px 12px;font
 .state b{display:block;color:var(--text);font-size:17px;margin-bottom:6px}
 .state button,.btn{margin-top:14px;padding:11px 18px;border-radius:12px;background:var(--green);color:#fff;font-weight:700}
 :root[data-theme=dark] .state button,:root[data-theme=dark] .btn{background:var(--gold);color:#1a1a1a}
-.btn.danger{background:var(--danger-s);color:var(--danger);border:1px solid var(--danger)}
-.btn.ok{background:var(--ok-s);color:var(--ok);border:1px solid var(--ok)}
+:root .btn.danger,:root[data-theme=dark] .btn.danger{background:var(--danger-s);color:var(--danger);border:1px solid var(--danger)}
+:root .btn.ok,:root[data-theme=dark] .btn.ok{background:var(--ok-s);color:var(--ok);border:1px solid var(--ok)}
 .btn:disabled{opacity:.5}
 .sk{height:64px;margin:0;border-bottom:1px solid var(--line);background:linear-gradient(90deg,var(--soft),var(--line),var(--soft));background-size:200% 100%;animation:sh 1.2s infinite}
 @keyframes sh{to{background-position:-200% 0}}
@@ -90,6 +90,20 @@ select{background:var(--soft);border:0;border-radius:12px;padding:10px 12px;font
 .note{font-size:12.5px;color:var(--muted);margin-top:10px}
 .toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:#16211d;color:#fff;padding:12px 18px;border-radius:12px;z-index:30;max-width:90%;text-align:center}
 .toast[hidden]{display:none}
+.sec{border-top:1px solid var(--line);margin-top:16px;padding-top:14px}
+.sec h4{font-size:14px;margin-bottom:10px}
+.fld{display:block;margin-bottom:10px}.fld span{display:block;font-size:12px;color:var(--muted);font-weight:600;margin-bottom:4px}
+.fld input{width:100%;background:var(--soft);border:1.5px solid transparent;border-radius:12px;padding:11px 12px;outline:0}
+.fld input:focus{border-color:var(--gold)}
+.chk{display:flex;gap:10px;align-items:flex-start;margin:6px 0 12px;font-size:13.5px}
+.chk input{margin-top:3px;width:18px;height:18px;flex:none}
+.pw{display:flex;gap:8px;align-items:center;background:var(--soft);border:1.5px dashed var(--gold);border-radius:12px;padding:12px;margin:10px 0}
+.pw code{flex:1;font-size:20px;font-weight:800;letter-spacing:.08em;word-break:break-all}
+.pw button{padding:8px 12px;border-radius:10px;background:var(--green);color:#fff;font-weight:700}
+:root[data-theme=dark] .pw button{background:var(--gold);color:#1a1a1a}
+.logl{font-size:13px;color:var(--muted);padding:6px 0;border-bottom:1px solid var(--line)}.logl b{color:var(--text)}
+.btn.sm{margin-top:0;padding:9px 14px;font-size:14px}
+.row2{display:flex;gap:8px;flex-wrap:wrap}
 .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
 </style>
 </head>
@@ -219,9 +233,39 @@ async function openUser(id) {
         ${u.suspended_at ? `<span>Suspended on</span><b>${fmtTime(u.suspended_at)}</b>` : ''}</div>
       <div class="cnt"><div><b>${c.contacts}</b><span>Contacts</span></div><div><b>${c.messages_sent}</b><span>Messages sent</span></div><div><b>${c.groups}</b><span>Groups</span></div><div><b>${c.channels}</b><span>Channels</span></div><div><b>${c.active_statuses}</b><span>Live statuses</span></div><div><b>${c.logged_in_devices}</b><span>Signed-in devices</span></div></div>
       ${c.reports_against ? `<p class="note">Reports filed against this user: <b>${c.reports_against}</b></p>` : ''}
+      ${u.admin ? '' : `
+      <div class="sec"><h4>Edit details</h4>
+        <label class="fld"><span>Name</span><input id="eName" maxlength="40" value="${esc(u.name)}"></label>
+        <label class="fld"><span>Username</span><input id="eUser" maxlength="20" value="${esc(u.username)}" autocapitalize="none"></label>
+        <label class="fld"><span>Email (leave empty to remove)</span><input id="eMail" type="email" maxlength="120" value="${esc(u.email || '')}" autocapitalize="none"></label>
+        <div class="row2"><button class="btn sm" id="eSave">Save changes</button>${u.avatar ? '<button class="btn sm danger" id="eAv">Remove photo</button>' : ''}</div>
+        <p class="note" id="eMsg"></p></div>
+      <div class="sec"><h4>Forgot password</h4>
+        <p class="note" style="margin:0 0 8px">Only after you have confirmed the person really owns this account. A new password is created and shown once; the user is signed out everywhere and should change it in Settings → Account.</p>
+        <label class="chk"><input type="checkbox" id="pwOk"><span>I have verified that this person is the owner of the account.</span></label>
+        <button class="btn sm danger" id="pwBtn" disabled>Reset password</button>
+        <div id="pwOut"></div></div>`}
       ${u.admin ? '' : u.status === 'suspended' ? '<button class="btn ok" id="tg" style="width:100%">Reactivate account</button>' : '<button class="btn danger" id="tg" style="width:100%">Suspend account</button>'}
+      ${d.log && d.log.length ? `<div class="sec"><h4>Recent admin actions</h4>${d.log.map(l => `<div class="logl"><b>${esc(({ edit: 'Edited', password_reset: 'Password reset', suspend: 'Suspended', reactivate: 'Reactivated' })[l.action] || l.action)}</b>${l.detail ? ' · ' + esc(l.detail) : ''}<br>${esc(l.admin || 'admin')} · ${fmtTime(l.created_at)}</div>`).join('')}</div>` : ''}
       <p class="note">Private messages, passwords and sign-in tokens are never shown here. A suspended account is signed out everywhere and cannot sign in until reactivated; its data is kept.</p>`;
     $('#cl').onclick = closeP;
+    const msg = (t, bad) => { const m = $('#eMsg'); if (m) { m.textContent = t; m.style.color = bad ? 'var(--danger)' : 'var(--ok)'; } };
+    const es = $('#eSave'); if (es) es.onclick = async () => {
+      es.disabled = true;
+      try { const r = await api('admin/users/update', { id: u.id, name: $('#eName').value, username: $('#eUser').value, email: $('#eMail').value }); toast(r.changed.length ? 'Saved' : 'Nothing changed'); if (r.changed.length) { openUser(u.id); load(); } else es.disabled = false; }
+      catch (e) { msg(e.message, true); es.disabled = false; }
+    };
+    const ea = $('#eAv'); if (ea) ea.onclick = async () => { if (!confirm('Remove this user\'s profile photo?')) return; try { await api('admin/users/update', { id: u.id, remove_avatar: true }); toast('Photo removed'); openUser(u.id); load(); } catch (e) { msg(e.message, true); } };
+    const pc = $('#pwOk'); if (pc) { pc.onchange = () => $('#pwBtn').disabled = !pc.checked; $('#pwBtn').onclick = async () => {
+      if (!confirm(`Reset the password of @${u.username}? They will be signed out everywhere.`)) return;
+      $('#pwBtn').disabled = true;
+      try {
+        const r = await api('admin/users/password', { id: u.id, verified: true });
+        $('#pwOut').innerHTML = `<p class="note" style="color:var(--ok)"><b>Password reset.</b> Give this to the owner now. It will not be shown again.</p><div class="pw"><code id="pwTxt">${esc(r.password)}</code><button id="pwCp" type="button">Copy</button></div>`;
+        $('#pwCp').onclick = async () => { try { await navigator.clipboard.writeText(r.password); toast('Copied'); } catch { toast('Select and copy it manually'); } };
+        pc.checked = false; pc.disabled = true;
+      } catch (e) { toast(e.message); $('#pwBtn').disabled = false; }
+    }; }
     const tg = $('#tg'); if (tg) tg.onclick = async () => {
       const sus = u.status !== 'suspended';
       if (!confirm(sus ? `Suspend @${u.username}? They will be signed out and unable to use SUNLIGHT until you reactivate them.` : `Reactivate @${u.username}?`)) return;
