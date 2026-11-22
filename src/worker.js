@@ -95,7 +95,7 @@ const TABLES = [
   `CREATE INDEX IF NOT EXISTS idx_support_user ON support_requests(user_id, id)`,
   `CREATE TABLE IF NOT EXISTS status_views (status_id INTEGER NOT NULL, viewer_id INTEGER NOT NULL, viewed_at INTEGER NOT NULL, PRIMARY KEY (status_id, viewer_id))`
 ];
-const USER_COLS = { username: "TEXT", email: 'TEXT', name: "TEXT NOT NULL DEFAULT ''", pass_hash: "TEXT NOT NULL DEFAULT ''", salt: "TEXT NOT NULL DEFAULT ''", created_at: 'INTEGER NOT NULL DEFAULT 0', last_seen: 'INTEGER NOT NULL DEFAULT 0', avatar_key: 'TEXT' };
+const USER_COLS = { username: "TEXT", email: 'TEXT', name: "TEXT NOT NULL DEFAULT ''", pass_hash: "TEXT NOT NULL DEFAULT ''", salt: "TEXT NOT NULL DEFAULT ''", created_at: 'INTEGER NOT NULL DEFAULT 0', last_seen: 'INTEGER NOT NULL DEFAULT 0', avatar_key: 'TEXT', suspended_at: 'INTEGER' };
 const MSG_COLS = { type: "TEXT NOT NULL DEFAULT 'text'", media_key: 'TEXT', media_type: 'TEXT', media_size: 'INTEGER', duration: 'INTEGER', reply_to: 'INTEGER', delivered_at: 'INTEGER', deleted_at: 'INTEGER', status_id: 'INTEGER', status_snap: 'TEXT' };
 let ready = null;
 // Two requests can start the schema check at the same moment (e.g. right after a deploy); the loser must not fail with "duplicate column".
@@ -222,21 +222,74 @@ async function route(req, env, url) {
     const ident = String(body.username || body.email || body.identifier || '').trim().toLowerCase();
     const pw = String(body.password || '');
     if (!ident || !pw) return json({ error: 'Enter your username (or email) and password' }, 400);
-    const u = await db.prepare('SELECT id,username,name,avatar_key,pass_hash,salt FROM users WHERE username=?1 OR email=?1').bind(ident).first();
+    const u = await db.prepare('SELECT id,username,name,avatar_key,pass_hash,salt,suspended_at FROM users WHERE username=?1 OR email=?1').bind(ident).first();
     // same work + same message whether the account exists or not
     const ok = u && u.pass_hash && safeEq(await hashPw(pw, u.salt), u.pass_hash);
     if (!ok) return json({ error: 'Incorrect username/email or password' }, 401);
+    if (u.suspended_at) return json({ error: 'Your account has been suspended. Please contact support.', code: 'SUSPENDED' }, 403);
     return startSession(db, { id: u.id, username: u.username, name: u.name, avatar: u.avatar_key || null }, now);
   }
 
   // ---- authenticated routes ----
   const tok = (req.headers.get('authorization') || '').replace('Bearer ', '');
-  const me = tok ? await db.prepare('SELECT u.id,u.username,u.name,u.avatar_key avatar,u.last_seen FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token=? AND s.created_at>?').bind(tok, now - SESSION_MS).first() : null;
+  const me = tok ? await db.prepare('SELECT u.id,u.username,u.name,u.avatar_key avatar,u.last_seen,u.suspended_at FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token=? AND s.created_at>?').bind(tok, now - SESSION_MS).first() : null;
   if (!me) return json({ error: 'Please log in' }, 401);
+  if (me.suspended_at) return json({ error: 'Your account has been suspended. Please contact support.', code: 'SUSPENDED' }, 403);
+  delete me.suspended_at;
   if (now - me.last_seen > 10000) await db.prepare('UPDATE users SET last_seen=? WHERE id=?').bind(now, me.id).run(); // throttled: saves D1 writes
   delete me.last_seen;
 
   if (p === 'me') return json({ user: me });
+
+  // =============== ADMIN: USERS MANAGEMENT ===============
+  // An admin is an existing account whose numeric ID is listed in the ADMIN_USER_IDS setting (e.g. "1,7"). IDs never change, usernames can,
+  // so a renamed or re-registered username can never inherit admin rights. Checked on the server for EVERY admin request; others get a plain 404.
+  if (p.startsWith('admin/')) {
+    const adminIds = String(env.ADMIN_USER_IDS || '').split(',').map(x => parseInt(x.trim(), 10)).filter(Number.isInteger);
+    if (!adminIds.includes(me.id)) return json({ error: 'Not found' }, 404);
+    const shape = (u, hasPhone) => ({ id: u.id, username: u.username, name: u.name, avatar: u.avatar_key || null, created_at: u.created_at || null, last_seen: u.last_seen || null,
+      online: now - (u.last_seen || 0) < ONLINE_MS, status: u.suspended_at ? 'suspended' : 'active', suspended_at: u.suspended_at || null, admin: adminIds.includes(u.id), phone: hasPhone ? (u.phone || null) : null });
+    const hasPhone = async () => (await db.prepare('PRAGMA table_info(users)').all()).results.some(c => c.name === 'phone');   // shown only if the app collects phone numbers
+    if (p === 'admin/overview' && !post) {
+      const t = await db.prepare('SELECT COUNT(*) total, COALESCE(SUM(CASE WHEN suspended_at IS NULL THEN 0 ELSE 1 END),0) suspended, COALESCE(SUM(CASE WHEN created_at>?1 THEN 1 ELSE 0 END),0) recent, COALESCE(SUM(CASE WHEN last_seen>?2 THEN 1 ELSE 0 END),0) seen24 FROM users').bind(now - 7 * 86400000, now - 86400000).first();
+      return json({ total: t.total, active: t.total - t.suspended, suspended: t.suspended, recent: t.recent, seen_24h: t.seen24, phone_enabled: await hasPhone() });
+    }
+    if (p === 'admin/users' && !post) {
+      const q = (url.searchParams.get('q') || '').trim().replace(/^@+/, '').slice(0, 40), st = url.searchParams.get('status'), oldest = url.searchParams.get('sort') === 'oldest';
+      const per = Math.min(50, Math.max(5, parseInt(url.searchParams.get('per'), 10) || 20)), page = Math.max(1, parseInt(url.searchParams.get('page'), 10) || 1);
+      const conds = [], args = [];
+      if (q) { const like = '%' + likeEsc(q.toLowerCase()) + '%'; if (/^\d{1,12}$/.test(q)) { conds.push("(u.id=? OR lower(u.username) LIKE ? ESCAPE '\\' OR lower(u.name) LIKE ? ESCAPE '\\')"); args.push(Number(q), like, like); } else { conds.push("(lower(u.username) LIKE ? ESCAPE '\\' OR lower(u.name) LIKE ? ESCAPE '\\')"); args.push(like, like); } }
+      if (st === 'active') conds.push('u.suspended_at IS NULL'); else if (st === 'suspended') conds.push('u.suspended_at IS NOT NULL');
+      const where = conds.length ? 'WHERE ' + conds.join(' AND ') : '';
+      const hp = await hasPhone();
+      const total = (await db.prepare(`SELECT COUNT(*) n FROM users u ${where}`).bind(...args).first()).n;
+      const { results } = await db.prepare(`SELECT u.id,u.username,u.name,u.avatar_key,u.created_at,u.last_seen,u.suspended_at${hp ? ',u.phone' : ''} FROM users u ${where} ORDER BY u.created_at ${oldest ? 'ASC' : 'DESC'}, u.id ${oldest ? 'ASC' : 'DESC'} LIMIT ? OFFSET ?`).bind(...args, per, (page - 1) * per).all();
+      return json({ users: results.map(u => shape(u, hp)), total, page, per, pages: Math.max(1, Math.ceil(total / per)), phone_enabled: hp });
+    }
+    if (p === 'admin/user' && !post) {                         // account facts and counts only: never passwords, tokens or message content
+      const id = parseInt(url.searchParams.get('id'), 10); if (!Number.isInteger(id)) return json({ error: 'User not found' }, 404);
+      const hp = await hasPhone();
+      const u = await db.prepare(`SELECT id,username,name,email,avatar_key,created_at,last_seen,suspended_at${hp ? ',phone' : ''} FROM users WHERE id=?`).bind(id).first();
+      if (!u) return json({ error: 'User not found' }, 404);
+      const n = async (sql) => ((await db.prepare(sql).bind(id).first()) || {}).n || 0;
+      return json({ user: { ...shape(u, hp), email: u.email || null }, counts: {
+        contacts: await n('SELECT COUNT(*) n FROM contacts WHERE owner_id=?'), messages_sent: await n('SELECT COUNT(*) n FROM messages WHERE sender_id=?'),
+        groups: await n('SELECT COUNT(*) n FROM group_members WHERE user_id=?'), channels: await n('SELECT COUNT(*) n FROM channel_members WHERE user_id=?'),
+        active_statuses: await n(`SELECT COUNT(*) n FROM statuses WHERE user_id=? AND expires_at>${now}`), logged_in_devices: await n(`SELECT COUNT(*) n FROM sessions WHERE user_id=? AND created_at>${now - SESSION_MS}`),
+        reports_against: await n('SELECT COUNT(*) n FROM reports WHERE reported_id=?') }, phone_enabled: hp });
+    }
+    if (p === 'admin/users/status' && post) {
+      const id = Number(body.id), suspend = body.suspended === true;
+      if (!Number.isInteger(id)) return json({ error: 'User not found' }, 404);
+      if (id === me.id) return json({ error: 'You cannot suspend your own account' }, 400);
+      if (adminIds.includes(id)) return json({ error: 'Administrators cannot be suspended' }, 403);
+      const t = await db.prepare('SELECT id FROM users WHERE id=?').bind(id).first(); if (!t) return json({ error: 'User not found' }, 404);
+      await db.prepare('UPDATE users SET suspended_at=? WHERE id=?').bind(suspend ? now : null, id).run();
+      if (suspend) await db.prepare('DELETE FROM sessions WHERE user_id=?').bind(id).run();   // signed out everywhere immediately
+      return json({ ok: true, status: suspend ? 'suspended' : 'active' });
+    }
+    return json({ error: 'Not found' }, 404);
+  }
 
   if (p === 'logout' && post) {
     await db.prepare('DELETE FROM sessions WHERE token=?').bind(tok).run();
