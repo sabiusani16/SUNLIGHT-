@@ -3,7 +3,8 @@ const CORS = { 'access-control-allow-origin': '*', 'access-control-allow-headers
 const json = (d, s = 200) => new Response(JSON.stringify(d), { status: s, headers: { 'content-type': 'application/json', 'cache-control': 'no-store', ...CORS } });
 const hex = b => [...new Uint8Array(b)].map(x => x.toString(16).padStart(2, '0')).join('');
 const rand = n => hex(crypto.getRandomValues(new Uint8Array(n)));
-const REPORT_REASONS = ['spam', 'harassment', 'inappropriate', 'scam', 'threats', 'other'];
+const REPORT_REASONS = ['harassment', 'spam', 'fake_account', 'inappropriate', 'scam', 'other', 'threats'];   // 'threats' is kept for older reports/clients
+const REPORT_STATUSES = ['open', 'review', 'resolved', 'rejected'], SUPPORT_STATUSES = ['open', 'progress', 'resolved'], SUPPORT_CATS = ['contact', 'problem', 'help', 'account'];
 const THEME_BG = ['midnight', 'forest', 'gold', 'ocean', 'rose', 'slate', 'dots'], THEME_COLOR = ['gold', 'blue', 'purple', 'rose', 'teal'];   // allowed chat themes (anything else is rejected)
 const PAGE = null; /*__PAGE__*/
 const RING_MS = 45000, BEAT_MS = 25000, STUN = [{ urls: ['stun:stun.cloudflare.com:3478', 'stun:stun.l.google.com:19302'] }];
@@ -20,7 +21,8 @@ const likeEsc = s => s.replace(/[\\%_]/g, '\\$&');            // escape LIKE wil
 // D1 allows at most 5 terms in a compound SELECT, so "is this media key still referenced anywhere?" is a chain of EXISTS checks, not a big UNION.
 const mediaUsed = col => '(' + [
   'SELECT 1 FROM messages WHERE media_key=', "SELECT 1 FROM chat_prefs WHERE json_extract(theme,'$.wp')=", 'SELECT 1 FROM users WHERE avatar_key=', 'SELECT 1 FROM statuses WHERE media_key=',
-  'SELECT 1 FROM group_messages WHERE media_key=', 'SELECT 1 FROM groups WHERE avatar_key=', 'SELECT 1 FROM channel_posts WHERE media_key=', 'SELECT 1 FROM channels WHERE avatar_key=', 'SELECT 1 FROM chat_prefs WHERE wp_key='
+  'SELECT 1 FROM group_messages WHERE media_key=', 'SELECT 1 FROM groups WHERE avatar_key=', 'SELECT 1 FROM channel_posts WHERE media_key=', 'SELECT 1 FROM channels WHERE avatar_key=', 'SELECT 1 FROM chat_prefs WHERE wp_key=',
+  'SELECT 1 FROM reports WHERE evidence_key=', 'SELECT 1 FROM support_messages WHERE media_key=', 'SELECT 1 FROM support_requests WHERE media_key='
 ].map(q => `EXISTS(${q}${col})`).join(' OR ') + ')';
 const MEDIA_KEY = /^u\d+\/[a-f0-9]{32}$/;                  // keys we generate: u<userId>/<random>
 const MEDIA_RULES = { image: { max: 1000000 }, voice: { max: 1000000 } };   // max raw bytes per file; files are stored in D1, so they are kept small
@@ -101,6 +103,10 @@ const TABLES = [
   `CREATE TABLE IF NOT EXISTS email_changes (user_id INTEGER PRIMARY KEY, new_email TEXT NOT NULL, code_hash TEXT NOT NULL, salt TEXT NOT NULL, attempts INTEGER NOT NULL DEFAULT 0, expires_at INTEGER NOT NULL, created_at INTEGER NOT NULL)`,
   `CREATE TABLE IF NOT EXISTS support_requests (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, subject TEXT NOT NULL, message TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'open', created_at INTEGER NOT NULL)`,
   `CREATE INDEX IF NOT EXISTS idx_support_user ON support_requests(user_id, id)`,
+  `CREATE TABLE IF NOT EXISTS support_messages (id INTEGER PRIMARY KEY AUTOINCREMENT, request_id INTEGER NOT NULL, sender TEXT NOT NULL, body TEXT NOT NULL DEFAULT '', media_key TEXT, created_at INTEGER NOT NULL)`,
+  `CREATE INDEX IF NOT EXISTS idx_support_msg ON support_messages(request_id, id)`,
+  `CREATE TABLE IF NOT EXISTS report_notes (id INTEGER PRIMARY KEY AUTOINCREMENT, report_id INTEGER NOT NULL, admin_id INTEGER NOT NULL, note TEXT NOT NULL, created_at INTEGER NOT NULL)`,
+  `CREATE INDEX IF NOT EXISTS idx_report_notes ON report_notes(report_id, id)`,
   `CREATE TABLE IF NOT EXISTS status_views (status_id INTEGER NOT NULL, viewer_id INTEGER NOT NULL, viewed_at INTEGER NOT NULL, PRIMARY KEY (status_id, viewer_id))`
 ];
 const USER_COLS = { username: "TEXT", email: 'TEXT', name: "TEXT NOT NULL DEFAULT ''", pass_hash: "TEXT NOT NULL DEFAULT ''", salt: "TEXT NOT NULL DEFAULT ''", created_at: 'INTEGER NOT NULL DEFAULT 0', last_seen: 'INTEGER NOT NULL DEFAULT 0', avatar_key: 'TEXT', suspended_at: 'INTEGER', phone: 'TEXT' };
@@ -123,6 +129,12 @@ function ensureSchema(db) {
     if (!haveP.includes('wp_key')) await addCol(db, 'chat_prefs', 'wp_key', 'TEXT');
     if (!haveP.includes('wp_dim')) await addCol(db, 'chat_prefs', 'wp_dim', 'INTEGER NOT NULL DEFAULT 35');
     if (!haveP.includes('cleared_at')) await addCol(db, 'chat_prefs', 'cleared_at', 'INTEGER NOT NULL DEFAULT 0');
+    const haveR = (await db.prepare('PRAGMA table_info(reports)').all()).results.map(c => c.name);
+    for (const [col, type] of Object.entries({ evidence_key: 'TEXT', updated_at: 'INTEGER NOT NULL DEFAULT 0', reviewed_by: 'INTEGER' })) if (!haveR.includes(col)) await addCol(db, 'reports', col, type);
+    const haveS = (await db.prepare('PRAGMA table_info(support_requests)').all()).results.map(c => c.name);
+    for (const [col, type] of Object.entries({ category: "TEXT NOT NULL DEFAULT 'contact'", updated_at: 'INTEGER NOT NULL DEFAULT 0', user_unread: 'INTEGER NOT NULL DEFAULT 0', admin_unread: 'INTEGER NOT NULL DEFAULT 1', media_key: 'TEXT' })) if (!haveS.includes(col)) await addCol(db, 'support_requests', col, type);
+    await db.prepare('CREATE INDEX IF NOT EXISTS idx_reports_status ON reports(status, id)').run();
+    await db.prepare('CREATE INDEX IF NOT EXISTS idx_support_status ON support_requests(status, updated_at)').run();
     await db.prepare('CREATE INDEX IF NOT EXISTS idx_calls_pair ON calls(caller_id, callee_id)').run();
     await db.prepare('CREATE INDEX IF NOT EXISTS idx_msg_media ON messages(media_key)').run();
     await db.prepare('CREATE INDEX IF NOT EXISTS idx_msg_deliv ON messages(receiver_id, delivered_at)').run();
@@ -260,9 +272,84 @@ async function route(req, env, url) {
       online: now - (u.last_seen || 0) < ONLINE_MS, status: u.suspended_at ? 'suspended' : 'active', suspended_at: u.suspended_at || null, admin: adminIds.includes(u.id), phone: hasPhone ? (u.phone || null) : null });
     const logAdmin = (target, action, detail) => db.prepare('INSERT INTO admin_log(admin_id,target_id,action,detail,created_at) VALUES(?,?,?,?,?)').bind(me.id, target, action, detail, now).run();   // who did what (never passwords or message text)
     const hasPhone = async () => true;   // shown only if the app collects phone numbers
+    // ---- reports (submitted by users) ----
+    const pageOf = () => { const per = Math.min(50, Math.max(5, parseInt(url.searchParams.get('per'), 10) || 20)); return { per, page: Math.max(1, parseInt(url.searchParams.get('page'), 10) || 1) }; };
+    if (p === 'admin/reports' && !post) {
+      const st = url.searchParams.get('status'), cat = url.searchParams.get('category'), q = (url.searchParams.get('q') || '').trim().replace(/^@+/, '').slice(0, 40), { per, page } = pageOf();
+      const conds = [], args = [];
+      if (REPORT_STATUSES.includes(st)) { conds.push('r.status=?'); args.push(st); }
+      if (REPORT_REASONS.includes(cat)) { conds.push('r.reason=?'); args.push(cat); }
+      if (q) { const like = '%' + likeEsc(q.toLowerCase()) + "%"; conds.push("(lower(a.username) LIKE ? ESCAPE '\\' OR lower(b.username) LIKE ? ESCAPE '\\'" + (/^\d{1,12}$/.test(q) ? ' OR r.id=?' : '') + ')'); args.push(like, like); if (/^\d{1,12}$/.test(q)) args.push(Number(q)); }
+      const where = conds.length ? 'WHERE ' + conds.join(' AND ') : '';
+      const from = 'FROM reports r LEFT JOIN users a ON a.id=r.reporter_id LEFT JOIN users b ON b.id=r.reported_id ' + where;
+      const total = (await db.prepare('SELECT COUNT(*) n ' + from).bind(...args).first()).n;
+      const { results } = await db.prepare('SELECT r.id,r.reason,r.details,r.status,r.created_at,r.reporter_id,r.reported_id,a.username reporter,b.username reported,(r.evidence_key IS NOT NULL OR r.message_text IS NOT NULL) has_evidence ' + from + ' ORDER BY r.id DESC LIMIT ? OFFSET ?').bind(...args, per, (page - 1) * per).all();
+      const c = await db.prepare("SELECT COUNT(*) total, COALESCE(SUM(status='open'),0) pending, COALESCE(SUM(status='review'),0) review, COALESCE(SUM(status='resolved'),0) resolved, COALESCE(SUM(status='rejected'),0) rejected FROM reports").first();
+      return json({ stats: c, reports: results.map(r => ({ ...r, details: String(r.details || '').slice(0, 160), has_evidence: !!r.has_evidence })), total, page, per, pages: Math.max(1, Math.ceil(total / per)) });
+    }
+    if (p === 'admin/report' && !post) {
+      const id = parseInt(url.searchParams.get('id'), 10);
+      const r = Number.isInteger(id) ? await db.prepare('SELECT r.*,a.username reporter,a.name reporter_name,b.username reported,b.name reported_name FROM reports r LEFT JOIN users a ON a.id=r.reporter_id LEFT JOIN users b ON b.id=r.reported_id WHERE r.id=?').bind(id).first() : null;
+      if (!r) return json({ error: 'Report not found' }, 404);
+      const notes = (await db.prepare('SELECT n.id,n.note,n.created_at,a.username admin FROM report_notes n LEFT JOIN users a ON a.id=n.admin_id WHERE n.report_id=? ORDER BY n.id').bind(id).all()).results;
+      const others = (await db.prepare('SELECT COUNT(*) n FROM reports WHERE reported_id=? AND id!=?').bind(r.reported_id, id).first()).n;
+      return json({ report: { id: r.id, reason: r.reason, details: r.details || '', message_text: r.message_text || null, evidence_key: r.evidence_key || null, status: r.status, created_at: r.created_at, updated_at: r.updated_at || null,
+        reporter: { id: r.reporter_id, username: r.reporter, name: r.reporter_name }, reported: { id: r.reported_id, username: r.reported, name: r.reported_name }, other_reports_against: others }, notes });
+    }
+    if (p === 'admin/reports/status' && post) {
+      const id = Number(body.id), st = String(body.status || ''); if (!REPORT_STATUSES.includes(st)) return json({ error: 'Invalid status' }, 400);
+      const r = Number.isInteger(id) ? await db.prepare('SELECT id,reported_id FROM reports WHERE id=?').bind(id).first() : null; if (!r) return json({ error: 'Report not found' }, 404);
+      await db.prepare('UPDATE reports SET status=?,updated_at=?,reviewed_by=? WHERE id=?').bind(st, now, me.id, id).run();
+      await logAdmin(r.reported_id, 'report_' + st, 'report #' + id);
+      return json({ ok: true, status: st });
+    }
+    if (p === 'admin/reports/note' && post) {
+      const id = Number(body.id), note = String(body.note || '').trim(); if (!note || note.length > 1000) return json({ error: 'Write a note (1000 characters max)' }, 400);
+      const r = Number.isInteger(id) ? await db.prepare('SELECT id FROM reports WHERE id=?').bind(id).first() : null; if (!r) return json({ error: 'Report not found' }, 404);
+      await db.prepare('INSERT INTO report_notes(report_id,admin_id,note,created_at) VALUES(?,?,?,?)').bind(id, me.id, note, now).run();   // internal: never shown to any user
+      return json({ ok: true });
+    }
+    // ---- support inbox ----
+    if (p === 'admin/support' && !post) {
+      const st = url.searchParams.get('status'), q = (url.searchParams.get('q') || '').trim().replace(/^@+/, '').slice(0, 40), { per, page } = pageOf();
+      const conds = [], args = [];
+      if (SUPPORT_STATUSES.includes(st)) { conds.push('r.status=?'); args.push(st); } else if (st === 'unread') conds.push('r.admin_unread>0');
+      if (q) { const like = '%' + likeEsc(q.toLowerCase()) + "%"; conds.push("(lower(u.username) LIKE ? ESCAPE '\\' OR lower(r.subject) LIKE ? ESCAPE '\\'" + (/^\d{1,12}$/.test(q) ? ' OR u.id=? OR r.id=?' : '') + ')'); args.push(like, like); if (/^\d{1,12}$/.test(q)) args.push(Number(q), Number(q)); }
+      const where = conds.length ? 'WHERE ' + conds.join(' AND ') : '';
+      const from = 'FROM support_requests r LEFT JOIN users u ON u.id=r.user_id ' + where;
+      const total = (await db.prepare('SELECT COUNT(*) n ' + from).bind(...args).first()).n;
+      const { results } = await db.prepare('SELECT r.id,r.subject,r.status,r.category,r.created_at,r.updated_at,r.admin_unread,r.user_id,u.username,u.name,(SELECT COUNT(*) FROM support_messages m WHERE m.request_id=r.id AND m.sender=\'user\') + 1 user_msgs,COALESCE((SELECT body FROM support_messages WHERE request_id=r.id ORDER BY id DESC LIMIT 1), r.message) last ' + from + ' ORDER BY (r.admin_unread>0) DESC, MAX(r.updated_at, r.created_at) DESC LIMIT ? OFFSET ?').bind(...args, per, (page - 1) * per).all();
+      const c = await db.prepare("SELECT COUNT(*) total, COALESCE(SUM(status='open'),0) pending, COALESCE(SUM(status='progress'),0) progress, COALESCE(SUM(status='resolved'),0) resolved, COALESCE(SUM(admin_unread>0),0) unread FROM support_requests").first();
+      return json({ stats: c, requests: results.map(r => ({ ...r, last: String(r.last || '').slice(0, 100), unread: !!r.admin_unread })), total, page, per, pages: Math.max(1, Math.ceil(total / per)) });
+    }
+    if (p === 'admin/support/thread' && !post) {
+      const id = parseInt(url.searchParams.get('id'), 10);
+      const r = Number.isInteger(id) ? await db.prepare('SELECT r.id,r.subject,r.message,r.status,r.category,r.media_key,r.created_at,r.admin_unread,r.user_id,u.username,u.name FROM support_requests r LEFT JOIN users u ON u.id=r.user_id WHERE r.id=?').bind(id).first() : null;
+      if (!r) return json({ error: 'Request not found' }, 404);
+      const { results } = await db.prepare('SELECT id,sender,body,media_key,created_at FROM support_messages WHERE request_id=? ORDER BY id').bind(id).all();
+      if (r.admin_unread) await db.prepare('UPDATE support_requests SET admin_unread=0 WHERE id=?').bind(id).run();
+      return json({ request: { id: r.id, subject: r.subject, status: r.status, category: r.category, created_at: r.created_at, user: { id: r.user_id, username: r.username, name: r.name } },
+        messages: [{ id: 0, sender: 'user', body: r.message, media_key: r.media_key || null, created_at: r.created_at }, ...results.map(m => ({ ...m, sender: m.sender === 'admin' ? 'admin' : 'user' }))] });
+    }
+    if (p === 'admin/support/reply' && post) {
+      const id = Number(body.id), text = String(body.body || '').trim(), r = Number.isInteger(id) ? await db.prepare('SELECT id,status FROM support_requests WHERE id=?').bind(id).first() : null;
+      if (!r) return json({ error: 'Request not found' }, 404);
+      let img = null; if (body.media_key) { const k = String(body.media_key), mm = MEDIA_KEY.test(k) && k.startsWith('u' + me.id + '/') ? await db.prepare('SELECT type FROM media WHERE key=? AND owner_id=?').bind(k, me.id).first() : null; if (!mm || !String(mm.type).startsWith('image/')) return json({ error: 'The image could not be attached' }, 400); img = k; }
+      if (!text && !img) return json({ error: 'Write a reply' }, 400); if (text.length > 2000) return json({ error: 'Reply is too long (2000 characters max)' }, 400);
+      const mr = await db.prepare("INSERT INTO support_messages(request_id,sender,body,media_key,created_at) VALUES(?,'admin',?,?,?)").bind(id, text, img, now).run();
+      await db.prepare("UPDATE support_requests SET updated_at=?, user_unread=1, admin_unread=0, status=CASE WHEN status='open' THEN 'progress' ELSE status END WHERE id=?").bind(now, id).run();
+      return json({ ok: true, message: { id: mr.meta.last_row_id, sender: 'admin', body: text, media_key: img, created_at: now }, status: r.status === 'open' ? 'progress' : r.status });
+    }
+    if (p === 'admin/support/status' && post) {
+      const id = Number(body.id), st = String(body.status || ''); if (!SUPPORT_STATUSES.includes(st)) return json({ error: 'Invalid status' }, 400);
+      const r = Number.isInteger(id) ? await db.prepare('SELECT id FROM support_requests WHERE id=?').bind(id).first() : null; if (!r) return json({ error: 'Request not found' }, 404);
+      await db.prepare('UPDATE support_requests SET status=?,updated_at=? WHERE id=?').bind(st, now, id).run();
+      return json({ ok: true, status: st });
+    }
     if (p === 'admin/overview' && !post) {
       const t = await db.prepare('SELECT COUNT(*) total, COALESCE(SUM(CASE WHEN suspended_at IS NULL THEN 0 ELSE 1 END),0) suspended, COALESCE(SUM(CASE WHEN created_at>?1 THEN 1 ELSE 0 END),0) recent, COALESCE(SUM(CASE WHEN last_seen>?2 THEN 1 ELSE 0 END),0) seen24 FROM users').bind(now - 7 * 86400000, now - 86400000).first();
-      return json({ total: t.total, active: t.total - t.suspended, suspended: t.suspended, recent: t.recent, seen_24h: t.seen24, phone_enabled: await hasPhone() });
+      const pr = (await db.prepare("SELECT COUNT(*) n FROM reports WHERE status='open'").first()).n, su = (await db.prepare('SELECT COUNT(*) n FROM support_requests WHERE admin_unread>0').first()).n;
+      return json({ total: t.total, active: t.total - t.suspended, suspended: t.suspended, recent: t.recent, seen_24h: t.seen24, phone_enabled: await hasPhone(), reports_pending: pr, support_unread: su });
     }
     if (p === 'admin/users' && !post) {
       const q = (url.searchParams.get('q') || '').trim().replace(/^@+/, '').slice(0, 40), st = url.searchParams.get('status'), oldest = url.searchParams.get('sort') === 'oldest';
@@ -489,11 +576,17 @@ async function route(req, env, url) {
       if (!m) return json({ error: 'Message not found' }, 404);
       mid = m.id; mtext = (m.type === 'text' ? m.body : '[' + m.type + '] ' + m.body).slice(0, 500);   // evidence is kept even if the message is deleted later
     }
+    let ev = null;                                            // optional screenshot: must be the reporter's own uploaded image
+    if (body.evidence_key) {
+      const k = String(body.evidence_key); const mm = MEDIA_KEY.test(k) && k.startsWith('u' + me.id + '/') ? await db.prepare('SELECT type FROM media WHERE key=? AND owner_id=?').bind(k, me.id).first() : null;
+      if (!mm || !String(mm.type).startsWith('image/')) return json({ error: 'The screenshot could not be attached' }, 400);
+      ev = k;
+    }
     const recent = await db.prepare('SELECT COUNT(*) n FROM reports WHERE reporter_id=? AND created_at>?').bind(me.id, now - 864e5).first();
     if (recent.n >= 20) return json({ error: 'Too many reports today. Please try again tomorrow.' }, 429);
-    const dup = await db.prepare('SELECT id FROM reports WHERE reporter_id=? AND reported_id=? AND COALESCE(message_id,0)=? AND reason=? AND created_at>?').bind(me.id, peer.id, mid || 0, reason, now - 864e5).first();
-    if (!dup) await db.prepare('INSERT INTO reports(reporter_id,reported_id,message_id,message_text,reason,details,created_at) VALUES(?,?,?,?,?,?,?)').bind(me.id, peer.id, mid, mtext, reason, details || null, now).run();
-    return json({ ok: true });                                // reports are write-only here: no API returns them, only the database owner can read them
+    const dup = await db.prepare("SELECT id FROM reports WHERE reporter_id=? AND reported_id=? AND COALESCE(message_id,0)=? AND reason=? AND (created_at>? OR status IN ('open','review'))").bind(me.id, peer.id, mid || 0, reason, now - 864e5).first();
+    if (!dup) await db.prepare("INSERT INTO reports(reporter_id,reported_id,message_id,message_text,reason,details,evidence_key,status,created_at,updated_at) VALUES(?,?,?,?,?,?,?,'open',?,?)").bind(me.id, peer.id, mid, mtext, reason, details || null, ev, now, now).run();
+    return json({ ok: true });                                // reports are write-only for users: only administrators can read them (admin/reports), and the reported user is never told who reported
   }
 
   // ---- status likes + notifications ----
@@ -1085,6 +1178,7 @@ async function route(req, env, url) {
     if (String(body.confirm || '') !== 'DELETE') return json({ error: 'Type DELETE to confirm' }, 400);
     if (!(await pwOk(String(body.password || '')))) return json({ error: 'Your password is incorrect' }, 403);
     const id = me.id;
+    await db.batch(['DELETE FROM support_messages WHERE request_id IN (SELECT id FROM support_requests WHERE user_id=?1)', 'DELETE FROM support_requests WHERE user_id=?1'].map(q => db.prepare(q).bind(id)));   // their support threads go with the account
     const { results: keys } = await db.prepare('SELECT key FROM media WHERE owner_id=?').bind(id).all();
     for (const k of keys) await dropAny(k.key);
     { const { results: gs } = await db.prepare('SELECT group_id FROM group_members WHERE user_id=?').bind(id).all(); for (const g of gs) await groupLeave(g.group_id, id); }
@@ -1116,19 +1210,43 @@ async function route(req, env, url) {
     return json({ prefs: { ...NOTIF_DEFAULTS } });
   }
 
-  // =============== HELP: SUPPORT REQUESTS ===============
+  // =============== SUPPORT: conversations between a user and the administrator ===============
+  // A request is a thread: the first message lives on the request row, replies in support_messages. Users see only their own threads.
+  const sImg = async k => { if (!k) return null; k = String(k); const mm = MEDIA_KEY.test(k) && k.startsWith('u' + me.id + '/') ? await db.prepare('SELECT type FROM media WHERE key=? AND owner_id=?').bind(k, me.id).first() : null; return mm && String(mm.type).startsWith('image/') ? k : false; };
+  const supRate = async () => (await db.prepare('SELECT (SELECT COUNT(*) FROM support_requests WHERE user_id=?1 AND created_at>?2) + (SELECT COUNT(*) FROM support_messages m JOIN support_requests r ON r.id=m.request_id WHERE r.user_id=?1 AND m.sender=\'user\' AND m.created_at>?2) n').bind(me.id, now - 3600000).first()).n;
   if (p === 'support' && post) {
-    const subject = String(body.subject || '').trim(), message = String(body.message || '').trim();
+    const subject = String(body.subject || '').trim(), message = String(body.message || '').trim(), cat = SUPPORT_CATS.includes(body.category) ? body.category : 'contact';
     if (subject.length < 3 || subject.length > 100) return json({ error: 'Subject must be 3–100 characters' }, 400);
     if (message.length < 10 || message.length > 2000) return json({ error: 'Describe the problem in 10–2000 characters' }, 400);
-    const recent = await db.prepare('SELECT COUNT(*) n FROM support_requests WHERE user_id=? AND created_at>?').bind(me.id, now - 3600000).first();
-    if (recent.n >= 5) return json({ error: 'You have sent several requests already. Please wait a while.' }, 429);
-    const r = await db.prepare('INSERT INTO support_requests(user_id,subject,message,status,created_at) VALUES(?,?,?,?,?)').bind(me.id, subject, message, 'open', now).run();
-    return json({ ok: true, request: { id: r.meta.last_row_id, subject, status: 'open', created_at: now } });
+    const img = await sImg(body.media_key); if (img === false) return json({ error: 'The image could not be attached' }, 400);
+    if (await supRate() >= 10) return json({ error: 'You have sent several messages already. Please wait a while.' }, 429);
+    const r = await db.prepare("INSERT INTO support_requests(user_id,subject,message,status,category,media_key,created_at,updated_at,user_unread,admin_unread) VALUES(?,?,?,'open',?,?,?,?,0,1)").bind(me.id, subject, message, cat, img, now, now).run();
+    return json({ ok: true, request: { id: r.meta.last_row_id, subject, status: 'open', category: cat, created_at: now } });
   }
   if (p === 'support' && !post) {
-    const { results } = await db.prepare('SELECT id,subject,message,status,created_at FROM support_requests WHERE user_id=? ORDER BY id DESC LIMIT 20').bind(me.id).all();
-    return json({ requests: results });
+    const { results } = await db.prepare(`SELECT r.id,r.subject,r.status,r.category,r.created_at,r.updated_at,r.user_unread,
+      COALESCE((SELECT body FROM support_messages WHERE request_id=r.id ORDER BY id DESC LIMIT 1), r.message) last
+      FROM support_requests r WHERE r.user_id=? ORDER BY MAX(r.updated_at, r.created_at) DESC LIMIT 50`).bind(me.id).all();
+    return json({ requests: results.map(r => ({ ...r, last: String(r.last || '').slice(0, 90), unread: !!r.user_unread })) });
+  }
+  if (p === 'support/unread' && !post) return json({ unread: (await db.prepare('SELECT COUNT(*) n FROM support_requests WHERE user_id=? AND user_unread>0').bind(me.id).first()).n });
+  if (p === 'support/thread' && !post) {
+    const id = parseInt(url.searchParams.get('id'), 10), r = Number.isInteger(id) ? await db.prepare('SELECT id,subject,message,status,category,media_key,created_at,user_unread FROM support_requests WHERE id=? AND user_id=?').bind(id, me.id).first() : null;
+    if (!r) return json({ error: 'Not found' }, 404);
+    const { results } = await db.prepare('SELECT id,sender,body,media_key,created_at FROM support_messages WHERE request_id=? ORDER BY id').bind(id).all();
+    if (r.user_unread) await db.prepare('UPDATE support_requests SET user_unread=0 WHERE id=?').bind(id).run();
+    return json({ request: { id: r.id, subject: r.subject, status: r.status, category: r.category, created_at: r.created_at }, messages: [{ id: 0, sender: 'user', body: r.message, media_key: r.media_key || null, created_at: r.created_at }, ...results.map(m => ({ ...m, sender: m.sender === 'admin' ? 'admin' : 'user' }))] });
+  }
+  if (p === 'support/reply' && post) {
+    const id = Number(body.id), text = String(body.body || '').trim(), r = Number.isInteger(id) ? await db.prepare('SELECT id,status FROM support_requests WHERE id=? AND user_id=?').bind(id, me.id).first() : null;
+    if (!r) return json({ error: 'Not found' }, 404);
+    const img = await sImg(body.media_key); if (img === false) return json({ error: 'The image could not be attached' }, 400);
+    if (!text && !img) return json({ error: 'Write a message' }, 400);
+    if (text.length > 2000) return json({ error: 'Message is too long (2000 characters max)' }, 400);
+    if (await supRate() >= 30) return json({ error: 'You have sent several messages already. Please wait a while.' }, 429);
+    const mr = await db.prepare("INSERT INTO support_messages(request_id,sender,body,media_key,created_at) VALUES(?,'user',?,?,?)").bind(id, text, img, now).run();
+    await db.prepare("UPDATE support_requests SET updated_at=?, admin_unread=1, status=CASE WHEN status='resolved' THEN 'open' ELSE status END WHERE id=?").bind(now, id).run();   // a reply reopens a resolved request
+    return json({ ok: true, message: { id: mr.meta.last_row_id, sender: 'user', body: text, media_key: img, created_at: now } });
   }
 
   // "typing…" / "recording audio…" shown to the person you are chatting with. Short-lived (expires by itself) and never shown if either side blocked the other.
@@ -1345,7 +1463,10 @@ async function route(req, env, url) {
   if (p.startsWith('media/') && !post) {
     const key = p.slice(6);
     if (!MEDIA_KEY.test(key)) return json({ error: 'Not found' }, 404);
+    const isAdm = String(env.ADMIN_USER_IDS || '').split(',').map(x => parseInt(x.trim(), 10)).includes(me.id);
     const allowed = key.startsWith('u' + me.id + '/') ||
+      (isAdm && !!(await db.prepare('SELECT 1 ok WHERE EXISTS(SELECT 1 FROM reports WHERE evidence_key=?1) OR EXISTS(SELECT 1 FROM support_messages WHERE media_key=?1) OR EXISTS(SELECT 1 FROM support_requests WHERE media_key=?1)').bind(key).first())) ||   // admins read report evidence and support screenshots
+      await db.prepare('SELECT 1 ok FROM support_requests r WHERE r.user_id=?2 AND (r.media_key=?1 OR EXISTS(SELECT 1 FROM support_messages m WHERE m.request_id=r.id AND m.media_key=?1))').bind(key, me.id).first() ||   // the user sees the screenshots in their own support threads
       await db.prepare('SELECT 1 ok FROM messages WHERE media_key=? AND deleted_at IS NULL AND (sender_id=? OR receiver_id=?)').bind(key, me.id, me.id).first() ||
       await db.prepare('SELECT 1 ok FROM users WHERE avatar_key=?').bind(key).first() ||   // profile photos
       await db.prepare('SELECT 1 ok FROM group_messages gm JOIN group_members m ON m.group_id=gm.group_id WHERE gm.media_key=? AND gm.deleted_at IS NULL AND m.user_id=?').bind(key, me.id).first() ||   // group media: members only
