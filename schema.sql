@@ -102,3 +102,5 @@ CREATE INDEX IF NOT EXISTS idx_cp_channel ON channel_posts(channel_id, id);
 CREATE TABLE IF NOT EXISTS channel_reactions (post_id INTEGER NOT NULL, user_id INTEGER NOT NULL, emoji TEXT NOT NULL, created_at INTEGER NOT NULL, PRIMARY KEY (post_id, user_id));
 CREATE TABLE IF NOT EXISTS channel_comments (id INTEGER PRIMARY KEY AUTOINCREMENT, post_id INTEGER NOT NULL, user_id INTEGER NOT NULL, body TEXT NOT NULL, created_at INTEGER NOT NULL, deleted_at INTEGER);
 CREATE INDEX IF NOT EXISTS idx_cc_post ON channel_comments(post_id, id);
+
+CREATE TABLE IF NOT EXISTS chat_activity (user_id INTEGER NOT NULL, peer_id INTEGER NOT NULL, state TEXT NOT NULL, at INTEGER NOT NULL, PRIMARY KEY (user_id, peer_id));
