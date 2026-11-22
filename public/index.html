@@ -1325,7 +1325,7 @@ const vmedia = new Map();
 function vidUrl(key) {                                      // videos live in R2: fetched with the login token, played from a blob URL
   if (mediaDone.has(key)) return Promise.resolve(mediaDone.get(key));
   if (!vmedia.has(key)) vmedia.set(key, fetch((window.SUNLIGHT_API || '') + '/api/media/' + key, { headers: { authorization: 'Bearer ' + token } })
-    .then(r => { if (!r.ok) throw new Error('Could not load the video'); return r.blob(); })
+    .then(async r => { if (!r.ok) { let m = ''; try { m = (await r.json()).error || ''; } catch {} console.warn('video load failed', r.status, m); throw new Error('Could not load the video (' + r.status + (m ? ': ' + m : '') + ')'); } return r.blob(); })
     .then(b => { const u = URL.createObjectURL(b); mediaDone.set(key, u); return u; })
     .catch(e => { vmedia.delete(key); throw e; }));
   return vmedia.get(key);
@@ -2239,9 +2239,9 @@ function svShow() {
       const v = document.createElement('video'); v.playsInline = true; v.preload = 'auto'; v.controls = false; v.src = u;
       v.onloadedmetadata = () => { if (!sv || sv.items_id !== it.id) return; sp.remove(); sv.dur = Math.max(2000, Math.min(60000, (v.duration || 5) * 1000)); svStage.appendChild(v); ready(); };
       v.onerror = () => { if (!sv || sv.items_id !== it.id) return; sp.remove(); const e = document.createElement('div'); e.className = 'sv-err'; e.textContent = 'Could not play this video'; svStage.appendChild(e); sv.ready = true; svRun(true); };
-    }).catch(() => {
+    }).catch(err => {
       if (!sv || sv.items_id !== it.id) return;
-      sp.remove(); const e = document.createElement('div'); e.className = 'sv-err'; e.textContent = 'Could not load this video'; svStage.appendChild(e); sv.ready = true; svRun(true);
+      sp.remove(); const e = document.createElement('div'); e.className = 'sv-err'; e.textContent = 'Could not load this video' + (err && /\((\d+)/.test(err.message) ? ' (error ' + RegExp.$1 + ')' : ' (check your network)'); svStage.appendChild(e); sv.ready = true; svRun(true);
     });
   } else {
     const sp = document.createElement('span'); sp.className = 'sv-loading'; svStage.appendChild(sp);
@@ -2945,27 +2945,26 @@ function drawAccount(keep) {
     <div class="irow"><span>Joined</span><b>${esc(fmtDate(a.created_at))}</b></div>
   </div>
   <div class="scard"><h4>Profile &amp; login</h4>
-    ${arow('fUser', 'fa-at', 'Change username', 'Currently @' + esc(a.username))}
-    <form class="sform" id="fUser" autocomplete="off" ${open.includes('fUser') ? '' : 'hidden'}><input id="nuName" placeholder="New username" maxlength="20" autocapitalize="none" spellcheck="false" aria-label="New username"><div class="fmsg" id="nuHint"></div><input id="nuPw" type="password" placeholder="Your password" autocomplete="current-password" aria-label="Current password"><button class="sbtn" type="submit">Save username</button><div class="fmsg"></div></form>
-    ${arow('fMail', 'fa-envelope', 'Change email', a.pending_email ? 'Waiting to verify ' + esc(a.pending_email) : a.email ? esc(a.email) : 'Add an email address')}
+    <div class="arow locked" data-locked="username" style="cursor:default"><span class="set-ico"><i class="fa-solid fa-at"></i></span><span>Username<small>@${esc(a.username)} · locked, only an admin can change it</small></span><i class="fa-solid fa-lock" style="margin-left:auto;opacity:.6" aria-label="Locked"></i></div>
+    ${a.email ? `<div class="arow locked" data-locked="email" style="cursor:default"><span class="set-ico"><i class="fa-solid fa-envelope"></i></span><span>Email<small>${esc(a.email)} · locked, only an admin can change it</small></span><i class="fa-solid fa-lock" style="margin-left:auto;opacity:.6" aria-label="Locked"></i></div>` : `${arow('fMail', 'fa-envelope', 'Add email', a.pending_email ? 'Waiting to verify ' + esc(a.pending_email) : 'You can add it once. After that only an admin can change it')}
     <form class="sform" id="fMail" autocomplete="off" ${open.includes('fMail') || a.pending_email ? '' : 'hidden'}>
-      ${a.email_service ? '' : '<div class="hnote">Email verification is not set up on this server yet, so the email cannot be changed right now. The server owner must add the email service keys.</div>'}
-      <input id="neMail" type="email" placeholder="New email address" maxlength="120" autocapitalize="none" aria-label="New email"><input id="nePw" type="password" placeholder="Your password" autocomplete="current-password" aria-label="Current password">
+      ${a.email_service ? '' : '<div class="hnote">Email verification is not set up on this server yet, so an email cannot be added right now. The server owner must add the email service keys.</div>'}
+      <input id="neMail" type="email" placeholder="Email address" maxlength="120" autocapitalize="none" aria-label="Email"><input id="nePw" type="password" placeholder="Your password" autocomplete="current-password" aria-label="Current password">
+      <div class="hint">Careful: once saved, you cannot change or remove it yourself.</div>
       <button class="sbtn" type="submit" ${a.email_service ? '' : 'disabled'}>Send verification code</button>
-      <div ${a.pending_email ? '' : 'hidden'} id="neCodeBox" style="display:${a.pending_email ? 'flex' : 'none'};flex-direction:column;gap:9px"><div class="hint">Enter the 6-digit code sent to <b>${esc(a.pending_email || '')}</b>. Your email changes only after it is verified.</div><input id="neCode" inputmode="numeric" maxlength="6" placeholder="6-digit code" aria-label="Verification code"><button class="sbtn" type="button" id="neConfirm">Verify and change email</button><button class="sbtn ghost" type="button" id="neCancel">Cancel change</button></div>
-      <div class="fmsg"></div></form>
-    ${arow('fPhone', 'fa-mobile-screen-button', a.phone ? 'Change phone number' : 'Add phone number', a.phone ? esc(a.phone) : 'Add your number to your profile')}
+      <div ${a.pending_email ? '' : 'hidden'} id="neCodeBox" style="display:${a.pending_email ? 'flex' : 'none'};flex-direction:column;gap:9px"><div class="hint">Enter the 6-digit code sent to <b>${esc(a.pending_email || '')}</b>. Your email is saved only after it is verified.</div><input id="neCode" inputmode="numeric" maxlength="6" placeholder="6-digit code" aria-label="Verification code"><button class="sbtn" type="button" id="neConfirm">Verify and save email</button><button class="sbtn ghost" type="button" id="neCancel">Cancel</button></div>
+      <div class="fmsg"></div></form>`}
+    ${a.phone ? `<div class="arow locked" data-locked="phone" style="cursor:default"><span class="set-ico"><i class="fa-solid fa-mobile-screen-button"></i></span><span>Phone number<small>${esc(a.phone)} · locked, only an admin can change it</small></span><i class="fa-solid fa-lock" style="margin-left:auto;opacity:.6" aria-label="Locked"></i></div>` : `${arow('fPhone', 'fa-mobile-screen-button', 'Add phone number', 'You can add it once. After that only an admin can change it')}
     <form class="sform" id="fPhone" autocomplete="off" ${open.includes('fPhone') ? '' : 'hidden'}>
-      <input id="npPhone" type="tel" inputmode="tel" placeholder="+234 803 123 4567" maxlength="20" value="${a.phone ? esc(a.phone) : ''}" aria-label="Phone number"><div class="hint">Include the country code, for example +234… (Nigerian numbers can start with 0). Only you can see your number. It is not verified by SMS yet.</div>
+      <input id="npPhone" type="tel" inputmode="tel" placeholder="+234 803 123 4567" maxlength="20" aria-label="Phone number"><div class="hint">Include the country code, for example +234… (Nigerian numbers can start with 0). Only you can see your number. It is not verified by SMS yet. Careful: once saved, you cannot change or remove it yourself.</div>
       <input id="npPhonePw" type="password" placeholder="Your password" autocomplete="current-password" aria-label="Your password">
-      <button class="sbtn" type="submit">Save number</button>${a.phone ? '<button class="sbtn ghost" type="button" id="npPhoneDel">Remove number</button>' : ''}
-      <div class="fmsg"></div></form>
-    ${arow('fPass', 'fa-lock', 'Change password', 'Use at least 8 characters with a letter and a number')}
-    <form class="sform" id="fPass" autocomplete="off" ${open.includes('fPass') ? '' : 'hidden'}><input id="npCur" type="password" placeholder="Current password" autocomplete="current-password" aria-label="Current password"><input id="npNew" type="password" placeholder="New password" autocomplete="new-password" aria-label="New password"><input id="npNew2" type="password" placeholder="Repeat new password" autocomplete="new-password" aria-label="Repeat new password"><button class="sbtn" type="submit">Update password</button><div class="fmsg"></div></form>
+      <button class="sbtn" type="submit">Save number</button>
+      <div class="fmsg"></div></form>`}
+    <div class="arow locked" data-locked="password" style="cursor:default"><span class="set-ico"><i class="fa-solid fa-lock"></i></span><span>Password<small>Locked. If you forget it, ask an admin to reset it</small></span></div>
   </div>
   <div class="scard"><h4>Security</h4>
     <div class="irow"><span>Signed-in devices</span><b>${a.sessions}</b></div>
-    <div class="hint">Passwords are stored only as salted hashes. Changing your password signs out your other devices.</div>
+    <div class="hint">Passwords are stored only as salted hashes. Username, password, phone and email cannot be changed here once set; contact an admin for any change.</div>
     <button type="button" class="arow" id="accOthers"><span class="set-ico"><i class="fa-solid fa-mobile-screen"></i></span><span>Sign out other devices<small>Keep only this device signed in</small></span></button>
     <button type="button" class="arow" id="accLogout"><span class="set-ico"><i class="fa-solid fa-right-from-bracket"></i></span><span>Log out<small>Sign out of this device</small></span></button>
   </div>
@@ -2978,14 +2977,13 @@ $('#accBody').addEventListener('click', async e => {
   const t = e.target.closest('[data-toggle]');
   if (t) { const f = $('#' + t.dataset.toggle); f.hidden = !f.hidden; if (!f.hidden) { const i = f.querySelector('input'); if (i) setTimeout(() => i.focus(), 50); } return; }
   if (e.target.closest('#accLogout')) return logout();
-  if (e.target.closest('#npPhoneDel')) { const f = $('#fPhone'); try { const d = await api('account/phone', { body: { phone: '', password: $('#npPhonePw').value } }); acc.phone = null; drawAccount(); toast('Phone number removed'); } catch (err) { msgBox(f, err.message); } return; }
   if (e.target.closest('#accOthers')) {
     try { await api('account/logout-others', { body: {} }); acc.sessions = 1; drawAccount(); toast('Other devices signed out'); } catch (err) { toast(err.message); } return;
   }
   const f = $('#fMail');
   if (e.target.closest('#neConfirm')) {
     const b = e.target.closest('button'); b.disabled = true;
-    try { const d = await api('account/email/confirm', { body: { code: $('#neCode').value.trim() } }); acc.email = d.email; acc.pending_email = null; drawAccount(); toast('Email updated'); }
+    try { const d = await api('account/email/confirm', { body: { code: $('#neCode').value.trim() } }); acc.email = d.email; acc.pending_email = null; drawAccount(); toast('Email saved'); }
     catch (err) { msgBox(f, err.message); } b.disabled = false; return;
   }
   if (e.target.closest('#neCancel')) { try { await api('account/email/cancel', { body: {} }); acc.pending_email = null; drawAccount(['fMail']); } catch (err) { msgBox(f, err.message); } }
@@ -3002,19 +3000,12 @@ $('#accBody').addEventListener('input', e => {
 $('#accBody').addEventListener('submit', async e => {
   e.preventDefault(); const f = e.target, btn = f.querySelector('button[type=submit]'); btn.disabled = true; msgBox(f, '');
   try {
-    if (f.id === 'fUser') {
-      const d = await api('account/username', { body: { username: $('#nuName').value, password: $('#nuPw').value } });
-      acc.username = me.username = d.username; renderProfile(); drawAccount(); toast('Username changed to @' + d.username);
-    } else if (f.id === 'fPhone') {
+    if (f.id === 'fPhone') {
       const d = await api('account/phone', { body: { phone: $('#npPhone').value, password: $('#npPhonePw').value } });
-      acc.phone = d.phone; drawAccount(); toast(d.phone ? 'Phone number saved' : 'Phone number removed');
+      acc.phone = d.phone; drawAccount(); toast('Phone number saved');
     } else if (f.id === 'fMail') {
       const d = await api('account/email/request', { body: { email: $('#neMail').value, password: $('#nePw').value } });
       acc.pending_email = d.pending_email; drawAccount(['fMail']); msgBox($('#fMail'), 'Code sent. Check your inbox.', true);
-    } else if (f.id === 'fPass') {
-      if ($('#npNew').value !== $('#npNew2').value) throw new Error('The new passwords do not match');
-      await api('account/password', { body: { current: $('#npCur').value, password: $('#npNew').value } });
-      acc.sessions = 1; drawAccount(); toast('Password updated');
     } else if (f.id === 'fDel') {
       await api('account/delete', { body: { password: $('#ndPw').value, confirm: $('#ndConf').value.trim() } });
       logout(true); toast('Your account was deleted');
@@ -3134,10 +3125,10 @@ const HELP = [
     ['How do I start a chat?', 'On the Chats tab tap the round button at the bottom right, search for a person by name or username, then tap their name to open a conversation.'],
     ['How do I add a contact?', 'Search for the person in the new-chat screen and tap Add. People you add appear in your contacts list.'] ] },
   { id: 'account', icon: 'fa-key', title: 'Account and Login', faq: [
-    ['How do I change my username?', 'Settings → Account → Change username. Pick a new name (3–20 letters, numbers or _), and confirm with your password. We tell you if it is taken.'],
-    ['How do I change my password?', 'Settings → Account → Change password. Enter your current password and a new one (8+ characters with a letter and a number). Your other devices are signed out.'],
-    ['Why can\'t I change my email?', 'Changing email needs a verification code sent by email. If the server has not been connected to an email service yet, the change is not available. Your email never changes before you verify the code.'],
-    ['I forgot my password. What can I do?', 'Password reset by email is not available yet. Use Help → Contact support and describe the problem.'],
+    ['How do I change my username?', 'Your username is locked once it is set. Only an admin can change it. Use Help → Contact support to ask.'],
+    ['How do I change my password?', 'Passwords are locked for your safety. Only an admin can change or reset your password. Use Help → Contact support; you will be asked to prove the account is yours.'],
+    ['Can I change my phone number or email?', 'You can add a phone number and an email once, if you have not set them yet. After you save them they are locked and only an admin can change them.'],
+    ['I forgot my password. What can I do?', 'Use Help → Contact support. An admin will verify that you own the account and then give you a new password.'],
     ['How do I delete my account?', 'Settings → Account → Delete account. You must enter your password and type DELETE. Deletion is permanent and removes your data.'] ] },
   { id: 'chat', icon: 'fa-comment', title: 'Private Messaging', faq: [
     ['What do the ticks mean?', 'One tick: sent. Two ticks: delivered to the other person. Two blue ticks: read.'],
