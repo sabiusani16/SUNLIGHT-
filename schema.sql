@@ -107,3 +107,7 @@ CREATE TABLE IF NOT EXISTS chat_activity (user_id INTEGER NOT NULL, peer_id INTE
 
 CREATE TABLE IF NOT EXISTS admin_log (id INTEGER PRIMARY KEY AUTOINCREMENT, admin_id INTEGER NOT NULL, target_id INTEGER NOT NULL, action TEXT NOT NULL, detail TEXT, created_at INTEGER NOT NULL);
 CREATE INDEX IF NOT EXISTS idx_admin_log_target ON admin_log(target_id, id);
+CREATE TABLE IF NOT EXISTS report_notes (id INTEGER PRIMARY KEY AUTOINCREMENT, report_id INTEGER NOT NULL, admin_id INTEGER NOT NULL, note TEXT NOT NULL, created_at INTEGER NOT NULL);
+CREATE INDEX IF NOT EXISTS idx_report_notes ON report_notes(report_id, id);
+CREATE TABLE IF NOT EXISTS support_messages (id INTEGER PRIMARY KEY AUTOINCREMENT, request_id INTEGER NOT NULL, sender TEXT NOT NULL, body TEXT NOT NULL DEFAULT '', media_key TEXT, created_at INTEGER NOT NULL);
+CREATE INDEX IF NOT EXISTS idx_support_msg ON support_messages(request_id, id);
