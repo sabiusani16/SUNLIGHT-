@@ -126,7 +126,7 @@ select{background:var(--soft);border:0;border-radius:12px;padding:10px 12px;font
   <span class="logo" aria-hidden="true"><svg width="22" height="22" viewBox="0 0 24 24" fill="#F5C542"><circle cx="12" cy="12" r="4.6"/><g stroke="#F5C542" stroke-width="2" stroke-linecap="round"><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M19.1 4.9L17 7M7 17l-2.1 2.1"/></g></svg></span>
   <h1>SUNLIGHT<small>Admin dashboard</small></h1>
   <span class="sp"></span>
-  <a href="/">Back to app</a>
+  <a href="/app/">Back to app</a>
 </header>
 <main id="main"><div class="state"><b>Loading…</b></div></main>
 
@@ -162,10 +162,10 @@ const badge = s => `<span class="badge ${s}">${s === 'suspended' ? 'Suspended' :
 
 /* ---------- gatekeeping ---------- */
 async function gate() {
-  if (!token) return state('Sign in first', 'Open SUNLIGHT, sign in with your administrator account, then come back to this page.', '<a class="btn" style="display:inline-block;text-decoration:none" href="/">Open SUNLIGHT</a>');
+  if (!token) return state('Sign in first', 'Open SUNLIGHT, sign in with your administrator account, then come back to this page.', '<a class="btn" style="display:inline-block;text-decoration:none" href="/app/">Open SUNLIGHT</a>');
   try { await api('admin/overview'); }
   catch (e) {
-    if (e.status === 401) return state('Please sign in again', 'Your session has ended. Sign in to SUNLIGHT, then reopen this page.', '<a class="btn" style="display:inline-block;text-decoration:none" href="/">Open SUNLIGHT</a>');
+    if (e.status === 401) return state('Please sign in again', 'Your session has ended. Sign in to SUNLIGHT, then reopen this page.', '<a class="btn" style="display:inline-block;text-decoration:none" href="/app/">Open SUNLIGHT</a>');
     if (e.status === 404 || e.status === 403) {
       let id = ''; try { id = (await api('me')).user.id; } catch {}
       return state('Administrators only', 'This account does not have administrator access.' + (id ? ` Your user ID is <b style="display:inline">${esc(id)}</b>. The owner grants access by adding this ID to the <code>ADMIN_USER_IDS</code> setting of the Worker.` : ''));
