@@ -146,8 +146,6 @@ export default {
   async fetch(req, env) {
     const url = new URL(req.url);
     if (!url.pathname.startsWith('/api/')) {
-      // The website lives at "/"; the chat app lives at "/app/". Old shared links (/?chat=…, /?channel=…) still open the app.
-      if (url.pathname === '/' && (url.searchParams.has('chat') || url.searchParams.has('channel'))) return Response.redirect(url.origin + '/app/' + url.search, 302);
       // Page: prefer the static-assets binding (wrangler deploy); otherwise serve the page embedded in this file
       // (build.py fills PAGE), so a single worker.js pasted into the Cloudflare dashboard works with no extra binding.
       if (env.ASSETS) return env.ASSETS.fetch(req);
